@@ -7,6 +7,9 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
+Acceptance scenarios must be automatable and will drive TDD. Note any mocks/stubs required for
+external systems to keep tests deterministic.
+
 <!--
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
   Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
@@ -76,6 +79,11 @@
 - How does system handle [error scenario]?
 
 ## Requirements *(mandatory)*
+
+**Design Discipline**: Keep solutions simple (KISS, YAGNI, DRY, SOLID). Document rationale for any
+complexity that remains.  
+**Testing**: Requirements must be concrete enough to translate directly into automated tests written
+before implementation, with mocks/stubs specified for any external services.
 
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.

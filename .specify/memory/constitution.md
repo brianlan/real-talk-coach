@@ -1,50 +1,68 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+Version change: N/A → 1.0.0
+Modified principles: Principle 1 → Readability & Explicitness; Principle 2 → TDD-First & Isolated; Principle 3 → Automation Everywhere; Principle 4 → Simple, Disciplined Design; Principle 5 → Purposeful Comments & Rationale
+Added sections: Development Workflow; Review & Quality Gates
+Removed sections: None
+Templates requiring updates (✅ updated / ⚠ pending): ✅ .specify/templates/plan-template.md; ✅ .specify/templates/spec-template.md; ✅ .specify/templates/tasks-template.md
+Follow-up TODOs: None
+-->
+
+# Real Talk Coach Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Readability & Explicitness
+Code must favor clarity over clever tricks. Prefer straightforward flows, descriptive naming, and
+explicit dependencies over hidden magic so maintainers can reason about behavior quickly.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. TDD-First & Isolated
+All new work begins with tests. Write failing tests before implementation, rely on mocks/stubs for
+external services, and iterate through red-green-refactor to keep scope tight and regressions
+visible.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Automation Everywhere
+Automate repeatable work—linting, formatting, tests—and gate merges on passing pipelines. Local
+commands should mirror CI so every developer can reproduce results without manual steps.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Simple, Disciplined Design
+Apply KISS, DRY, SOLID, and YAGNI to keep designs minimal and cohesive. Add abstractions only when
+needed, remove duplication with intention, and keep interfaces small and well-defined.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Purposeful Comments & Rationale
+Comments and docs must explain why decisions were made, tradeoffs considered, and constraints
+accepted—not restate what the code already says. Keep rationale close to the code and update it as
+behavior changes.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Development Workflow
+- Start from user stories and acceptance tests that are specific enough to automate; these tests
+  define scope.
+- Stub or mock external systems to keep the feedback loop fast and deterministic.
+- Follow red-green-refactor: write a failing test, implement the smallest change to pass, then clean
+  up while preserving readability.
+- Prefer simple, explicit implementations first; defer abstractions until repeated needs are proven.
+- Keep automation scripts and CI definitions as single sources of truth for linting, testing, and
+  build commands.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
-
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## Review & Quality Gates
+- Reviews verify readability, explicit control flow, and that rationale is captured in code comments
+  or docs.
+- Every change must include tests created first and passing automation (lint, format, test) before
+  merge.
+- Designs that add complexity must justify alignment with KISS/DRY/SOLID/YAGNI; unnecessary patterns
+  are rejected.
+- Mocks/stubs must be used in tests when touching external services to avoid flakiness and ensure
+  determinism.
+- Periodic audits sample merged work to ensure constitution compliance and to tune automation where
+  friction appears.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+This constitution supersedes informal practices; variances require explicit approval and documented
+justification in the relevant plan/spec. Amendments follow semantic versioning: MAJOR for breaking
+governance or principle removals, MINOR for new principles or significant expansions, PATCH for
+clarifications. Each amendment must record rationale and affected templates. Ratification occurs via
+team approval and is recorded in version history; the latest version is authoritative in this
+repository. Compliance reviews run at least once per release cycle to validate adherence and update
+templates or automation when gaps are found.
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
-
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2025-12-06 | **Last Amended**: 2025-12-06
