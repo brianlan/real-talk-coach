@@ -1,0 +1,5 @@
+.codex/auth.json
+.codex/sessions/
+.codex/log/
+.codex/history.jsonl
+.vscode
