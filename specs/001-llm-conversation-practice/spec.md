@@ -10,6 +10,11 @@
   - AI initiates the discussion, and the trainee and the AI will talk round by round. The AI will play the role that has predefined background and persona in the scenario settings.
   - Each round, AI evaluates whether the end criteria of the conversion has met. If not, continue playing the role and talk, otherwise, end the conversation.   - The conversation can also be ended by other logic other than the evaluation by AI. For example, if the trainee hasnt provide a response for more than 8 seconds or the total time elapsed exceeds a predefined threshold, say 5 minutes. - After the practice/converstion ends, all the information will be provided to another pure-text-based LLM to evaluate this practice and provide the user with: - Ratings on each communication skills that relates to the scenario in the practice, including skills that performed by the user, or the user lacks. - Provide general feedbacks on what has been done well and where can be improved. During the practice, well use/call qwen3-omni-flash (https://bailian.console.aliyun.com/?tab=doc#/doc/?type=model&url=2867839) as the AI assistant, where after the role settings are provided, the AI uses this model to generate audio directly (output both audio and text).  Likewise, the users audio is also directly passed to this model together with statement text like reply according to the audio content and the conversation history. All the related information of each practice will be saved into a database including the raw audio base64 that the user and AI outputs. The user can view all the historical practices in a list. The user can click to view the details of any of them or start practicing the same scenario again from an existing practice. Create a python tech stack based api server using FastAPI, httpx, uvicorn and pydantic, etc. and follow best practices of building such an API server. Use"
 
+## Clarifications
+
+### Session 2025-12-06
+- Q: How long should transcripts and audio be retained? → A: Keep indefinitely unless user deletes.
+
 ## User Scenarios & Testing *(mandatory)*
 
 Acceptance scenarios must be automatable and will drive TDD. Note any mocks/stubs required for
@@ -117,6 +122,8 @@ before implementation, with mocks/stubs specified for any external services.
   scenario, preserving the original session data intact.
 - **FR-010**: System MUST validate scenario completeness (personas, objectives, end criteria) before
   allowing practice to start and return actionable errors for missing fields.
+- **FR-011**: System MUST retain transcripts and audio until the trainee deletes them and provide a
+  way to delete specific sessions and associated media.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -139,6 +146,7 @@ before implementation, with mocks/stubs specified for any external services.
   ratings and feedback.
 - Default timeouts: idle threshold of 8 seconds and maximum session duration of 5 minutes unless a
   scenario defines stricter limits.
+- Data retention: transcripts and audio persist indefinitely unless the trainee deletes them.
 
 ## Success Criteria *(mandatory)*
 
