@@ -14,8 +14,8 @@
 
 ### Session 2025-12-06
 - Q: How long should transcripts and audio be retained? → A: Keep indefinitely unless user deletes.
-- Q: How is user speech turned into text for turns? → A: Client sends audio plus optional context text; backend invokes qwen-omni-flash ASR to produce the transcript for user turns; AI turns already return text+audio.
-- Q: What audio format/flow and fallback should be used? → A: Client sends single-turn base64 MP3 blobs; backend forwards to qwen without ASR; retryable error on failure while preserving prior turns.
+- Q: How is user speech turned into text for turns? → A: Trainee turn pipeline: client sends audio plus optional context text; backend first calls qwen-omni-flash ASR to transcribe the user audio, stores transcript + audio, then uses the transcribed turn in the next AI reply call.
+- Q: What audio format/flow and fallback should be used? → A: Client sends single-turn base64 MP3 blobs; backend calls qwen ASR for user transcripts and calls qwen generation for AI replies (audio + transcript); retryable error on failure while preserving prior turns.
 - Q: How should evaluations score communication skills? → A: Numeric 1–5 per skill with rubric (1=poor,3=adequate,5=excellent), per-skill notes, overall summary.
 - Q: How are skills selected for scoring? → A: Each scenario declares its skill list from a global library; evaluator scores only those skills.
 - Q: Where are idle/timeout timers measured? → A: Client measures idle and total session clocks and signals termination; backend records reason.
@@ -125,15 +125,15 @@ before implementation, with mocks/stubs specified for any external services.
   its details before the AI initiates the first turn in the specified persona.
 - **FR-003**: System MUST run turn-based conversations where the AI and trainee alternate, checking
   end criteria after each round and allowing termination due to idle time or maximum duration.
-- **FR-004**: System MUST capture and persist each turn's transcript (text) and associated audio
-  (base64 MP3) for both AI and trainee, with timestamps and speaker roles; audio is stored as
-  LeanCloud LFile and referenced via metadata (including URL) in LeanCloud LObject (no duplicate
-  base64 stored in session records).
+- **FR-004**: System MUST capture and persist each turn's transcript (text) and associated audio for
+  both AI and trainee, with timestamps and speaker roles; audio is stored as LeanCloud LFile and only a
+  file reference/URL is kept in the turn record (no raw base64 in the turn record).
 - **FR-005**: Trainee MUST be able to manually end a session at any time, with termination reason
   recorded.
 - **FR-005a**: For trainee turns, the client MUST provide audio plus optional context text; backend
-  invokes qwen-omni-flash ASR to produce the transcript for storage and evaluation; failures return
-  retryable errors while preserving prior turns.
+  first calls qwen-omni-flash ASR to transcribe the user audio for storage/evaluation, then uses the
+  transcribed turn when calling qwen for the next AI reply; failures return retryable errors while
+  preserving prior turns.
 - **FR-005b**: Client measures idle (8s) and total session duration (5m by default), signals
   termination when thresholds hit; backend validates timestamps and records termination reason.
 - **FR-005c**: Client MUST send session start and per-turn timestamps with termination signals; backend
@@ -148,8 +148,9 @@ before implementation, with mocks/stubs specified for any external services.
   traces covering request → AI call → storage path.
 - **FR-009**: Enforce per-turn audio size under LeanCloud single-file limit (128 KB); reject larger
   uploads with clear errors; rely on LeanCloud encryption at rest and HTTPS in transit.
-- **FR-010**: AI turns must persist both returned audio and the model-supplied transcript; trainee
-  turns must persist the transcript returned by the ASR call to qwen-omni-flash alongside audio.
+- **FR-010**: AI turns must persist both returned audio (via LFile reference) and the model-supplied
+  transcript; trainee turns must persist the transcript returned by the ASR call to qwen-omni-flash
+  alongside the LFile reference to audio.
 - **FR-011**: qwen-omni-flash calls MUST use bearer key auth; send persona/system text, user context,
   and base64 MP3 audio in JSON (non-streaming); expect JSON with base64 MP3 + transcript; apply 10s
   timeout and retry up to 2 times on 5xx/timeout errors.
@@ -178,9 +179,9 @@ before implementation, with mocks/stubs specified for any external services.
 - **Scenario**: Category, title, description, objective, participant personas/backgrounds, end
   criteria, and prompts for AI initiation.
 - **PracticeSession**: Scenario reference, start/end timestamps, duration, termination reason, status.
-- **Turn**: PracticeSession reference, speaker (trainee or AI), transcript text, audio base64 MP3,
-  timestamp, and sequence order; trainee turns include context text and transcript derived via
-  qwen-omni-flash ASR; AI turns include transcript returned with audio.
+- **Turn**: PracticeSession reference, speaker (trainee or AI), transcript text, audio LeanCloud file
+  reference/URL (MP3), timestamp, and sequence order; trainee turns include context text and transcript
+  derived via qwen-omni-flash ASR; AI turns include transcript returned with audio.
 - **Evaluation**: PracticeSession reference, ratings per scenario-defined communication skill (from a
   global skill library), qualitative feedback, evaluator source, created timestamp; ratings use
   numeric 1–5 scale with rubric-aligned per-skill notes and overall summary.
@@ -196,8 +197,8 @@ before implementation, with mocks/stubs specified for any external services.
 - Default timeouts: idle threshold of 8 seconds and maximum session duration of 5 minutes unless a
   scenario defines stricter limits; client measures these and signals termination.
 - Data retention: transcripts and audio persist indefinitely unless the trainee deletes them.
-- Audio format: client sends single-turn base64 MP3; backend forwards to qwen; AI turns return audio
-  plus transcript; user turns also trigger qwen ASR to obtain transcript; synthesis or recognition
+- Audio format: client sends single-turn base64 MP3; backend calls qwen ASR on trainee turns to obtain
+  transcripts, then calls qwen generation for AI replies (audio + transcript); synthesis or recognition
   failures return retryable errors without losing prior turns; audio stored as LeanCloud LFile with
   metadata in LObject via REST over HTTPS.
 - No authentication in this release; identity is stubbed/single-tenant; admin scenario seeding is
