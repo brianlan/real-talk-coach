@@ -14,8 +14,8 @@
 
 ### Session 2025-12-06
 - Q: How long should transcripts and audio be retained? → A: Keep indefinitely unless user deletes.
-- Q: How is user speech turned into text for turns? → A: Trainee turn pipeline: client sends audio plus optional context text; backend first calls qwen-omni-flash ASR to transcribe the user audio, stores transcript + audio, then uses the transcribed turn in the next AI reply call.
-- Q: What audio format/flow and fallback should be used? → A: Client sends single-turn base64 MP3 blobs; backend calls qwen ASR for user transcripts and calls qwen generation for AI replies (audio + transcript); retryable error on failure while preserving prior turns.
+- Q: How is user speech turned into text for turns? → A: Trainee turn pipeline: client sends audio plus optional context text; backend immediately calls qwen-omni-flash for the AI reply (audio + transcript). In parallel, backend calls qwen-omni-flash ASR async to transcribe the user audio for storage/evaluation; no extra user-facing latency.
+- Q: What audio format/flow and fallback should be used? → A: Client sends single-turn base64 MP3 blobs; backend calls qwen generation for AI replies (audio + transcript) and runs ASR separately/asynchronously for user transcripts; retryable error on failure while preserving prior turns.
 - Q: How should evaluations score communication skills? → A: Numeric 1–5 per skill with rubric (1=poor,3=adequate,5=excellent), per-skill notes, overall summary.
 - Q: How are skills selected for scoring? → A: Each scenario declares its skill list from a global library; evaluator scores only those skills.
 - Q: Where are idle/timeout timers measured? → A: Client measures idle and total session clocks and signals termination; backend records reason.
@@ -31,6 +31,8 @@
 - Q: Do we store raw base64 in session records in addition to LeanCloud files? → A: No; store only LeanCloud file reference/metadata in session records (no duplicate base64 blobs).
 - Q: Is evaluation synchronous or async? → A: Async: enqueue evaluation on session completion; trainee polls/fetches status; failures retried or marked failed.
 - Q: How do deletes work? → A: Hard-delete sessions and evaluations on user request; cascade to delete LeanCloud LFiles; remove LObject references; no soft delete.
+- Q: What are the session end conditions? → A: Session ends if trainee closes the client, idle exceeds threshold, total duration exceeds limit, or per-turn objective check (qwen) says goal achieved/failed.
+- Q: Are during-session and post-session models tied to qwen-omni-flash? → A: No; during-session objective check and post-session evaluation use configurable text-only models distinct from the speech model; payloads are text-only.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -119,60 +121,28 @@ before implementation, with mocks/stubs specified for any external services.
 
 ### Functional Requirements
 
-- **FR-001**: System MUST provide a catalog of practice scenarios capturing category, title,
-  description, objective, participant backgrounds/personas, and explicit end criteria.
-- **FR-002**: Trainee MUST be able to start a practice session by selecting a scenario and reviewing
-  its details before the AI initiates the first turn in the specified persona.
-- **FR-003**: System MUST run turn-based conversations where the AI and trainee alternate, checking
-  end criteria after each round and allowing termination due to idle time or maximum duration.
-- **FR-004**: System MUST capture and persist each turn's transcript (text) and associated audio for
-  both AI and trainee, with timestamps and speaker roles; audio is stored as LeanCloud LFile and only a
-  file reference/URL is kept in the turn record (no raw base64 in the turn record).
-- **FR-005**: Trainee MUST be able to manually end a session at any time, with termination reason
-  recorded.
-- **FR-005a**: For trainee turns, the client MUST provide audio plus optional context text; backend
-  first calls qwen-omni-flash ASR to transcribe the user audio for storage/evaluation, then uses the
-  transcribed turn when calling qwen for the next AI reply; failures return retryable errors while
-  preserving prior turns.
-- **FR-005b**: Client measures idle (8s) and total session duration (5m by default), signals
-  termination when thresholds hit; backend validates timestamps and records termination reason.
-- **FR-005c**: Client MUST send session start and per-turn timestamps with termination signals; backend
-  recalculates idle/total and accepts client termination unless drift exceeds 2 seconds, in which case
-  the server overrides the termination decision.
-- **FR-006**: Scenarios and session/evaluation records MUST be stored in LeanCloud using LObject; audio
-  blobs stored as LeanCloud LFile with access via LeanCloud REST over HTTPS.
-- **FR-007**: System operates without authentication; practice/history/evaluation endpoints assume a
-  single-tenant, stubbed identity; admin scenario management is out-of-band (no admin UI).
-- **FR-008**: Emit structured logs for session and turn events (including latency per turn and
-  termination reason), metrics for session start/complete/timeout/error counts and latencies, and
-  traces covering request → AI call → storage path.
-- **FR-009**: Enforce per-turn audio size under LeanCloud single-file limit (128 KB); reject larger
-  uploads with clear errors; rely on LeanCloud encryption at rest and HTTPS in transit.
-- **FR-010**: AI turns must persist both returned audio (via LFile reference) and the model-supplied
-  transcript; trainee turns must persist the transcript returned by the ASR call to qwen-omni-flash
-  alongside the LFile reference to audio.
-- **FR-011**: qwen-omni-flash calls MUST use bearer key auth; send persona/system text, user context,
-  and base64 MP3 audio in JSON (non-streaming); expect JSON with base64 MP3 + transcript; apply 10s
-  timeout and retry up to 2 times on 5xx/timeout errors.
-- **FR-012**: Deleting a session MUST hard-delete session/evaluation records and cascade to delete
-  associated LeanCloud LFiles; LObject references are removed; no soft delete.
-- **FR-013**: Upon session completion, system MUST enqueue an evaluation job that compiles conversation
-  data and requests scoring from a text-only model to produce numeric (1–5) ratings per
-  scenario-defined communication skills (chosen from a global skill library) using a rubric (1=poor,
-  3=adequate, 5=excellent), per-skill notes, and an overall summary.
-- **FR-014**: System MUST expose evaluation status (pending/failed/completed) and, when completed,
-  present stored ratings and feedback (per-skill scores and notes, overall summary) without requiring
-  re-evaluation on repeat views.
-- **FR-015**: System MUST list historical practice sessions with filters/sorting (e.g., by date,
-  scenario) and provide access to detail view including transcript, audio references, and evaluation;
-  default sort newest-first, page size 20, filters by scenario and category, search by title/objective
-  substring.
-- **FR-016**: System MUST allow the trainee to start a new session using any previously saved
-  scenario, preserving the original session data intact.
-- **FR-017**: System MUST validate scenario completeness (personas, objectives, end criteria) before
-  allowing practice to start and return actionable errors for missing fields.
-- **FR-018**: System MUST retain transcripts and audio until the trainee deletes them and provide a
-  way to delete specific sessions and associated media.
+- **FR-001**: System MUST provide a catalog of practice scenarios capturing category, title, description, objective, participant backgrounds/personas, and explicit end criteria.
+- **FR-002**: Trainee MUST be able to start a practice session by selecting a scenario and reviewing its details before the AI initiates the first turn in the specified persona.
+- **FR-003**: System MUST run turn-based conversations where the AI and trainee alternate and end a session when any of these occur: trainee closes the client, idle exceeds threshold, total duration exceeds limit, or the per-turn objective check determines the goal achieved/failed.
+- **FR-004**: System MUST capture and persist each turn's transcript (text) and associated audio for both AI and trainee, with timestamps and speaker roles; audio is stored as LeanCloud LFile and only a file reference/URL is kept in the turn record (no raw base64 in the turn record).
+- **FR-005**: Trainee MUST be able to manually end a session at any time, with termination reason recorded.
+- **FR-006**: For trainee turns, the client MUST provide audio plus optional context text; backend immediately calls qwen-omni-flash to generate the AI reply (audio + transcript) and, in parallel, calls qwen-omni-flash ASR asynchronously to transcribe the user audio for storage/evaluation; failures return retryable errors while preserving prior turns.
+- **FR-007**: Client measures idle (8s) and total session duration (5m by default), signals termination when thresholds hit; backend validates timestamps and records termination reason.
+- **FR-008**: Client MUST send session start and per-turn timestamps with termination signals; backend recalculates idle/total and accepts client termination unless drift exceeds 2 seconds, in which case the server overrides the termination decision.
+- **FR-009**: After each AI reply, system MUST call a configurable text-only model (distinct from the speech model) with the text context and transcript history to determine if objectives are achieved/failed; if so, client ends the session and records the termination reason.
+- **FR-010**: Scenarios and session/evaluation records MUST be stored in LeanCloud using LObject; audio blobs stored as LeanCloud LFile with access via LeanCloud REST over HTTPS.
+- **FR-011**: System operates without authentication; practice/history/evaluation endpoints assume a single-tenant, stubbed identity; admin scenario management is out-of-band (no admin UI).
+- **FR-012**: Emit structured logs for session and turn events (including latency per turn and termination reason), metrics for session start/complete/timeout/error counts and latencies, and traces covering request → AI call → storage path.
+- **FR-013**: Enforce per-turn audio size under LeanCloud single-file limit (128 KB); reject larger uploads with clear errors; rely on LeanCloud encryption at rest and HTTPS in transit.
+- **FR-014**: AI turns must persist both returned audio (via LFile reference) and the model-supplied transcript; trainee turns must persist the transcript returned by the ASR call to qwen-omni-flash alongside the LFile reference to audio.
+- **FR-015**: qwen-omni-flash calls MUST use bearer key auth; send persona/system text, user context, and base64 MP3 audio in JSON (non-streaming); expect JSON with base64 MP3 + transcript; apply 10s timeout and retry up to 2 times on 5xx/timeout errors.
+- **FR-016**: Deleting a session MUST hard-delete session/evaluation records and cascade to delete associated LeanCloud LFiles; LObject references are removed; no soft delete.
+- **FR-017**: Upon session completion, system MUST enqueue an evaluation job that compiles conversation data and requests scoring from a configurable text-only model (distinct from the speech model) to produce numeric (1–5) ratings per scenario-defined communication skills (chosen from a global skill library) using a rubric (1=poor, 3=adequate, 5=excellent), per-skill notes, and an overall summary.
+- **FR-018**: System MUST expose evaluation status (pending/failed/completed) and, when completed, present stored ratings and feedback (per-skill scores and notes, overall summary) without requiring re-evaluation on repeat views.
+- **FR-019**: System MUST list historical practice sessions with filters/sorting (e.g., by date, scenario) and provide access to detail view including transcript, audio references, and evaluation; default sort newest-first, page size 20, filters by scenario and category, search by title/objective substring.
+- **FR-020**: System MUST allow the trainee to start a new session using any previously saved scenario, preserving the original session data intact.
+- **FR-021**: System MUST validate scenario completeness (personas, objectives, end criteria) before allowing practice to start and return actionable errors for missing fields.
+- **FR-022**: System MUST retain transcripts and audio until the trainee deletes them and provide a way to delete specific sessions and associated media.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -198,9 +168,10 @@ before implementation, with mocks/stubs specified for any external services.
   scenario defines stricter limits; client measures these and signals termination.
 - Data retention: transcripts and audio persist indefinitely unless the trainee deletes them.
 - Audio format: client sends single-turn base64 MP3; backend calls qwen ASR on trainee turns to obtain
-  transcripts, then calls qwen generation for AI replies (audio + transcript); synthesis or recognition
-  failures return retryable errors without losing prior turns; audio stored as LeanCloud LFile with
-  metadata in LObject via REST over HTTPS.
+  transcripts, then calls qwen generation for AI replies (audio + transcript). During-session objective
+  checks and post-session evaluation use configurable text-only models (not qwen speech); all
+  synthesis/recognition failures return retryable errors without losing prior turns; audio stored as
+  LeanCloud LFile with metadata in LObject via REST over HTTPS.
 - No authentication in this release; identity is stubbed/single-tenant; admin scenario seeding is
   done out-of-band (no admin UI).
 - Observability: structured logs per session/turn (latency, termination), metrics for session
