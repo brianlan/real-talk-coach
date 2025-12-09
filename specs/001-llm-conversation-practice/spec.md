@@ -39,6 +39,8 @@
 - Q: How do we fit 128 KB audio? → A: Use MP3 ~32 kbps mono, target <3s per turn; clients pre-check size and show a clear error if over cap.
 - Q: How is identity handled in single-tenant mode? → A: Use a fixed stub user ID to scope sessions/history/deletes and avoid cross-user leakage.
 - Q: Where to emit observability data? → A: Use OpenTelemetry-style spans/metrics and LeanCloud logging; required fields: session ID, turn ID, latencies, termination reason; metrics map to SC-001–SC-004.
+- Q: Do we ever store raw base64 outside LeanCloud files? → A: No; raw audio is only in-memory for upload to LFile/ASR; turn records store only LFile references + transcript.
+- Q: Who is the termination authority? → A: Server decides termination (based on timers/objective check); client reports timers and receives termination events over WebSocket/poll fallback.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -129,13 +131,13 @@ before implementation, with mocks/stubs specified for any external services.
 
 - **FR-001**: System MUST provide a catalog of practice scenarios capturing category, title, description, objective, participant backgrounds/personas, and explicit end criteria.
 - **FR-002**: Trainee MUST be able to start a practice session by selecting a scenario and reviewing its details before the AI initiates the first turn in the specified persona.
-- **FR-003**: System MUST run turn-based conversations where the AI and trainee alternate and end a session when any of these occur: trainee closes the client, idle exceeds threshold, total duration exceeds limit, or the per-turn objective check determines the goal achieved/failed.
+- **FR-003**: System MUST run turn-based conversations where the AI and trainee alternate and end a session when any of these occur: server-detected idle exceeds threshold, server-detected total duration exceeds limit, or the server's per-turn objective check determines the goal achieved/failed; client close requests are sent to server, and server is the authority to close and notify.
 - **FR-004**: System MUST capture and persist each turn's transcript (text) and associated audio for both AI and trainee, with timestamps and speaker roles; audio is stored as LeanCloud LFile and only a file reference/URL is kept in the turn record (no raw base64 in the turn record).
 - **FR-005**: Trainee MUST be able to manually end a session at any time, with termination reason recorded.
 - **FR-006**: For trainee turns, the client MUST provide audio plus optional context text; backend immediately calls qwen-omni-flash to generate the AI reply (audio + transcript) and, in parallel, calls qwen-omni-flash ASR asynchronously (distinct API) to transcribe the user audio for storage/evaluation; retries must preserve turn order and not block the AI reply path.
-- **FR-007**: Client measures idle (8s) and total session duration (5m by default), signals termination when thresholds hit; backend validates timestamps and records termination reason.
-- **FR-008**: Client MUST send session start and per-turn timestamps with termination signals; backend recalculates idle/total and accepts client termination unless drift exceeds 2 seconds, in which case the server overrides the termination decision.
-- **FR-009**: After each AI reply, system MUST call a configurable text-only model (distinct from the speech model) with the text context and transcript history to determine if objectives are achieved/failed; if so, client ends the session and records the termination reason; server pushes termination over WebSocket and client polls as fallback.
+- **FR-007**: Client measures idle (8s) and total session duration (5m by default) locally and reports thresholds; server validates and is authoritative for termination, recording reason.
+- **FR-008**: Client MUST send session start and per-turn timestamps; server recalculates idle/total and issues termination events if thresholds are exceeded; if client and server disagree after drift checks, server decision wins and is pushed to client.
+- **FR-009**: After each AI reply, server MUST call a configurable text-only model (distinct from the speech model) with the text context and transcript history to determine if objectives are achieved/failed; if so, server ends the session, records the termination reason, and pushes the event over WebSocket (client polls as fallback).
 - **FR-010**: Scenarios and session/evaluation records MUST be stored in LeanCloud using LObject; audio blobs stored as LeanCloud LFile with access via LeanCloud REST over HTTPS.
 - **FR-011**: System operates without authentication; practice/history/evaluation endpoints assume a single-tenant, stubbed user ID to scope sessions/history/deletes; admin scenario management is out-of-band (no admin UI).
 - **FR-012**: Emit structured logs for session and turn events (including latency per turn and termination reason), metrics for session start/complete/timeout/error counts and latencies, and traces covering request → AI call → storage path; use OpenTelemetry-style spans/metrics and LeanCloud logging with fields: session ID, turn ID, latencies, termination reason; metrics align to SC-001–SC-004.
@@ -143,7 +145,7 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-014**: AI turns must persist both returned audio (via LFile reference) and the model-supplied transcript; trainee turns must persist the transcript returned by the ASR call to qwen-omni-flash alongside the LFile reference to audio.
 - **FR-015**: qwen-omni-flash calls MUST use bearer key auth; send persona/system text, user context, and base64 MP3 audio in JSON (non-streaming); expect JSON with base64 MP3 + transcript; apply 10s timeout and retry up to 2 times on 5xx/timeout errors. ASR calls use the ASR-specific endpoint (audio-only input, transcript-only output) and run async.
 - **FR-016**: Deleting a session MUST hard-delete session/evaluation records and cascade to delete associated LeanCloud LFiles; LObject references are removed; no soft delete.
-- **FR-017**: Upon session completion, system MUST enqueue an evaluation job that compiles conversation data and requests scoring from a configurable text-only model (distinct from the speech model) to produce numeric (1–5) ratings per scenario-defined communication skills (chosen from a global skill library) using a rubric (1=poor, 3=adequate, 5=excellent), per-skill notes, and an overall summary; job processed by queued background worker with status (pending, running, failed, completed) and retry with backoff.
+- **FR-017**: Upon session completion, system MUST enqueue an evaluation job that compiles conversation data and requests scoring from a configurable text-only model (distinct from the speech model) to produce numeric (1–5) ratings per scenario-defined communication skills (chosen from a global skill library) using a rubric (1=poor, 3=adequate, 5=excellent), per-skill notes, and an overall summary; job processed by queued background worker with status (pending, running, failed, completed) and retry with backoff; target SLO is relaxed (see SC-003).
 - **FR-018**: System MUST expose evaluation status (pending/failed/completed) and, when completed, present stored ratings and feedback (per-skill scores and notes, overall summary) without requiring re-evaluation on repeat views.
 - **FR-019**: System MUST list historical practice sessions with filters/sorting (e.g., by date, scenario) and provide access to detail view including transcript, audio references, and evaluation; default sort newest-first, page size 20, filters by scenario and category, search by title/objective substring.
 - **FR-020**: System MUST allow the trainee to start a new session using any previously saved scenario, preserving the original session data intact.
@@ -193,7 +195,7 @@ before implementation, with mocks/stubs specified for any external services.
   transcript/audio without system errors.
 - **SC-002**: 95% of sessions meeting end criteria or timeout stop within 2 seconds of detection and
   persist the final state.
-- **SC-003**: 90% of evaluations deliver ratings and feedback to the trainee within 10 seconds of
-  session completion.
+- **SC-003**: 90% of evaluations deliver ratings and feedback to the trainee within 60 seconds of
+  session completion (reflects async worker + retries).
 - **SC-004**: 95% of trainees can locate and open a past session with transcript and feedback in under
   two steps from the history list.
