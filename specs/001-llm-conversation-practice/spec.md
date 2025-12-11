@@ -121,6 +121,10 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-021**: System MUST validate scenario completeness (personas, objectives, end criteria) before allowing practice to start and return actionable errors for missing fields.
 - **FR-022**: System MUST retain transcripts and audio until the trainee deletes them and provide a way to delete specific sessions and associated media.
 
+### Non-Functional Requirements
+
+- **NFR-001**: Size infrastructure and concurrency controls for fewer than 20 simultaneous practice sessions (single-team pilot load), ensuring graceful degradation if exceeded.
+
 ### Key Entities *(include if feature involves data)*
 
 - **Scenario**: Category, title, description, objective, participant personas/backgrounds, end
@@ -226,3 +230,6 @@ before implementation, with mocks/stubs specified for any external services.
 - Q: Where to emit observability data? → A: Observability & Metrics Contract: OpenTelemetry-style spans + LeanCloud logging with session/turn IDs, latencies, termination reasons, and metrics tied to SC-001–SC-004.
 - Q: Do we ever store raw base64 outside LeanCloud files? → A: Audio & Media Contract: raw audio stays in-memory for upload/ASR; only references + transcripts reach persistent storage.
 - Q: Who is the termination authority? → A: Session Lifecycle Contract: server decides and pushes termination events; client reports telemetry only.
+
+### Session 2025-12-07
+- Q: What concurrent session load should the system target? → A: Size for fewer than 20 simultaneous sessions (single-team pilot scale).
