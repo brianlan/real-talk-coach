@@ -12,6 +12,6 @@
    **Rationale**: Gives SSR for scenario/history screens, good DX for bundling audio workers, and plays nicely with FastAPI WebSockets + fetch; Next.js 15 includes turbopack + server actions that simplify stub user scope.  
    **Alternatives considered**: Vite + React SPA (lighter but would require more manual routing/data-fetch wiring); Remix (less mature audio recording examples, smaller community).
 
-4. **Decision**: Run evaluation + transcription orchestration through a Celery worker backed by Redis, with FastAPI enqueueing jobs and storing status/metadata in LeanCloud.  
-   **Rationale**: Celery provides built-in retries/backoff, result tracking, and can run as a separate deployment without overburdening uvicorn; Redis dependency is lightweight and common.  
-   **Alternatives considered**: FastAPI BackgroundTasks (no durable retries); LeanCloud Cloud Functions (harder to debug locally, limited control over qwen secrets); self-managed asyncio queue (reinventing scheduling/retry logic).
+4. **Decision**: Implement an internal asyncio evaluation worker that polls LeanCloud for pending sessions, performs scoring, and writes results back with retry/backoff metadata (no external broker like Redis).  
+   **Rationale**: Keeps infrastructure minimal while still providing durable state via LeanCloud, fits the <20-session scale, and avoids introducing another managed service.  
+   **Alternatives considered**: Celery + Redis (adds operational dependency the team can’t run today); LeanCloud Cloud Functions (harder to iterate locally, limited control over qwen secrets); naive BackgroundTasks (no durability if API restarts).

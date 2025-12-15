@@ -3,7 +3,6 @@
 ## Prerequisites
 - Python 3.11 + pipx or uv
 - Node.js 20 LTS + pnpm 9
-- Redis 7 (for Celery broker/backing store)
 - LeanCloud single-tenant credentials (appId, appKey, masterKey)
 - qwen3-omni-flash + evaluator model API keys
 
@@ -20,7 +19,6 @@ QWEN_BASE_URL=https://api.qwen.com
 QWEN_BEARER=...
 EVALUATOR_MODEL=qwen-text-eval
 STUB_USER_ID=pilot-user
-REDIS_URL=redis://localhost:6379/0
 ```
 
 `frontend/.env.local`
@@ -38,16 +36,16 @@ pnpm install
 ```
 
 ## Run (dev)
-Terminal 1 – backend API + worker:
+Terminal 1 – backend API:
 ```bash
 cd backend
 uvicorn app.main:app --reload
 ```
 
-Terminal 2 – Celery evaluation worker:
+Terminal 2 – evaluation worker (LeanCloud poller):
 ```bash
 cd backend
-celery -A app.workers.evaluations worker -l info
+python -m app.workers.evaluations
 ```
 
 Terminal 3 – frontend:
@@ -83,5 +81,6 @@ pnpm playwright test   # e2e, uses stubbed qwen/LeanCloud MSW handlers
 - Package backend as container image with uvicorn + gunicorn workers, horizontal pod autoscale
   capped for <20 concurrent sessions.
 - Deploy frontend via static hosting (Vercel/S3) pointing to API base.
-- Redis + Celery worker share the same VPC; LeanCloud + qwen secrets stored via runtime secret
-  manager.
+- Run at least one replica of the evaluation worker process alongside the API (same container image
+  or separate deployment) so the LeanCloud polling queue continues to progress; LeanCloud + qwen
+  secrets stored via runtime secret manager.

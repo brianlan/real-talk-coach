@@ -12,9 +12,10 @@ Deliver a FastAPI/Uvicorn/httpx backend plus a web UI that lets trainees run voi
 against qwen3-omni-flash roleplayers, persist audio/transcripts/evaluations in LeanCloud, and surface
 history/replay plus async rubric scoring. Architecture centers on an async FastAPI service with
 server-authoritative timers/WebSockets, a Next.js 15 frontend that streams audio and listens for
-termination/evaluation events, and LeanCloud REST models for Scenario, PracticeSession, Turn, and
-Evaluation. Research validated LeanCloud access patterns, qwen retry envelopes, and the <20-session
-pilot capacity assumption to size infra and queues.
+termination/evaluation events, LeanCloud REST models for Scenario, PracticeSession, Turn, and
+Evaluation, and an internal evaluation dispatcher that polls LeanCloud for pending work instead of
+depending on an external queue. Research validated LeanCloud access patterns, qwen retry envelopes,
+and the <20-session pilot capacity assumption to size infra and background polling cadence.
 
 ## Technical Context
 
@@ -112,15 +113,16 @@ bundle) and keeps tests scoped per surface.
 
 **Inputs captured from Technical Context**
 - Dependencies: FastAPI, Uvicorn, httpx, WebSockets, Next.js/React, Web Audio API, LeanCloud REST,
-  qwen3-omni-flash, Celery + Redis.
+  qwen3-omni-flash, internal async evaluation runner.
 - Integrations: LeanCloud LObject/LFile storage, qwen speech+ASR, text-only evaluator LLM,
   WebSocket termination/polling channels.
 
 **Research tasks dispatched**
-- Best practices for running FastAPI + WebSockets + background Celery worker under <20-session load.
+- Best practices for running FastAPI + WebSockets with an internal evaluation worker under
+  <20-session load.
 - Patterns for storing conversational turns + audio references in LeanCloud via REST with cascade delete.
 - Evaluate frontend framework tradeoffs for audio capture + streaming (Next.js vs Vite SPA).
-- Durable evaluation worker design with retries/backoff (Celery vs native BackgroundTasks).
+- Durable evaluation worker design with retries/backoff (polling worker vs native BackgroundTasks).
 
 **Output**: `specs/001-llm-conversation-practice/research.md`
 
@@ -130,7 +132,8 @@ Key findings:
 2. Treat LeanCloud as the sole persisted store (LObject/LFile) to honor contracts and avoid secret
    leakage to frontend.
 3. Choose Next.js 15 (App Router) for SSR history views and ergonomic integration with Web Audio/WebSocket.
-4. Use Celery + Redis for evaluation flow to gain built-in retries/backoff beyond FastAPI background tasks.
+4. Implement an internal asyncio evaluation worker that persists job state in LeanCloud, polls for
+   pending sessions, and handles retries/backoff without introducing Redis.
 
 All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFICATION).
 
@@ -151,8 +154,8 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   channel per session ensures timers + termination reasons stay consistent.
 - Turn storage enforces LeanCloud sequence uniqueness and 128 KB MP3 constraints while capturing ASR
   status so UI can show pending transcripts.
-- Evaluation API exposes cached results plus a safe requeue endpoint that simply toggles Celery job
-  creation; Celery worker updates LeanCloud state atomically to meet retry/backoff requirement.
+- Evaluation API exposes cached results plus a safe requeue endpoint that marks work as pending; the
+  internal worker polls LeanCloud, updates records atomically, and enforces retry/backoff semantics.
 - Quickstart enumerates automation commands so CI can mirror: `ruff`, `pytest`, `pnpm lint/test`,
   `pnpm playwright test`.
 
@@ -165,8 +168,8 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
    idle/duration enforcement, LeanCloud persistence + cascading deletes.
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation/ASR integration,
    retries + telemetry, history listing.
-4. **Evaluation worker**: Celery queue/enqueue, LeanCloud status transitions, HTTP evaluation status
-   endpoint, requeue hook, instrumentation.
+4. **Evaluation worker**: LeanCloud-backed pending queue, enqueue markers, polling worker process,
+   LeanCloud status transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
 5. **Frontend**: Next.js app scaffolding, scenario browser, practice room with audio capture + stream,
    history/evaluation screens, WebSocket termination handling.
 6. **Testing/automation**: contract tests against OpenAPI, MSW mocks, Playwright happy-path practice
@@ -175,14 +178,14 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
 ## Constitution Check (Post-Design)
 
 - Readability & Explicitness: Data model + OpenAPI keep flows explicit; plan documents rationale for
-  Celery, qwen, LeanCloud usage.
+  the LeanCloud-backed worker, qwen, LeanCloud usage.
 - TDD-First & Isolated: Quickstart + plan lock in pytest/Vitest/Playwright loops with mocked qwen +
   LeanCloud so red-green remains practical.
 - Automation Everywhere: Quickstart enumerates lint/test commands for CI parity; future tasks will
   codify them in scripts.
 - Simple, Disciplined Design: One backend + one frontend + one worker process; no additional
-  microservices/datastores beyond Redis (required for Celery).
+  microservices/datastores required beyond LeanCloud itself.
 - Purposeful Comments & Rationale: Research + plan capture necessary tradeoffs (Next.js vs Vite,
-  Celery vs BackgroundTasks), so implementation can reference them.
+  polling worker vs BackgroundTasks), so implementation can reference them.
 
 **Gate Status**: PASS

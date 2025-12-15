@@ -77,8 +77,9 @@ number if ASR fails.
 - `lastError` (string, optional) — truncated message for `failed` state.
 - `queuedAt` / `completedAt`.
 
-Worker interaction: FastAPI enqueues a Celery job referencing `sessionId`. Worker updates the record
-state atomically through LeanCloud REST to avoid collisions.
+Worker interaction: FastAPI marks the evaluation as `pending`. A dedicated asyncio worker polls
+LeanCloud for pending evaluations, executes scoring, and updates the record state atomically through
+LeanCloud REST to avoid collisions.
 
 ## Supporting Concepts
 
