@@ -6,6 +6,7 @@
 - LeanCloud single-tenant credentials (appId, appKey, masterKey)
 - qwen3-omni-flash + evaluator model API keys (DashScope OpenAI-compatible SDK ≥1.52.0; install `openai`,
   plus `numpy`, `soundfile`, and an MP3 encoder helper such as `pydub` + `ffmpeg` for WAV→MP3 conversion)
+- GPT-5 mini `secretKey` for evaluations (https://api.chataiapi.com)
 
 ## Environment Variables
 Create `.env` files in both apps (never commit secrets):
@@ -16,9 +17,10 @@ LEAN_APP_ID=xxx
 LEAN_APP_KEY=xxx
 LEAN_MASTER_KEY=xxx
 LEAN_SERVER_URL=https://api.leancloud.cn
-QWEN_BASE_URL=https://api.qwen.com
-QWEN_BEARER=...
-DASHSCOPE_API_KEY=...  # used by OpenAI-compatible SDK (set same value as QWEN_BEARER)
+DASHSCOPE_API_KEY=...  # DashScope/OpenAI SDK key used for qwen3-omni-flash calls
+QWEN_BEARER=...        # optional alias if other components expect this name
+CHATAI_API_BASE=https://api.chataiapi.com/v1
+CHATAI_API_KEY=...
 EVALUATOR_MODEL=qwen-text-eval
 STUB_USER_ID=pilot-user
 ```

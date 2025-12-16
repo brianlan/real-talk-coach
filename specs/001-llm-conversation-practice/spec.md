@@ -164,6 +164,7 @@ before implementation, with mocks/stubs specified for any external services.
 - Each scenario lists communication skills chosen from a shared skill library; only those skills are scored for that session.
 - When a session ends, the system triggers an asynchronous evaluation task that compiles transcripts/audio metadata and calls a configurable text-only LLM to score each skill on a 1–5 rubric (1=poor, 3=adequate, 5=excellent), attach per-skill notes, and generate an overall summary of strengths/gaps.
 - Evaluations run via FastAPI in-process background tasks with status fields `pending`, `running`, `failed`, and `completed`; the task engine retries with backoff while the API instance remains healthy, and trainees can requeue jobs via API if additional attempts are needed.
+- The default evaluator is the GPT-5 mini endpoint hosted at `https://api.chataiapi.com/v1/chat/completions`. Requests use bearer `secretKey`, include `{"model":"gpt-5-mini","messages":[...]}` payloads, and responses return OpenAI-style `choices` plus moderation metadata; the backend extracts ratings/feedback from the assistant message and records token usage for observability.
 - Trainees poll/fetch evaluation status; once completed, stored ratings/feedback are re-used for subsequent views without re-triggering the evaluator.
 
 #### Observability & Metrics Contract
@@ -227,6 +228,7 @@ before implementation, with mocks/stubs specified for any external services.
 - Q: What are the session end conditions? → A: Session Lifecycle Contract: manual stop, client close, timer breach, or text-only objective check deciding success/failure.
 - Q: Are during-session and post-session models tied to qwen3-omni-flash? → A: Session Lifecycle + Evaluation Flow Contracts: both objective checks and post-session evaluations use configurable text-only models (not the speech model).
 - Q: How are qwen generation calls authenticated and formatted? → A: Use the DashScope OpenAI-compatible SDK (Python ≥1.52.0) with `stream=True`, `modalities=["text","audio"]`, and `audio={"voice": "...", "format": "wav"}`; decode streamed WAV chunks locally, convert to mono MP3, and store LeanCloud references only.
+- Q: Which text-only evaluator backs post-session scoring? → A: GPT-5 mini served at `https://api.chataiapi.com/v1/chat/completions`, authenticated via bearer `secretKey` using OpenAI-style chat payloads; the assistant response provides rubric scores/notes that we persist.
 - Q: How do ASR and generation calls differ? → A: Audio & Media Contract: generation returns audio+transcript synchronously; ASR is an async audio-only call that feeds trainee transcripts without blocking the AI reply.
 - Q: How are termination signals transported? → A: Session Lifecycle Contract: server pushes WebSocket termination events with poll fallback and authoritative decision.
 - Q: How is async evaluation executed? → A: Evaluation Flow Contract: FastAPI background tasks mark LeanCloud records and retry with backoff while the API remains available; manual requeue is exposed for additional attempts.

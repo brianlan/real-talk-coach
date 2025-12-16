@@ -27,7 +27,7 @@ assumption to size infra and background task load.
 -->
 
 **Language/Version**: Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15  
-**Primary Dependencies**: FastAPI, Uvicorn, httpx, WebSockets, LeanCloud REST APIs, qwen3-omni-flash, OpenAI Python SDK (DashScope compatible), Next.js/React, Web Audio API  
+**Primary Dependencies**: FastAPI, Uvicorn, httpx, WebSockets, LeanCloud REST APIs, qwen3-omni-flash, OpenAI Python SDK (DashScope compatible), GPT-5 mini text-only API (https://api.chataiapi.com), Next.js/React, Web Audio API  
 **Storage**: LeanCloud LObject/LFile for structured data + audio references  
 **Testing**: Pytest + httpx AsyncClient, pytest-asyncio for backend; Vitest + Testing Library + Playwright for frontend/e2e  
 **Target Platform**: Backend: Linux containers (uvicorn workers); Frontend: modern evergreen browsers  
@@ -159,6 +159,8 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   MP3, and persists LeanCloud references alongside transcripts.
 - Evaluation API exposes cached results plus a safe requeue endpoint; FastAPI background tasks pick
   up pending evaluations/ASR work, handle retries while the process stays alive, and update LeanCloud.
+  Evaluations call GPT-5 mini via `https://api.chataiapi.com/v1/chat/completions` with bearer secrets
+  and OpenAI-style chat payloads, then map the assistant response to rubric scores/notes.
 - Quickstart enumerates automation commands so CI can mirror: `ruff`, `pytest`, `pnpm lint/test`,
   `pnpm playwright test`.
 
@@ -172,7 +174,8 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation via OpenAI SDK
    (streaming text+WAV audio), WAV→MP3 transcode, qwen ASR integration, retries + telemetry, history listing.
 4. **Evaluation & ASR tasks**: FastAPI background task orchestration, enqueue markers in LeanCloud,
-   state transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
+   GPT-5 mini (chataiapi.com) client wrapper, state transitions, HTTP evaluation status endpoint,
+   requeue hook, instrumentation.
 5. **Frontend**: Next.js app scaffolding, scenario browser, practice room with audio capture + stream,
    history/evaluation screens, WebSocket termination handling.
 6. **Testing/automation**: contract tests against OpenAPI, MSW mocks, Playwright happy-path practice
