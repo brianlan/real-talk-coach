@@ -160,8 +160,8 @@ before implementation, with mocks/stubs specified for any external services.
 #### Evaluation Flow Contract
 
 - Each scenario lists communication skills chosen from a shared skill library; only those skills are scored for that session.
-- When a session ends, the system enqueues an evaluation job that compiles transcripts/audio metadata and calls a configurable text-only LLM to score each skill on a 1–5 rubric (1=poor, 3=adequate, 5=excellent), attach per-skill notes, and generate an overall summary of strengths/gaps.
-- Evaluations run asynchronously via a background worker (LeanCloud job or self-hosted) with status fields `pending`, `running`, `failed`, and `completed`; failures retry with backoff until they succeed or are marked failed.
+- When a session ends, the system triggers an asynchronous evaluation task that compiles transcripts/audio metadata and calls a configurable text-only LLM to score each skill on a 1–5 rubric (1=poor, 3=adequate, 5=excellent), attach per-skill notes, and generate an overall summary of strengths/gaps.
+- Evaluations run via FastAPI in-process background tasks with status fields `pending`, `running`, `failed`, and `completed`; the task engine retries with backoff while the API instance remains healthy, and trainees can requeue jobs via API if additional attempts are needed.
 - Trainees poll/fetch evaluation status; once completed, stored ratings/feedback are re-used for subsequent views without re-triggering the evaluator.
 
 #### Observability & Metrics Contract
@@ -182,6 +182,8 @@ before implementation, with mocks/stubs specified for any external services.
   Session Lifecycle Contract; clients measure locally while servers validate.
 - Audio & Media Contract governs data retention (indefinite until deletion), codec/size rules, LeanCloud
   storage via REST, retries, and the split between speech generation and text-only models.
+- Asynchronous ASR + evaluation tasks ride on FastAPI background tasks (in-process asyncio); MVP
+  scope accepts best-effort durability with manual requeue mechanisms if the API restarts mid-task.
 - No authentication in this release; identity remains a single-tenant stub, and admin scenario seeding
   is handled out-of-band (no admin UI).
 - Observability tooling follows the Observability & Metrics Contract (structured logs, metrics, traces).
@@ -195,7 +197,7 @@ before implementation, with mocks/stubs specified for any external services.
 - **SC-002**: 95% of sessions meeting end criteria or timeout stop within 2 seconds of detection and
   persist the final state.
 - **SC-003**: 90% of evaluations deliver ratings and feedback to the trainee within 60 seconds of
-  session completion (reflects async worker + retries).
+  session completion (reflects async FastAPI background tasks + retries).
 - **SC-004**: 95% of trainees can locate and open a past session with transcript and feedback in under
   two steps from the history list.
 
@@ -218,13 +220,13 @@ before implementation, with mocks/stubs specified for any external services.
 - Q: What is the qwen-omni-flash API contract? → A: Audio & Media Contract: bearer auth JSON calls that include persona/system text + MP3 input and return MP3 + transcript with 10s timeout and two retries on 5xx/timeouts.
 - Q: How are client timers validated? → A: Session Lifecycle Contract: client sends start/per-turn timestamps; server recalculates, tolerates ≤2s drift, otherwise overrides.
 - Q: Do we store raw base64 in session records in addition to LeanCloud files? → A: Audio & Media Contract: only LeanCloud references/metadata live in turn/session records.
-- Q: Is evaluation synchronous or async? → A: Evaluation Flow Contract: async worker with status + retry, results polled until ready.
+- Q: Is evaluation synchronous or async? → A: Evaluation Flow Contract: async FastAPI background tasks with status + retry (best effort), results polled until ready.
 - Q: How do deletes work? → A: Audio & Media Contract + FR-016: hard delete session/evaluation records and cascade to LeanCloud files; no soft delete.
 - Q: What are the session end conditions? → A: Session Lifecycle Contract: manual stop, client close, timer breach, or text-only objective check deciding success/failure.
 - Q: Are during-session and post-session models tied to qwen-omni-flash? → A: Session Lifecycle + Evaluation Flow Contracts: both objective checks and post-session evaluations use configurable text-only models (not the speech model).
 - Q: How do ASR and generation calls differ? → A: Audio & Media Contract: generation returns audio+transcript synchronously; ASR is an async audio-only call that feeds trainee transcripts without blocking the AI reply.
 - Q: How are termination signals transported? → A: Session Lifecycle Contract: server pushes WebSocket termination events with poll fallback and authoritative decision.
-- Q: How is async evaluation executed? → A: Evaluation Flow Contract: queued worker with status fields + retry/backoff handles evaluations.
+- Q: How is async evaluation executed? → A: Evaluation Flow Contract: FastAPI background tasks mark LeanCloud records and retry with backoff while the API remains available; manual requeue is exposed for additional attempts.
 - Q: How do we fit 128 KB audio? → A: Audio & Media Contract: enforce mono ~32 kbps MP3 (<3s) and fail fast on oversized uploads.
 - Q: How is identity handled in single-tenant mode? → A: Use a fixed stub user ID to scope sessions/history/deletes and avoid cross-user leakage.
 - Q: Where to emit observability data? → A: Observability & Metrics Contract: OpenTelemetry-style spans + LeanCloud logging with session/turn IDs, latencies, termination reasons, and metrics tied to SC-001–SC-004.

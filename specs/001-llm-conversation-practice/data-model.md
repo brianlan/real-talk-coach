@@ -77,9 +77,9 @@ number if ASR fails.
 - `lastError` (string, optional) — truncated message for `failed` state.
 - `queuedAt` / `completedAt`.
 
-Worker interaction: FastAPI marks the evaluation as `pending`. A dedicated asyncio worker polls
-LeanCloud for pending evaluations, executes scoring, and updates the record state atomically through
-LeanCloud REST to avoid collisions.
+Worker interaction: FastAPI marks the evaluation as `pending` and spins up an in-process background
+task that reads the record, performs scoring, and updates state via LeanCloud REST. If the process
+restarts mid-flight, the trainee can requeue the job via API to spawn a fresh task.
 
 ## Supporting Concepts
 

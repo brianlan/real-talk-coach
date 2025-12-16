@@ -12,6 +12,6 @@
    **Rationale**: Gives SSR for scenario/history screens, good DX for bundling audio workers, and plays nicely with FastAPI WebSockets + fetch; Next.js 15 includes turbopack + server actions that simplify stub user scope.  
    **Alternatives considered**: Vite + React SPA (lighter but would require more manual routing/data-fetch wiring); Remix (less mature audio recording examples, smaller community).
 
-4. **Decision**: Implement an internal asyncio evaluation worker that polls LeanCloud for pending sessions, performs scoring, and writes results back with retry/backoff metadata (no external broker like Redis).  
-   **Rationale**: Keeps infrastructure minimal while still providing durable state via LeanCloud, fits the <20-session scale, and avoids introducing another managed service.  
-   **Alternatives considered**: Celery + Redis (adds operational dependency the team can’t run today); LeanCloud Cloud Functions (harder to iterate locally, limited control over qwen secrets); naive BackgroundTasks (no durability if API restarts).
+4. **Decision**: Use FastAPI in-process background tasks for both evaluation and ASR, persisting status in LeanCloud but relying on the API process lifetime for retries.  
+   **Rationale**: Satisfies MVP goals without provisioning additional worker infrastructure; acceptable tradeoff since durability can be handled manually (requeue) if a process restarts.  
+   **Alternatives considered**: Celery + Redis (adds ops surface); dedicated LeanCloud polling worker (more moving parts for this MVP); fire-and-forget without status tracking (no visibility for UI).

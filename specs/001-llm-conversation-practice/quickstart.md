@@ -36,19 +36,13 @@ pnpm install
 ```
 
 ## Run (dev)
-Terminal 1 – backend API:
+Terminal 1 – backend API (serves REST/WebSockets and launches background tasks for ASR/evaluations):
 ```bash
 cd backend
 uvicorn app.main:app --reload
 ```
 
-Terminal 2 – evaluation worker (LeanCloud poller):
-```bash
-cd backend
-python -m app.workers.evaluations
-```
-
-Terminal 3 – frontend:
+Terminal 2 – frontend:
 ```bash
 cd frontend
 pnpm dev --port 3000
@@ -79,8 +73,7 @@ pnpm playwright test   # e2e, uses stubbed qwen/LeanCloud MSW handlers
 
 ## Deployment Notes
 - Package backend as container image with uvicorn + gunicorn workers, horizontal pod autoscale
-  capped for <20 concurrent sessions.
+  capped for <20 concurrent sessions; background tasks share the same process pool so size pods to
+  leave a little headroom for ASR/evaluation coroutines.
 - Deploy frontend via static hosting (Vercel/S3) pointing to API base.
-- Run at least one replica of the evaluation worker process alongside the API (same container image
-  or separate deployment) so the LeanCloud polling queue continues to progress; LeanCloud + qwen
-  secrets stored via runtime secret manager.
+- LeanCloud + qwen secrets stored via runtime secret manager.

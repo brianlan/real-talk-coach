@@ -12,10 +12,11 @@ Deliver a FastAPI/Uvicorn/httpx backend plus a web UI that lets trainees run voi
 against qwen3-omni-flash roleplayers, persist audio/transcripts/evaluations in LeanCloud, and surface
 history/replay plus async rubric scoring. Architecture centers on an async FastAPI service with
 server-authoritative timers/WebSockets, a Next.js 15 frontend that streams audio and listens for
-termination/evaluation events, LeanCloud REST models for Scenario, PracticeSession, Turn, and
-Evaluation, and an internal evaluation dispatcher that polls LeanCloud for pending work instead of
-depending on an external queue. Research validated LeanCloud access patterns, qwen retry envelopes,
-and the <20-session pilot capacity assumption to size infra and background polling cadence.
+termination/evaluation events, and LeanCloud REST models for Scenario, PracticeSession, Turn, and
+Evaluation. Asynchronous evaluation + ASR work is handled via FastAPI background tasks (best-effort
+durability) so we can ship the MVP without provisioning separate worker infrastructure. Research
+validated LeanCloud access patterns, qwen retry envelopes, and the <20-session pilot capacity
+assumption to size infra and background task load.
 
 ## Technical Context
 
@@ -80,7 +81,7 @@ backend/
 │   ├── api/
 │   ├── services/
 │   ├── models/
-│   ├── workers/
+│   ├── tasks/
 │   └── telemetry/
 └── tests/
     ├── unit/
@@ -97,9 +98,9 @@ frontend/
     └── e2e/
 ```
 
-**Structure Decision**: Use discrete `backend/` and `frontend/` workspaces so API, worker, and UI
-assets remain isolated yet share the same repo; mirrors hosting split (FastAPI service + static web
-bundle) and keeps tests scoped per surface.
+**Structure Decision**: Use discrete `backend/` and `frontend/` workspaces so API/background-task code
+and UI assets remain isolated yet share the same repo; mirrors hosting split (FastAPI service + static
+web bundle) and keeps tests scoped per surface.
 
 ## Complexity Tracking
 
@@ -113,16 +114,15 @@ bundle) and keeps tests scoped per surface.
 
 **Inputs captured from Technical Context**
 - Dependencies: FastAPI, Uvicorn, httpx, WebSockets, Next.js/React, Web Audio API, LeanCloud REST,
-  qwen3-omni-flash, internal async evaluation runner.
+  qwen3-omni-flash.
 - Integrations: LeanCloud LObject/LFile storage, qwen speech+ASR, text-only evaluator LLM,
   WebSocket termination/polling channels.
 
 **Research tasks dispatched**
-- Best practices for running FastAPI + WebSockets with an internal evaluation worker under
-  <20-session load.
+- Best practices for running FastAPI + WebSockets with in-process background tasks under <20-session load.
 - Patterns for storing conversational turns + audio references in LeanCloud via REST with cascade delete.
 - Evaluate frontend framework tradeoffs for audio capture + streaming (Next.js vs Vite SPA).
-- Durable evaluation worker design with retries/backoff (polling worker vs native BackgroundTasks).
+- Durable evaluation/ASR background-task design with retries/backoff (ensuring best effort without dedicated workers).
 
 **Output**: `specs/001-llm-conversation-practice/research.md`
 
@@ -132,8 +132,8 @@ Key findings:
 2. Treat LeanCloud as the sole persisted store (LObject/LFile) to honor contracts and avoid secret
    leakage to frontend.
 3. Choose Next.js 15 (App Router) for SSR history views and ergonomic integration with Web Audio/WebSocket.
-4. Implement an internal asyncio evaluation worker that persists job state in LeanCloud, polls for
-   pending sessions, and handles retries/backoff without introducing Redis.
+4. Use FastAPI background tasks/asyncio to run evaluation + ASR flows without separate worker infra,
+   accepting MVP-level durability in exchange for reduced ops overhead.
 
 All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFICATION).
 
@@ -154,8 +154,8 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   channel per session ensures timers + termination reasons stay consistent.
 - Turn storage enforces LeanCloud sequence uniqueness and 128 KB MP3 constraints while capturing ASR
   status so UI can show pending transcripts.
-- Evaluation API exposes cached results plus a safe requeue endpoint that marks work as pending; the
-  internal worker polls LeanCloud, updates records atomically, and enforces retry/backoff semantics.
+- Evaluation API exposes cached results plus a safe requeue endpoint; FastAPI background tasks pick
+  up pending evaluations/ASR work, handle retries while the process stays alive, and update LeanCloud.
 - Quickstart enumerates automation commands so CI can mirror: `ruff`, `pytest`, `pnpm lint/test`,
   `pnpm playwright test`.
 
@@ -168,8 +168,8 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
    idle/duration enforcement, LeanCloud persistence + cascading deletes.
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation/ASR integration,
    retries + telemetry, history listing.
-4. **Evaluation worker**: LeanCloud-backed pending queue, enqueue markers, polling worker process,
-   LeanCloud status transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
+4. **Evaluation & ASR tasks**: FastAPI background task orchestration, enqueue markers in LeanCloud,
+   state transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
 5. **Frontend**: Next.js app scaffolding, scenario browser, practice room with audio capture + stream,
    history/evaluation screens, WebSocket termination handling.
 6. **Testing/automation**: contract tests against OpenAPI, MSW mocks, Playwright happy-path practice
@@ -178,14 +178,14 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
 ## Constitution Check (Post-Design)
 
 - Readability & Explicitness: Data model + OpenAPI keep flows explicit; plan documents rationale for
-  the LeanCloud-backed worker, qwen, LeanCloud usage.
+  FastAPI background task usage, qwen, LeanCloud.
 - TDD-First & Isolated: Quickstart + plan lock in pytest/Vitest/Playwright loops with mocked qwen +
   LeanCloud so red-green remains practical.
 - Automation Everywhere: Quickstart enumerates lint/test commands for CI parity; future tasks will
   codify them in scripts.
-- Simple, Disciplined Design: One backend + one frontend + one worker process; no additional
-  microservices/datastores required beyond LeanCloud itself.
+- Simple, Disciplined Design: One backend + one frontend; all async work stays inside FastAPI
+  background tasks so we avoid extra services.
 - Purposeful Comments & Rationale: Research + plan capture necessary tradeoffs (Next.js vs Vite,
-  polling worker vs BackgroundTasks), so implementation can reference them.
+  background tasks vs dedicated workers), so implementation can reference them.
 
 **Gate Status**: PASS
