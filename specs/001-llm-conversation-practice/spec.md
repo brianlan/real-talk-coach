@@ -112,7 +112,7 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-012**: Observability MUST follow the Observability & Metrics Contract (structured logs with session/turn IDs + latencies, metrics mapped to SC-001–SC-004, and traces across request → AI call → storage).
 - **FR-013**: Codec, size limits, storage method, encryption, and retries MUST comply with the Audio & Media Contract.
 - **FR-014**: Turn records MUST persist audio references and transcripts in the manner specified by the Audio & Media Contract (AI transcript from generation response, trainee transcript from async ASR, no raw base64 duplication).
-- **FR-015**: All qwen-omni-flash interactions (generation + ASR) MUST satisfy the bearer-auth JSON contract, timeout, and retry rules documented in the Audio & Media Contract.
+- **FR-015**: All qwen3-omni-flash interactions (generation + ASR) MUST satisfy the bearer-auth JSON contract, timeout, and retry rules documented in the Audio & Media Contract.
 - **FR-016**: Deleting a session MUST hard-delete session/evaluation records and cascade to delete associated LeanCloud LFiles; LObject references are removed; no soft delete.
 - **FR-017**: Upon session completion, the system MUST execute the Evaluation Flow Contract (enqueue job, text-only LLM scoring per scenario-defined skills, 1–5 rubric with notes, retry/backoff, relaxed SC-003 SLO).
 - **FR-018**: Evaluation APIs MUST expose status and serve cached results exactly as defined in the Evaluation Flow Contract (pending/failed/completed states, no re-evaluation on repeat views).
@@ -132,7 +132,7 @@ before implementation, with mocks/stubs specified for any external services.
 - **PracticeSession**: Scenario reference, start/end timestamps, duration, termination reason, status.
 - **Turn**: PracticeSession reference, speaker (trainee or AI), transcript text, audio LeanCloud file
   reference/URL (MP3), timestamp, and sequence order; trainee turns include context text and transcript
-  derived via qwen-omni-flash ASR; AI turns include transcript returned with audio.
+  derived via qwen3-omni-flash ASR; AI turns include transcript returned with audio.
 - **Evaluation**: PracticeSession reference, ratings per scenario-defined communication skill (from a
   global skill library), qualitative feedback, evaluator source, created timestamp; ratings use
   numeric 1–5 scale with rubric-aligned per-skill notes and overall summary.
@@ -217,13 +217,13 @@ before implementation, with mocks/stubs specified for any external services.
 - Q: What rate limiting applies? → A: None for this release.
 - Q: Any accessibility/localization requirements? → A: None specified for this release.
 - Q: What per-turn audio size cap/encryption applies? → A: Audio & Media Contract: single-turn MP3 must stay under the 128 KB LeanCloud limit; LeanCloud encryption + HTTPS cover storage/transit.
-- Q: What is the qwen-omni-flash API contract? → A: Audio & Media Contract: bearer auth JSON calls that include persona/system text + MP3 input and return MP3 + transcript with 10s timeout and two retries on 5xx/timeouts.
+- Q: What is the qwen3-omni-flash API contract? → A: Audio & Media Contract: bearer auth JSON calls that include persona/system text + MP3 input and return MP3 + transcript with 10s timeout and two retries on 5xx/timeouts.
 - Q: How are client timers validated? → A: Session Lifecycle Contract: client sends start/per-turn timestamps; server recalculates, tolerates ≤2s drift, otherwise overrides.
 - Q: Do we store raw base64 in session records in addition to LeanCloud files? → A: Audio & Media Contract: only LeanCloud references/metadata live in turn/session records.
 - Q: Is evaluation synchronous or async? → A: Evaluation Flow Contract: async FastAPI background tasks with status + retry (best effort), results polled until ready.
 - Q: How do deletes work? → A: Audio & Media Contract + FR-016: hard delete session/evaluation records and cascade to LeanCloud files; no soft delete.
 - Q: What are the session end conditions? → A: Session Lifecycle Contract: manual stop, client close, timer breach, or text-only objective check deciding success/failure.
-- Q: Are during-session and post-session models tied to qwen-omni-flash? → A: Session Lifecycle + Evaluation Flow Contracts: both objective checks and post-session evaluations use configurable text-only models (not the speech model).
+- Q: Are during-session and post-session models tied to qwen3-omni-flash? → A: Session Lifecycle + Evaluation Flow Contracts: both objective checks and post-session evaluations use configurable text-only models (not the speech model).
 - Q: How do ASR and generation calls differ? → A: Audio & Media Contract: generation returns audio+transcript synchronously; ASR is an async audio-only call that feeds trainee transcripts without blocking the AI reply.
 - Q: How are termination signals transported? → A: Session Lifecycle Contract: server pushes WebSocket termination events with poll fallback and authoritative decision.
 - Q: How is async evaluation executed? → A: Evaluation Flow Contract: FastAPI background tasks mark LeanCloud records and retry with backoff while the API remains available; manual requeue is exposed for additional attempts.
