@@ -27,7 +27,7 @@ assumption to size infra and background task load.
 -->
 
 **Language/Version**: Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15  
-**Primary Dependencies**: FastAPI, Uvicorn, httpx, WebSockets, LeanCloud REST APIs, qwen3-omni-flash, Next.js/React, Web Audio API  
+**Primary Dependencies**: FastAPI, Uvicorn, httpx, WebSockets, LeanCloud REST APIs, qwen3-omni-flash, OpenAI Python SDK (DashScope compatible), Next.js/React, Web Audio API  
 **Storage**: LeanCloud LObject/LFile for structured data + audio references  
 **Testing**: Pytest + httpx AsyncClient, pytest-asyncio for backend; Vitest + Testing Library + Playwright for frontend/e2e  
 **Target Platform**: Backend: Linux containers (uvicorn workers); Frontend: modern evergreen browsers  
@@ -154,6 +154,9 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   channel per session ensures timers + termination reasons stay consistent.
 - Turn storage enforces LeanCloud sequence uniqueness and 128 KB MP3 constraints while capturing ASR
   status so UI can show pending transcripts.
+- Turn handling module wraps the OpenAI-compatible qwen SDK (`stream=True`, `modalities=["text","audio"]`,
+  `audio={"voice": …, "format": "wav"}`), decodes streamed WAV chunks, transcodes them to mono ~32 kbps
+  MP3, and persists LeanCloud references alongside transcripts.
 - Evaluation API exposes cached results plus a safe requeue endpoint; FastAPI background tasks pick
   up pending evaluations/ASR work, handle retries while the process stays alive, and update LeanCloud.
 - Quickstart enumerates automation commands so CI can mirror: `ruff`, `pytest`, `pnpm lint/test`,
@@ -166,8 +169,8 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
    + observability plumbing, pytest fixtures/mocks.
 2. **Session lifecycle**: scenario catalog endpoints, session start/manual stop/delete, WebSocket hub,
    idle/duration enforcement, LeanCloud persistence + cascading deletes.
-3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation/ASR integration,
-   retries + telemetry, history listing.
+3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation via OpenAI SDK
+   (streaming text+WAV audio), WAV→MP3 transcode, qwen ASR integration, retries + telemetry, history listing.
 4. **Evaluation & ASR tasks**: FastAPI background task orchestration, enqueue markers in LeanCloud,
    state transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
 5. **Frontend**: Next.js app scaffolding, scenario browser, practice room with audio capture + stream,

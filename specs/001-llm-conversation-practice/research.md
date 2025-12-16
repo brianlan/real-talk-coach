@@ -15,3 +15,6 @@
 4. **Decision**: Use FastAPI in-process background tasks for both evaluation and ASR, persisting status in LeanCloud but relying on the API process lifetime for retries.  
    **Rationale**: Satisfies MVP goals without provisioning additional worker infrastructure; acceptable tradeoff since durability can be handled manually (requeue) if a process restarts.  
    **Alternatives considered**: Celery + Redis (adds ops surface); dedicated LeanCloud polling worker (more moving parts for this MVP); fire-and-forget without status tracking (no visibility for UI).
+
+5. **Finding**: Qwen3-omni-flash exposes an OpenAI-compatible streaming API via DashScope (`https://dashscope.aliyuncs.com/compatible-mode/v1`). Every request must set `stream=True`, `modalities=["text","audio"]`, and `audio={"voice": "<voiceId>", "format": "wav"}`; responses stream incremental text plus base64 WAV audio.  
+   **Implication**: Backend will use the OpenAI Python SDK (≥1.52.0), decode the WAV chunks, transcode them to mono MP3 (<128 KB) before storing in LeanCloud, and keep `DASHSCOPE_API_KEY` aligned with `QWEN_BEARER` env vars.  

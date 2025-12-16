@@ -4,7 +4,8 @@
 - Python 3.11 + pipx or uv
 - Node.js 20 LTS + pnpm 9
 - LeanCloud single-tenant credentials (appId, appKey, masterKey)
-- qwen3-omni-flash + evaluator model API keys
+- qwen3-omni-flash + evaluator model API keys (DashScope OpenAI-compatible SDK ≥1.52.0; install `openai`,
+  plus `numpy`, `soundfile`, and an MP3 encoder helper such as `pydub` + `ffmpeg` for WAV→MP3 conversion)
 
 ## Environment Variables
 Create `.env` files in both apps (never commit secrets):
@@ -17,6 +18,7 @@ LEAN_MASTER_KEY=xxx
 LEAN_SERVER_URL=https://api.leancloud.cn
 QWEN_BASE_URL=https://api.qwen.com
 QWEN_BEARER=...
+DASHSCOPE_API_KEY=...  # used by OpenAI-compatible SDK (set same value as QWEN_BEARER)
 EVALUATOR_MODEL=qwen-text-eval
 STUB_USER_ID=pilot-user
 ```
@@ -31,6 +33,8 @@ NEXT_PUBLIC_WS_BASE=ws://localhost:8000/ws
 ```bash
 cd backend
 uv sync  # or pip install -r requirements.txt
+# ensure qwen helpers are installed (inside uv/virtualenv):
+# uv pip install "openai>=1.52.0" numpy soundfile pydub ffmpeg-python
 cd ../frontend
 pnpm install
 ```
@@ -77,3 +81,5 @@ pnpm playwright test   # e2e, uses stubbed qwen/LeanCloud MSW handlers
   leave a little headroom for ASR/evaluation coroutines.
 - Deploy frontend via static hosting (Vercel/S3) pointing to API base.
 - LeanCloud + qwen secrets stored via runtime secret manager.
+- Ensure the backend container includes `ffmpeg` (or another encoder) so streamed WAV audio from Qwen
+  can be transcoded to mono ~32 kbps MP3 before uploading to LeanCloud.
