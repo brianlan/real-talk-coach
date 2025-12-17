@@ -21,7 +21,8 @@ DASHSCOPE_API_KEY=...  # DashScope/OpenAI SDK key used for qwen3-omni-flash call
 QWEN_BEARER=...        # optional alias if other components expect this name
 CHATAI_API_BASE=https://api.chataiapi.com/v1
 CHATAI_API_KEY=...
-EVALUATOR_MODEL=qwen-text-eval
+CHATAI_API_MODEL=gpt-5-mini
+EVALUATOR_MODEL=gpt-5-mini  # kept for backwards compatibility in configs/tests
 STUB_USER_ID=pilot-user
 ```
 

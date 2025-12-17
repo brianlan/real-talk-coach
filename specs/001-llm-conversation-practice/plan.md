@@ -151,9 +151,12 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
 
 **Design highlights**
 - Server authoritative session lifecycle with `PracticeSession.status` transitions and WebSocket
-  channel per session ensures timers + termination reasons stay consistent.
+  channel per session ensures timers + termination reasons stay consistent; WebSocket message schema
+  (`ai_turn`, `termination`, `evaluation_ready`) mirrors the REST Turn/Evaluation payloads.
 - Turn storage enforces LeanCloud sequence uniqueness and 128 KB MP3 constraints while capturing ASR
   status so UI can show pending transcripts.
+- Client-provided timing data is formalized: `/api/sessions` accepts `clientSessionStartedAt`, and
+  every trainee turn includes `startedAt/endedAt` so the backend can compute drift and idle/total duration.
 - Turn handling module wraps the OpenAI-compatible qwen SDK (`stream=True`, `modalities=["text","audio"]`,
   `audio={"voice": …, "format": "wav"}`), decodes streamed WAV chunks, transcodes them to mono ~32 kbps
   MP3, and persists LeanCloud references alongside transcripts.
@@ -172,7 +175,8 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
 2. **Session lifecycle**: scenario catalog endpoints, session start/manual stop/delete, WebSocket hub,
    idle/duration enforcement, LeanCloud persistence + cascading deletes.
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation via OpenAI SDK
-   (streaming text+WAV audio), WAV→MP3 transcode, qwen ASR integration, retries + telemetry, history listing.
+   (streaming text+WAV audio) with WebSocket push plumbing, WAV→MP3 transcode, qwen ASR integration,
+   retries + telemetry, history listing.
 4. **Evaluation & ASR tasks**: FastAPI background task orchestration, enqueue markers in LeanCloud,
    GPT-5 mini (chataiapi.com) client wrapper, state transitions, HTTP evaluation status endpoint,
    requeue hook, instrumentation.

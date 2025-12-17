@@ -53,9 +53,8 @@ State transitions:
 - `sessionId` (pointer → PracticeSession, required).
 - `sequence` (int, required, unique per session) — 0-based; AI turn 0 for initiation.
 - `speaker` (enum: `ai`, `trainee`).
-- `audioFileId` (string, required) — LeanCloud LFile ID.
-- `audioUrl` (string) — signed download URL (never stored permanently client-side). Files are stored as
-  mono MP3 (~32 kbps); WAV chunks from qwen are transcoded before upload to stay under the 128 KB cap.
+- `audioFileId` (string, required) — LeanCloud LFile ID (only persisted field; signed URLs are minted on demand when serving API responses so they never expire in storage).
+- `audioUrl` (virtual) — rendered in API responses as a short-lived signed URL; not stored in the Turn record.
 - `transcript` (string, required) — AI transcript immediate; trainee transcript filled when ASR
   finishes (records state below).
 - `context` (string, optional) — trainee-supplied metadata.

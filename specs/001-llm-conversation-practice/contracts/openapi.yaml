@@ -101,10 +101,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [scenarioId]
+              required: [scenarioId, clientSessionStartedAt]
               properties:
                 scenarioId:
                   type: string
+                clientSessionStartedAt:
+                  type: string
+                  format: date-time
+                  description: client-side timestamp marking when the trainee initiated the session (used for drift checks)
       responses:
         '201':
           description: Session created and AI initiates turn 0
@@ -276,6 +280,9 @@ components:
         terminationReason:
           type: string
           nullable: true
+        clientSessionStartedAt:
+          type: string
+          format: date-time
         startedAt:
           type: string
           format: date-time
@@ -292,6 +299,7 @@ components:
           type: integer
         wsChannel:
           type: string
+          description: WebSocket channel identifier (clients connect to ws://.../ws/sessions/{id} to receive ai_turn/termination events)
     SessionPage:
       type: object
       properties:
@@ -409,3 +417,22 @@ components:
           maximum: 5
         note:
           type: string
+    SessionWebSocketMessage:
+      type: object
+      description: Message emitted over the session WebSocket connection
+      properties:
+        type:
+          type: string
+          enum: [ai_turn, termination, evaluation_ready]
+        turn:
+          $ref: '#/components/schemas/Turn'
+        termination:
+          type: object
+          properties:
+            reason:
+              type: string
+            terminatedAt:
+              type: string
+              format: date-time
+        evaluation:
+          $ref: '#/components/schemas/Evaluation'
