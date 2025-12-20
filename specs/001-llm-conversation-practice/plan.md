@@ -171,7 +171,7 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
 
 Will break into incremental stories during `/speckit.tasks`, roughly:
 1. **Backend foundations**: scaffold FastAPI project, env loading, LeanCloud + qwen clients, health
-   + observability plumbing (including SC-001–SC-004 metrics/logs), pytest fixtures/mocks.
+   checks, baseline telemetry scaffolding (logs/metrics/traces hooks), pytest fixtures/mocks.
 2. **Session lifecycle**: scenario catalog endpoints (including `/api/skills` + scenario `skillSummaries`),
    session start/manual stop/delete, WebSocket hub, idle/duration enforcement, LeanCloud persistence +
    cascading deletes, and initial scenario/skill seed helpers (placeholder scripts wired to sample JSON).
