@@ -116,10 +116,10 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-016**: Deleting a session MUST hard-delete session/evaluation records and cascade to delete associated LeanCloud LFiles; LObject references are removed; no soft delete.
 - **FR-017**: Upon session completion, the system MUST execute the Evaluation Flow Contract (enqueue job, text-only LLM scoring per scenario-defined skills, 1–5 rubric with notes, retry/backoff, relaxed SC-003 SLO).
 - **FR-018**: Evaluation APIs MUST expose status and serve cached results exactly as defined in the Evaluation Flow Contract (pending/failed/completed states, no re-evaluation on repeat views).
-- **FR-019**: System MUST list historical practice sessions with filters/sorting (e.g., by date, scenario) and provide access to detail view including transcript, audio references, and evaluation; default sort newest-first, page size 20, filters by scenario and category, search by title/objective substring.
+- **FR-019**: System MUST list historical practice sessions with filters/sorting (e.g., by date, scenario) and provide access to detail view including transcript, audio references, and evaluation; default sort newest-first (server-side `sort=startedAtDesc`), optional `sort=startedAtAsc` for oldest-first, page size 20, filters by scenario and category, search by title/objective substring.
 - **FR-020**: System MUST allow the trainee to start a new session using any previously saved scenario, preserving the original session data intact.
 - **FR-021**: System MUST validate scenario completeness (personas, objectives, end criteria) before allowing practice to start and return actionable errors for missing fields.
-- **FR-022**: System MUST retain transcripts and audio until the trainee deletes them and provide a way to delete specific sessions and associated media.
+- **FR-022**: System MUST retain transcripts and audio until the trainee deletes them and provide a way to delete specific sessions and associated media; DELETE `/api/sessions/{id}` returns HTTP 204 when the cascade completes, and future fetches respond 404 so clients can treat either outcome as confirmation.
 
 ### Non-Functional Requirements
 
@@ -142,6 +142,7 @@ before implementation, with mocks/stubs specified for any external services.
 #### Session Lifecycle Contract
 
 - A session starts when a trainee selects a validated scenario (complete personas, objectives, end criteria) and reviews it; the AI initiates the first turn using the scenario persona and context.
+- After POST `/api/sessions` returns `201` with the `PracticeSession` payload, clients immediately connect to `/ws/sessions/{sessionId}` (or poll the detail endpoint) to receive turn `sequence=0`; the initial AI turn is streamed asynchronously via `ai_turn` WebSocket/poll events rather than embedded in the create response.
 - Turns alternate trainee ↔ AI. After each trainee upload, the backend immediately triggers the AI reply while separately handling ASR and streams the resulting AI turn to clients over the per-session WebSocket (`/ws/sessions/{sessionId}`).
 - The client measures idle time (default 8s) and total session duration (default 5m, overridable per scenario), attaching its notion of session start (`clientSessionStartedAt`, sent when creating the session) and per-turn timestamps to every request.
 - The server recalculates timers; if drift exceeds 2 seconds, server values override client reports. The server is the source of truth for session state and termination reasons.
@@ -151,13 +152,13 @@ before implementation, with mocks/stubs specified for any external services.
 
 #### Audio & Media Contract
 
-- Each turn transports a base64 MP3 blob (mono ~32 kbps) kept under LeanCloud's 128 KB LFile limit; clients pre-validate size and surface clear errors if exceeded.
+- Each turn transports a base64 MP3 blob (mono 16–24 kbps, 16 kHz) kept under LeanCloud's 128 KB LFile limit; clients pre-validate size, show a real-time timer/progress indicator, and headline guidance like “shorten this turn or split it into multiple replies” when the buffer nears the limit so trainees can still deliver ~5–6 seconds of context without hitting hard 413 errors.
 - Trainee requests include audio plus optional context text. On receipt, the backend uploads the audio to LeanCloud LFile via REST (relying on LeanCloud encryption) and stores only the resulting reference/metadata in LObject records.
-- Immediately after receiving a trainee turn, the backend (1) calls qwen3-omni-flash generation with persona/system text, context, conversation history, and the base64 MP3; it expects JSON with AI transcript + base64 MP3 audio, enforces a 10s timeout, and retries up to two times on 5xx/timeout responses; AI turns are pushed to the frontend via WebSocket messages shaped as `{type:"ai_turn", turn:{...}}` (turn object mirrors REST representation, omitting signed URLs) with a fallback GET `/api/sessions/{sessionId}` that exposes accumulated turns; (2) asynchronously calls qwen3-omni-flash ASR with the trainee audio to obtain the trainee transcript without delaying the AI reply; retries preserve turn order.
-- LeanCloud limits each MP3 blob to 128 KB (~3 seconds at 32 kbps mono). Clients MUST enforce this limit before upload (UX surfaces a “turn too long” prompt encouraging shorter utterances). The backend revalidates size and returns HTTP 413 with an actionable error if the limit is exceeded; chunking is out-of-scope for this release.
+- Immediately after receiving a trainee turn, the backend (1) calls qwen3-omni-flash generation with persona/system text, context, conversation history, and the base64 MP3; it expects JSON with AI transcript + base64 MP3 audio, enforces a 10s timeout, and retries up to two times on 5xx/timeout responses; AI turns are pushed to the frontend via WebSocket messages shaped as `{type:"ai_turn", turn:{...}}` (turn object mirrors REST representation, omitting signed URLs) with a fallback GET `/api/sessions/{sessionId}` that exposes accumulated turns; (2) asynchronously calls qwen3-omni-flash ASR with the trainee audio to obtain the trainee transcript without delaying the AI reply; retries preserve turn order, and the `Turn` record stays in `asrStatus="pending"` with `transcript=null` until ASR succeeds.
+- LeanCloud limits each MP3 blob to 128 KB. Clients MUST enforce this limit before upload (UX surfaces a “turn too long” prompt encouraging shorter utterances or suggests breaking into multiple turns, and records at ≤24 kbps mono to stretch usable time). The backend revalidates size and returns HTTP 413 with an actionable error if the limit is exceeded; chunking remains out-of-scope for this release, and future iterations can revisit higher storage tiers if needed.
 - Qwen generation uses the OpenAI-compatible SDK (Python ≥1.52.0) against `https://dashscope.aliyuncs.com/compatible-mode/v1` with bearer auth (`DASHSCOPE_API_KEY`, mirrored in `QWEN_BEARER`). Requests MUST set `stream=True`, specify `modalities=["text","audio"]`, and pass `audio={"voice": "<voiceId>", "format": "wav"}`; responses stream chunks containing incremental text plus base64 WAV audio that the backend decodes.
 - AI turns persist both the returned transcript and uploaded audio reference (LeanCloud file ID only). Trainee turns persist the ASR transcript once available plus the audio reference; missing/corrupted audio triggers a retry prompt without corrupting the session record. When clients fetch history, the API mints short-lived signed URLs per request instead of storing them on the Turn record, preventing stale links.
-- The backend converts the returned WAV/PCM to mono ~32 kbps MP3 (e.g., via ffmpeg/pydub) before storing in LeanCloud, ensuring transport compatibility while the model contract remains satisfied.
+- The backend converts the returned WAV/PCM to mono ≤24 kbps MP3 (e.g., via ffmpeg/pydub) before storing in LeanCloud, ensuring transport compatibility while the model contract remains satisfied.
 - Raw base64 audio is never stored outside LeanCloud LFiles; session/turn records keep speaker role, timestamps, transcripts, and LFile identifiers only. Audio and transcripts remain until the trainee deletes the session, which must cascade to delete associated files.
 
 #### Evaluation Flow Contract
@@ -166,6 +167,7 @@ before implementation, with mocks/stubs specified for any external services.
 - When a session ends, the system triggers an asynchronous evaluation task that compiles transcripts/audio metadata and calls a configurable text-only LLM to score each skill on a 1–5 rubric (1=poor, 3=adequate, 5=excellent), attach per-skill notes, and generate an overall summary of strengths/gaps.
 - Evaluations run via FastAPI in-process background tasks with status fields `pending`, `running`, `failed`, and `completed`; the task engine retries with backoff while the API instance remains healthy, and trainees can requeue jobs via API if additional attempts are needed.
 - The default evaluator is the GPT-5 mini endpoint hosted at `https://api.chataiapi.com/v1/chat/completions`. Requests use bearer `secretKey`, include `{"model":"gpt-5-mini","messages":[...]}` payloads, and responses return OpenAI-style `choices` plus moderation metadata; the backend extracts ratings/feedback from the assistant message and records token usage for observability. Configuration is driven via `CHATAI_API_BASE`, `CHATAI_API_KEY`, and `CHATAI_API_MODEL` (default `gpt-5-mini`).
+- Prompting enforces a deterministic JSON response by requesting the assistant call a tool named `evaluation_result` with schema `{scores:[{skillId:string,rating:integer,note:string}],summary:string}`; background tasks reject/retry any response that does not supply valid JSON per this schema before persisting data.
 - Trainees poll/fetch evaluation status; once completed, stored ratings/feedback are re-used for subsequent views without re-triggering the evaluator.
 
 #### Observability & Metrics Contract
@@ -210,7 +212,7 @@ before implementation, with mocks/stubs specified for any external services.
 ### Session 2025-12-06
 - Q: How long should transcripts and audio be retained? → A: Audio & Media Contract: retain until the trainee deletes the session.
 - Q: How is user speech turned into text for turns? → A: Audio & Media Contract: trainee sends audio + optional context, backend triggers immediate AI reply and asynchronous qwen ASR transcription.
-- Q: What audio format/flow and fallback should be used? → A: Audio & Media Contract: base64 MP3 per turn (<128 KB, ~32 kbps mono) with retries that preserve prior turns.
+- Q: What audio format/flow and fallback should be used? → A: Audio & Media Contract: base64 MP3 per turn (<128 KB, mono ≤24 kbps) with retries that preserve prior turns.
 - Q: How should evaluations score communication skills? → A: Evaluation Flow Contract: numeric 1–5 rubric with per-skill notes plus overall summary.
 - Q: How are skills selected for scoring? → A: Evaluation Flow Contract: each scenario references a skill subset from the global library.
 - Q: Where are idle/timeout timers measured? → A: Session Lifecycle Contract: client measures and reports, server recalculates and is authoritative.
@@ -233,7 +235,7 @@ before implementation, with mocks/stubs specified for any external services.
 - Q: How do ASR and generation calls differ? → A: Audio & Media Contract: generation returns audio+transcript synchronously; ASR is an async audio-only call that feeds trainee transcripts without blocking the AI reply.
 - Q: How are termination signals transported? → A: Session Lifecycle Contract: server pushes WebSocket termination events with poll fallback and authoritative decision.
 - Q: How is async evaluation executed? → A: Evaluation Flow Contract: FastAPI background tasks mark LeanCloud records and retry with backoff while the API remains available; manual requeue is exposed for additional attempts.
-- Q: How do we fit 128 KB audio? → A: Audio & Media Contract: enforce mono ~32 kbps MP3 (<3s) and fail fast on oversized uploads.
+- Q: How do we fit 128 KB audio? → A: Audio & Media Contract: enforce mono ≤24 kbps MP3 (~5–6s), provide UX warnings before exceeding the cap, and fail fast on oversized uploads.
 - Q: How is identity handled in single-tenant mode? → A: Use a fixed stub user ID to scope sessions/history/deletes and avoid cross-user leakage.
 - Q: Where to emit observability data? → A: Observability & Metrics Contract: OpenTelemetry-style spans + LeanCloud logging with session/turn IDs, latencies, termination reasons, and metrics tied to SC-001–SC-004.
 - Q: Do we ever store raw base64 outside LeanCloud files? → A: Audio & Media Contract: raw audio stays in-memory for upload/ASR; only references + transcripts reach persistent storage.

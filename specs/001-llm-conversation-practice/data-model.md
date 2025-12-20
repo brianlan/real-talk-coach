@@ -28,11 +28,11 @@ clamped to positive values and <= 900 seconds to prevent abuse.
 - `objectId`
 - `scenarioId` (pointer → Scenario, required).
 - `stubUserId` (string, required, constant) — scopes history.
-- `status` (enum: `pending`, `active`, `ended`, `deleted`).
+- `clientSessionStartedAt` (date, required) — timestamp provided by the client to measure drift.
+- `status` (enum: `pending`, `active`, `ended`).
 - `terminationReason` (enum) — `manual`, `idle`, `duration`, `objective_met`, `objective_failed`,
   `qa_error`, `media_error`.
-- `terminalAt` (date) — when server terminated.
-- `startedAt` / `endedAt` (dates) — source of truth timestamps.
+- `startedAt` / `endedAt` (dates) — server source-of-truth timestamps recorded when AI turn 0 is issued / session terminates; compared against `clientSessionStartedAt` to enforce drift rules.
 - `totalDurationSeconds` (int) — server-calculated; validated against drift rule.
 - `idleLimitSeconds` / `durationLimitSeconds` (ints) — cached from scenario/client with overrides.
 - `objectiveStatus` (enum: `unknown`, `succeeded`, `failed`).
@@ -41,12 +41,14 @@ clamped to positive values and <= 900 seconds to prevent abuse.
 - `createdAt/updatedAt`.
 
 Relationships: `PracticeSession` owns `Turn` records (1:N) and a single `Evaluation`. Hard deletes
-cascade to dependent records and LeanCloud files via backend orchestrator.
+cascade to dependent records and LeanCloud files via backend orchestrator; deletion removes the record
+entirely, so `deleted` never surfaces via API responses.
 
 State transitions:
 `pending` → `active` when AI initiates turn 0.  
 `active` → `ended` when one of termination criteria occurs.  
-`ended` → `deleted` upon trainee delete (removes record + evaluation + media).
+Deletion removes `PracticeSession`, its turns, evaluation, and LeanCloud files immediately; there is
+no lingering soft-deleted state exposed to clients.
 
 ## Turn
 - `objectId`
@@ -55,8 +57,8 @@ State transitions:
 - `speaker` (enum: `ai`, `trainee`).
 - `audioFileId` (string, required) — LeanCloud LFile ID (only persisted field; signed URLs are minted on demand when serving API responses so they never expire in storage).
 - `audioUrl` (virtual) — rendered in API responses as a short-lived signed URL; not stored in the Turn record.
-- `transcript` (string, required) — AI transcript immediate; trainee transcript filled when ASR
-  finishes (records state below).
+- `transcript` (string, optional) — AI transcript persists immediately; trainee transcript may be
+  null/placeholder until ASR finishes (tracked via `asrStatus` below).
 - `context` (string, optional) — trainee-supplied metadata.
 - `asrStatus` (enum: `pending`, `completed`, `failed`) — trainee turns only.
 - `createdAt` (date) — first persisted time; used for idle/duration enforcement.

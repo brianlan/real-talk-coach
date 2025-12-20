@@ -85,9 +85,16 @@ paths:
           name: search
           schema:
             type: string
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [startedAtDesc, startedAtAsc]
+            default: startedAtDesc
+          description: server-side ordering; default newest-first (`startedAtDesc`)
       responses:
         '200':
-          description: Paginated session history
+          description: Paginated session history (ordered newest-first unless specified)
           content:
             application/json:
               schema:
@@ -111,7 +118,7 @@ paths:
                   description: client-side timestamp marking when the trainee initiated the session (used for drift checks)
       responses:
         '201':
-          description: Session created and AI initiates turn 0
+          description: Session created; AI initiates turn 0 asynchronously via WebSocket/poll events
           content:
             application/json:
               schema:
@@ -148,7 +155,7 @@ paths:
             type: string
       responses:
         '204':
-          description: Deleted
+          description: Deleted; subsequent GETs return 404 once cascade completes
   /api/sessions/{sessionId}/turns:
     post:
       summary: Submit trainee turn audio/context
@@ -307,6 +314,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PracticeSession'
+          description: ordered by `startedAt` using the request's `sort` parameter (default newest-first)
         page:
           type: integer
         pageSize:
@@ -342,6 +350,8 @@ components:
           enum: [ai, trainee]
         transcript:
           type: string
+          nullable: true
+          description: AI turns always include transcript; trainee turns may be null until ASR completes
         audioFileId:
           type: string
         audioUrl:

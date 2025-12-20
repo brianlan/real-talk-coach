@@ -85,4 +85,4 @@ pnpm playwright test   # e2e, uses stubbed qwen/LeanCloud MSW handlers
 - Deploy frontend via static hosting (Vercel/S3) pointing to API base.
 - LeanCloud + qwen secrets stored via runtime secret manager.
 - Ensure the backend container includes `ffmpeg` (or another encoder) so streamed WAV audio from Qwen
-  can be transcoded to mono ~32 kbps MP3 before uploading to LeanCloud.
+  can be transcoded to mono ≤24 kbps MP3 before uploading to LeanCloud.

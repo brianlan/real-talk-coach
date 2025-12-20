@@ -158,7 +158,7 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
 - Client-provided timing data is formalized: `/api/sessions` accepts `clientSessionStartedAt`, and
   every trainee turn includes `startedAt/endedAt` so the backend can compute drift and idle/total duration.
 - Turn handling module wraps the OpenAI-compatible qwen SDK (`stream=True`, `modalities=["text","audio"]`,
-  `audio={"voice": …, "format": "wav"}`), decodes streamed WAV chunks, transcodes them to mono ~32 kbps
+  `audio={"voice": …, "format": "wav"}`), decodes streamed WAV chunks, transcodes them to mono ≤24 kbps
   MP3, and persists LeanCloud references alongside transcripts.
 - Evaluation API exposes cached results plus a safe requeue endpoint; FastAPI background tasks pick
   up pending evaluations/ASR work, handle retries while the process stays alive, and update LeanCloud.

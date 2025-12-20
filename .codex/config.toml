@@ -1,5 +1,31 @@
 model = "gpt-5.1-codex"
 model_reasoning_effort = "medium"
+[projects."/Users/rlan/projects/llm_data_toolkits"]
+trust_level = "trusted"
+
+[projects."/Users/rlan/projects/annodict"]
+trust_level = "trusted"
+
+[mcp_servers.context7]
+args = ["-y", "@upstash/context7-mcp"]
+command = "npx"
+
+[mcp_servers.exa]
+command = "npx"
+args = ["-y", "mcp-remote", "https://mcp.exa.ai/mcp"]
+env = { EXA_API_KEY = "d33e4aaf-2415-4850-91ba-c826accf408a"  }
+
+[mcp_servers.puppeteer]
+command = "npx"
+args = ["-y", "puppeteer-mcp-server"]
+
+[mcp_servers.lark-mcp]
+command = "npx"
+args = ["-y", "@larksuiteoapi/lark-mcp",  "mcp", "-a", "cli_a875f5ea0367501c", "-s", "WejH64yzj1eYAhlnGF54whA2gcgoyif1", "--oauth"]
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["chrome-devtools-mcp@latest"]
 
 [notice]
 "hide_gpt-5.1-codex-max_migration_prompt" = true
