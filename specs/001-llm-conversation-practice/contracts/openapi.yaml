@@ -15,6 +15,13 @@ paths:
           schema:
             type: string
         - in: query
+          name: historyStepCount
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Number of UI navigation steps taken (SC-004 metric); HTTP 422 when missing
+        - in: query
           name: search
           schema:
             type: string
@@ -151,6 +158,13 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: historyStepCount
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Number of UI navigation steps taken (SC-004 metric); HTTP 422 when missing
       responses:
         '200':
           description: Session detail
@@ -182,6 +196,34 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sequence, audioBase64, startedAt, endedAt]
+              properties:
+                sequence:
+                  type: integer
+                  description: Sequential turn number to enforce ordering
+                audioBase64:
+                  type: string
+                  description: Base64 MP3 blob (<128 KB, mono ≤24 kbps)
+                context:
+                  type: string
+                  nullable: true
+                startedAt:
+                  type: string
+                  format: date-time
+                endedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '202':
+          description: Turn accepted, AI reply queued
+        '422':
+          description: Missing timestamps, oversized audio, or invalid sequence
       requestBody:
         required: true
         content:

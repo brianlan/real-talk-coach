@@ -78,8 +78,8 @@ pnpm playwright test   # e2e, uses stubbed qwen/LeanCloud MSW handlers
 ## Smoke Flow
 1. Seed scenarios via `/scripts/seed_scenarios.py` (see Scenario Seeding Notes below for current status).
 2. Visit `http://localhost:3000`, pick a scenario, start practice.
-3. Exchange a few turns (browser mic permission required).
-4. Wait for evaluation ready toast, then open history and replay.
+3. Observe the AI initiation turn streaming automatically, then exchange a few turns (browser mic permission required).
+4. Wait for evaluation ready toast, then open history and replay (history requests include the required `historyStepCount` query parameter so telemetry works).
 
 ### Scenario & Skill Seeding Notes
 - **Script contract**: `python scripts/seed_scenarios.py --skills specs/001-llm-conversation-practice/seed-data/sample-skills.json --scenarios specs/001-llm-conversation-practice/seed-data/sample-scenarios.json`. The script (TBD) will upsert Skill records first (using the `externalId` field for deterministic lookups), then create Scenario LObjects that reference the corresponding LeanCloud `objectId`s. It requires the LeanCloud env vars listed above plus `STUB_USER_ID`.

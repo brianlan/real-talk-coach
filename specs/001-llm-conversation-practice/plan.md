@@ -173,8 +173,8 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
 1. **Backend foundations**: scaffold FastAPI project, env loading, LeanCloud + qwen clients, health
    checks, baseline telemetry scaffolding (logs/metrics/traces hooks), pytest fixtures/mocks.
 2. **Session lifecycle**: scenario catalog endpoints (including `/api/skills` + scenario `skillSummaries`),
-   session start/manual stop/delete, WebSocket hub, idle/duration enforcement, LeanCloud persistence +
-   cascading deletes, and initial scenario/skill seed helpers (placeholder scripts wired to sample JSON).
+   session start/manual stop/delete, immediate AI turn 0 kickoff, WebSocket hub, idle/duration enforcement,
+   LeanCloud persistence + cascading deletes, and initial scenario/skill seed helpers (placeholder scripts wired to sample JSON).
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation via OpenAI SDK
    (streaming text+WAV audio) with WebSocket push plumbing, WAV→MP3 transcode, qwen ASR integration,
    retries + telemetry, history listing.
@@ -183,8 +183,9 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
    background task orchestration for ASR/evaluations, GPT-5 mini (chataiapi.com) client wrapper, state
    transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
 5. **Frontend**: Next.js app scaffolding, scenario browser (with skill metadata), practice room with audio
-   capture + stream, history/evaluation screens, WebSocket termination handling.
-6. **Testing/automation**: contract tests against OpenAPI (sessions/turns/skills/objective-check hooks),
+   capture + stream, history/evaluation screens (history APIs include required `historyStepCount` telemetry),
+   WebSocket termination handling.
+6. **Testing/automation**: contract tests against OpenAPI (sessions/turns/skills/objective-check/history step hints),
    MSW mocks, Playwright happy-path practice + history flows, CI wiring.
 
 ## Constitution Check (Post-Design)

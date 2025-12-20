@@ -147,7 +147,7 @@ before implementation, with mocks/stubs specified for any external services.
 
 - A session starts when a trainee selects a validated scenario (complete personas, objectives, end criteria) and reviews it; the AI initiates the first turn using the scenario persona and context.
 - After POST `/api/sessions` returns `201` with the `PracticeSession` payload, clients immediately connect to `/ws/sessions/{sessionId}` (or poll the detail endpoint) to receive turn `sequence=0`; the initial AI turn is streamed asynchronously via `ai_turn` WebSocket/poll events rather than embedded in the create response.
-- Turns alternate trainee ↔ AI. After each trainee upload, the backend immediately triggers the AI reply while separately handling ASR and streams the resulting AI turn to clients over the per-session WebSocket (`/ws/sessions/{sessionId}`).
+- Turns alternate trainee ↔ AI. Immediately after `POST /api/sessions` succeeds, the backend invokes qwen to generate turn `sequence=0` (AI initiation) and streams it over `/ws/sessions/{sessionId}`. Trainees then send audio/context plus timestamps via `POST /api/sessions/{sessionId}/turns`; the backend stores the audio, enqueues ASR, and triggers the next qwen AI reply, streaming the `ai_turn` over WebSocket.
 - The client measures idle time (default 8s) and total session duration (default 5m, overridable per scenario), attaching its notion of session start (`clientSessionStartedAt`, sent when creating the session) and per-turn timestamps (`startedAt`/`endedAt`) to every request; omissions result in HTTP 422 to keep drift enforcement deterministic.
 - The server recalculates timers; if drift exceeds 2 seconds, server values override client reports. The server is the source of truth for session state and termination reasons.
 - Sessions end when: the trainee manually stops, the client closes, idle or total duration exceeds thresholds, or the per-turn objective check decides the goal succeeded/failed. Termination reasons are stored with the session.
@@ -157,7 +157,7 @@ before implementation, with mocks/stubs specified for any external services.
 #### Audio & Media Contract
 
 - Each turn transports a base64 MP3 blob (mono 16–24 kbps, 16 kHz) kept under LeanCloud's 128 KB LFile limit; clients pre-validate size, show a real-time timer/progress indicator, and headline guidance like “shorten this turn or split it into multiple replies” when the buffer nears the limit so trainees can still deliver ~5–6 seconds of context without hitting hard 413 errors.
-- Trainee requests include audio plus optional context text. On receipt, the backend uploads the audio to LeanCloud LFile via REST (relying on LeanCloud encryption) and stores only the resulting reference/metadata in LObject records.
+- Trainee requests include audio plus optional context text sent to `POST /api/sessions/{sessionId}/turns` with fields `{sequence, audioBase64, context?, startedAt, endedAt}`. On receipt, the backend uploads the audio to LeanCloud LFile via REST (relying on LeanCloud encryption) and stores only the resulting reference/metadata in LObject records.
 - Immediately after receiving a trainee turn, the backend (1) calls qwen3-omni-flash generation with persona/system text, context, conversation history, and the base64 MP3; it expects JSON with AI transcript + base64 MP3 audio, enforces a 10s timeout, and retries up to two times on 5xx/timeout responses; AI turns are pushed to the frontend via WebSocket messages shaped as `{type:"ai_turn", turn:{...}}` (turn object mirrors REST representation, omitting signed URLs) with a fallback GET `/api/sessions/{sessionId}` that exposes accumulated turns; (2) asynchronously calls qwen3-omni-flash ASR with the trainee audio to obtain the trainee transcript without delaying the AI reply; retries preserve turn order, and the `Turn` record stays in `asrStatus="pending"` with `transcript=null` until ASR succeeds.
 - LeanCloud limits each MP3 blob to 128 KB. Clients MUST enforce this limit before upload (UX surfaces a “turn too long” prompt encouraging shorter utterances or suggests breaking into multiple turns, and records at ≤24 kbps mono to stretch usable time). The backend revalidates size and returns HTTP 413 with an actionable error if the limit is exceeded; chunking remains out-of-scope for this release, and future iterations can revisit higher storage tiers if needed.
 - Qwen generation uses the OpenAI-compatible SDK (Python ≥1.52.0) against `https://dashscope.aliyuncs.com/compatible-mode/v1` with bearer auth (`DASHSCOPE_API_KEY`, mirrored in `QWEN_BEARER`). Requests MUST set `stream=True`, specify `modalities=["text","audio"]`, and pass `audio={"voice": "<voiceId>", "format": "wav"}`; responses stream chunks containing incremental text plus base64 WAV audio that the backend decodes.
@@ -195,7 +195,7 @@ before implementation, with mocks/stubs specified for any external services.
 #### Observability & Metrics Contract
 
 - Emit structured logs for every session and turn capturing session ID, turn ID, latency, and termination reasons; logs feed troubleshooting and auditing.
-- Publish metrics that align with success criteria SC-001 to SC-004: session completion rate, termination latency, evaluation turnaround, and ability to open history items within two steps.
+- Publish metrics that align with success criteria SC-001 to SC-004: session completion rate, termination latency, evaluation turnaround, and ability to open history items within two steps (`historyStepCount` query parameter provided by clients on history list/detail API calls).
 - Instrument OpenTelemetry-style traces covering request → AI call → storage so that latency hotspots are visible end-to-end.
 
 ## Assumptions & Dependencies
@@ -227,7 +227,10 @@ before implementation, with mocks/stubs specified for any external services.
 - **SC-003**: 90% of evaluations deliver ratings and feedback to the trainee within 60 seconds of
   session completion (reflects async FastAPI background tasks + retries).
 - **SC-004**: 95% of trainees can locate and open a past session with transcript and feedback in under
-  two steps from the history list.
+  two navigation steps from the history list. A “step” equals a top-level navigation action initiated
+  on the history list (first click selects a session, second click opens detail). Clients MUST include
+  a `historyStepCount` query parameter when calling history list/detail APIs; the backend rejects
+  requests without it and uses the provided hint to emit SC-004 metrics.
 
 ## Clarifications
 
