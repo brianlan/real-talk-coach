@@ -1,0 +1,154 @@
+# Tasks: LLM Conversation Practice Coach
+
+**Input**: Design documents from `/specs/001-llm-conversation-practice/`
+**Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
+
+**Tests**: Tests are REQUIRED by the constitution. Write them first (failing), use mocks/stubs for
+external services, and keep them automated.
+
+**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
+- Include exact file paths in descriptions
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: Establish environment scaffolding and developer workflows before feature work begins.
+
+- [ ] T001 Create `backend/.env.example` capturing LeanCloud, DashScope/qwen, evaluator, and stub user variables from quickstart.md.
+- [ ] T002 Create `frontend/.env.local.example` with `NEXT_PUBLIC_API_BASE` and `NEXT_PUBLIC_WS_BASE` placeholders for local/dev/prod targets.
+- [ ] T003 Update `README.md` with backend/frontend install, run, and test commands mirroring `specs/001-llm-conversation-practice/quickstart.md`.
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites)
+
+**Purpose**: Core infrastructure (app scaffolding, config, shared clients, telemetry, test fixtures) required by every user story.
+
+**⚠️ CRITICAL**: No user story work can begin until this phase is complete.
+
+- [ ] T004 Scaffold FastAPI entrypoint with lifespan hooks, router mounts, and CORS defaults in `backend/app/main.py` per plan structure.
+- [ ] T005 [P] Implement strongly typed settings loader with env validation in `backend/app/config.py` for LeanCloud/qwen/evaluator/objective-check secrets.
+- [ ] T006 [P] Create LeanCloud REST client with httpx session pooling, retries, and signed file helpers in `backend/app/clients/leancloud.py`.
+- [ ] T007 [P] Build qwen (generation+ASR) and GPT-5 mini evaluation client wrappers with timeout/retry policies in `backend/app/clients/llm.py`.
+- [ ] T008 [P] Add structured logging + OpenTelemetry helpers in `backend/app/telemetry/tracing.py` for session/turn metrics.
+- [ ] T009 Establish pytest fixtures + httpx MockTransport stubs for LeanCloud/qwen/evaluator in `backend/tests/conftest.py`.
+- [ ] T010 Implement deterministic scenario/skill importer script `scripts/seed_scenarios.py` that honors `seed-data/*.json` contracts.
+- [ ] T011 [P] Create shared frontend providers (QueryClient, WebSocket context, global styles) in `frontend/app/layout.tsx` and `frontend/app/providers/app-providers.tsx`.
+
+---
+
+## Phase 3: User Story 1 - Practice a scenario with AI coach (Priority: P1) 🎯 MVP
+
+**Goal**: Enable trainees to browse published scenarios, start a practice session, exchange audio turns with the AI roleplayer, and end sessions per lifecycle contract.
+
+**Independent Test**: Start a scenario, simulate alternating turns via stubs, and verify transcripts/audio + termination reason persist.
+
+### Tests for User Story 1 ⚠️
+
+- [ ] T012 [P] [US1] Add contract tests for `GET /api/scenarios*`, `GET /api/skills`, and `POST /api/sessions` in `backend/tests/contract/test_sessions.py` using MockTransport.
+- [ ] T013 [P] [US1] Implement integration test covering trainee turn upload → AI reply → termination (idle + manual stop) in `backend/tests/integration/test_practice_flow.py`.
+- [ ] T014 [P] [US1] Create Playwright happy-path test for selecting a scenario and completing a conversation in `frontend/tests/e2e/practice.spec.ts` with mocked WebSocket events.
+
+### Implementation for User Story 1
+
+- [ ] T015 [P] [US1] Implement LeanCloud repositories for Scenario, Skill, PracticeSession, and Turn classes in `backend/app/repositories/scenario_repository.py` and `backend/app/repositories/session_repository.py`.
+- [ ] T016 [P] [US1] Expose scenario + skill catalog APIs per OpenAPI contract in `backend/app/api/routes/scenarios.py` including search/filter logic.
+- [ ] T017 [US1] Model PracticeSession/Turn schemas and validators enforcing timestamps + drift in `backend/app/models/session.py`.
+- [ ] T018 [US1] Build `/api/sessions` REST routes (list/create/detail/delete/manual-stop) in `backend/app/api/routes/sessions.py` with LeanCloud persistence + cascade hooks.
+- [ ] T019 [US1] Implement per-session WebSocket hub with `ai_turn`, `termination`, `evaluation_ready` events in `backend/app/api/routes/session_socket.py`.
+- [ ] T020 [US1] Create turn pipeline orchestrator (upload audio → qwen generation → LeanCloud storage) with ASR background task handling in `backend/app/services/turn_pipeline.py`.
+- [ ] T021 [US1] Integrate Configurable Objective Check Model client and termination enforcement in `backend/app/services/objective_check.py`.
+- [ ] T022 [US1] Persist manual stop reasons + timer breaches via service hooks in `backend/app/services/session_service.py` to satisfy FR-003/FR-005/FR-007.
+- [ ] T023 [P] [US1] Build scenario catalog page with filters/search in `frontend/app/(dashboard)/scenarios/page.tsx` consuming `/api/scenarios` + `/api/skills`.
+- [ ] T024 [P] [US1] Implement scenario detail view + session start CTA in `frontend/app/(dashboard)/scenarios/[scenarioId]/page.tsx` calling `/api/sessions`.
+- [ ] T025 [US1] Create practice room UI with WebSocket turn stream, manual stop controls, and termination banners in `frontend/app/practice/[sessionId]/page.tsx`.
+- [ ] T026 [P] [US1] Implement reusable audio capture + MP3 encoding hook in `frontend/services/audio/useAudioRecorder.ts` enforcing 128 KB limit guidance.
+- [ ] T027 [P] [US1] Add API/WebSocket clients for sessions/turns in `frontend/services/api/sessions.ts` with idle/timeout telemetry submission.
+
+**Checkpoint**: User Story 1 delivers the conversational MVP end-to-end.
+
+---
+
+## Phase 4: User Story 2 - Receive post-practice evaluation (Priority: P2)
+
+**Goal**: After a session ends, compile transcripts/audio metadata, run GPT-5 mini evaluation, and expose ratings/feedback to the trainee with requeue controls.
+
+**Independent Test**: Complete a session, trigger evaluation via stubbed model, and assert ratings + summary persist and display without duplicate runs.
+
+### Tests for User Story 2 ⚠️
+
+- [ ] T028 [P] [US2] Write contract tests for `GET/POST /api/sessions/{id}/evaluation` in `backend/tests/contract/test_evaluations.py` validating status transitions.
+- [ ] T029 [P] [US2] Add integration test that simulates session completion and background evaluation retries in `backend/tests/integration/test_evaluation_flow.py`.
+- [ ] T030 [P] [US2] Add frontend component/unit test ensuring evaluation results render + requeue disabled states in `frontend/tests/unit/evaluation-panel.test.tsx`.
+
+### Implementation for User Story 2
+
+- [ ] T031 [P] [US2] Extend LeanCloud models + repositories for Evaluation records in `backend/app/models/evaluation.py` and `backend/app/repositories/evaluation_repository.py`.
+- [ ] T032 [US2] Implement FastAPI background task runner for evaluator calls with backoff + state updates in `backend/app/tasks/evaluation_runner.py`.
+- [ ] T033 [US2] Create evaluation API routes (status fetch + requeue) in `backend/app/api/routes/evaluations.py` reusing LeanCloud repository + concurrency guards.
+- [ ] T034 [US2] Wire GPT-5 mini prompt/response parsing + observability in `backend/app/services/evaluation_service.py`.
+- [ ] T035 [P] [US2] Build frontend evaluation panel component in `frontend/components/session/EvaluationPanel.tsx` showing per-skill ratings + notes.
+- [ ] T036 [US2] Implement polling/requeue hooks for evaluations in `frontend/services/api/evaluationClient.ts` and integrate with practice/history views.
+
+**Checkpoint**: Evaluations run asynchronously, expose progress, and display actionable feedback.
+
+---
+
+## Phase 5: User Story 3 - Review and replay practice history (Priority: P3)
+
+**Goal**: Let trainees browse historical sessions, inspect transcripts/audio/evaluations, delete records, and start new sessions from saved scenarios.
+
+**Independent Test**: Populate multiple sessions, list/filter them, open a detail view with transcripts/evaluation, and launch a "practice again" flow without overwriting originals.
+
+### Tests for User Story 3 ⚠️
+
+- [ ] T037 [P] [US3] Add contract tests for session history pagination/filtering and delete cascade in `backend/tests/contract/test_history.py`.
+- [ ] T038 [P] [US3] Implement integration test covering history detail fetch + practice-again handoff in `backend/tests/integration/test_history_replay.py`.
+- [ ] T039 [P] [US3] Add Playwright test for browsing history and replaying a session in `frontend/tests/e2e/history.spec.ts`.
+
+### Implementation for User Story 3
+
+- [ ] T040 [P] [US3] Implement history list query with filters/search/sort in `backend/app/api/routes/history.py` returning `SessionPage` responses.
+- [ ] T041 [US3] Create session deletion + LeanCloud cascade orchestrator in `backend/app/services/session_cleanup.py` for DELETE `/api/sessions/{id}`.
+- [ ] T042 [US3] Add "practice again" helper that clones scenario metadata and starts a new session in `backend/app/api/routes/replay.py`.
+- [ ] T043 [P] [US3] Build history list UI with filters/search in `frontend/app/(dashboard)/history/page.tsx`.
+- [ ] T044 [US3] Implement session detail view (transcripts, audio playback via signed URLs, evaluation) in `frontend/app/(dashboard)/history/[sessionId]/page.tsx`.
+- [ ] T045 [US3] Add reusable "Practice Again" CTA component in `frontend/components/history/PracticeAgainButton.tsx` to invoke `/api/sessions` with prior scenario data.
+
+**Checkpoint**: Trainees can review and replay sessions independently from evaluations.
+
+---
+
+## Phase 6: Polish & Cross-Cutting Concerns
+
+**Purpose**: Final documentation, resiliency hardening, and regression coverage once core stories are complete.
+
+- [ ] T046 [P] Document architecture decisions, API surface, and background task flows in `docs/architecture/practice-coach.md`.
+- [ ] T047 [P] Add objective-check + timer drift unit/regression coverage in `backend/tests/unit/test_objective_check.py`.
+- [ ] T048 Run end-to-end quickstart validation script covering lint/test/playwright in `scripts/ci/validate-feature.sh` and update CI docs if needed.
+
+---
+
+## Dependencies & Execution Order
+
+- **Setup (Phase 1)** → prerequisite for Foundational.
+- **Foundational (Phase 2)** → must be 100% complete before any user story; establishes config, clients, fixtures, and UI scaffolding.
+- **User Story Order**: US1 (P1) → US2 (P2) → US3 (P3). Each depends on Foundational but can run in parallel after their predecessors if shared contracts are respected. US2 requires session lifecycle hooks from US1; US3 depends on session persistence from US1 and evaluation linkage from US2.
+- **Polish** starts only after all targeted stories are code-complete + tested.
+
+## Parallel Execution Examples
+
+- **US1**: T012/T013/T014 tests can run concurrently; T023 and T024 (distinct Next.js pages) can proceed while backend turn pipeline (T020) is in flight.
+- **US2**: T028 and T029 execute in parallel, while T035 (frontend panel) can build against mocked API responses independent of backend T032.
+- **US3**: T037–T039 tests run simultaneously; frontend history UI tasks (T043/T044) can proceed in parallel with backend history API (T040).
+
+## Implementation Strategy
+
+1. **MVP First**: Deliver Setup → Foundational → US1 to unblock live practice flow; validate via integration + Playwright tests before adding evaluations/history.
+2. **Incremental Delivery**: Layer US2 (evaluations) next, ensuring async background tasks and polling integrate cleanly without blocking US1 endpoints.
+3. **Parallelization**: After Foundational, dedicate separate owners per story (e.g., backend focus on T018–T022 while frontend handles T023–T027) and keep [P] tasks aligned to avoid file conflicts.
+4. **Polish Last**: Once US1–US3 pass acceptance tests, complete docs, add regression coverage, and run full quickstart validation to prep for release.
