@@ -105,8 +105,8 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-005**: Manual termination controls MUST remain available throughout the session per the Session Lifecycle Contract, and the server MUST record the trainee-selected reason.
 - **FR-006**: Trainee turn handling MUST follow the Audio & Media Contract (audio + optional context input, immediate AI reply, asynchronous qwen ASR transcription, retries that preserve turn order).
 - **FR-007**: Idle and total duration telemetry MUST be measured and reported by the client but validated/overridden by the server, matching the Session Lifecycle Contract.
-- **FR-008**: Session start and per-turn timestamps MUST be included so the server can enforce the ≤2s drift rule in the Session Lifecycle Contract before issuing authoritative termination events.
-- **FR-009**: Per-turn objective checks MUST use the configurable text-only model in the Session Lifecycle Contract, and the resulting decisions MUST trigger termination and WebSocket/poll notifications.
+- **FR-008**: Session start and per-turn timestamps MUST be included so the server can enforce the ≤2s drift rule in the Session Lifecycle Contract before issuing authoritative termination events; requests without timestamps fail fast with HTTP 422.
+- **FR-009**: Per-turn objective checks MUST use the Configurable Objective Check Model Contract, and the resulting decisions MUST trigger termination and WebSocket/poll notifications.
 - **FR-010**: Scenarios and session/evaluation records MUST be stored in LeanCloud using LObject; audio blobs stored as LeanCloud LFile with access via LeanCloud REST over HTTPS.
 - **FR-011**: System operates without authentication; practice/history/evaluation endpoints assume a single-tenant, stubbed user ID to scope sessions/history/deletes; admin scenario management is out-of-band (no admin UI).
 - **FR-012**: Observability MUST follow the Observability & Metrics Contract (structured logs with session/turn IDs + latencies, metrics mapped to SC-001–SC-004, and traces across request → AI call → storage).
@@ -128,14 +128,18 @@ before implementation, with mocks/stubs specified for any external services.
 ### Key Entities *(include if feature involves data)*
 
 - **Scenario**: Category, title, description, objective, participant personas/backgrounds, end
-  criteria, and prompts for AI initiation.
-- **PracticeSession**: Scenario reference, start/end timestamps, duration, termination reason, status.
+  criteria, prompts for AI initiation, and skill references.
+- **PracticeSession**: Scenario reference, start/end timestamps, duration, termination reason, status,
+  stub user ID, objective status + reason, cached limits, evaluation pointer, and WebSocket channel metadata.
 - **Turn**: PracticeSession reference, speaker (trainee or AI), transcript text, audio LeanCloud file
-  reference/URL (MP3), timestamp, and sequence order; trainee turns include context text and transcript
-  derived via qwen3-omni-flash ASR; AI turns include transcript returned with audio.
-- **Evaluation**: PracticeSession reference, ratings per scenario-defined communication skill (from a
-  global skill library), qualitative feedback, evaluator source, created timestamp; ratings use
-  numeric 1–5 scale with rubric-aligned per-skill notes and overall summary.
+  reference/URL (MP3), timestamps (`startedAt`/`endedAt`), latency, context text, ASR status, and sequence
+  order; trainee turns include context text and transcript derived via qwen3-omni-flash ASR; AI turns
+  include transcript returned with audio.
+- **Evaluation**: PracticeSession reference, ratings per scenario-defined communication skill (from the
+  shared skill library), qualitative feedback, evaluator source, attempts, timestamps, and summary.
+- **Skill**: Shared/global skill definition with id, name, category, rubric guidance, and any default
+  notes; scenarios reference these IDs, and evaluations echo them so the frontend can render human-readable
+  names.
 
 ### Supporting Contracts
 
@@ -144,10 +148,10 @@ before implementation, with mocks/stubs specified for any external services.
 - A session starts when a trainee selects a validated scenario (complete personas, objectives, end criteria) and reviews it; the AI initiates the first turn using the scenario persona and context.
 - After POST `/api/sessions` returns `201` with the `PracticeSession` payload, clients immediately connect to `/ws/sessions/{sessionId}` (or poll the detail endpoint) to receive turn `sequence=0`; the initial AI turn is streamed asynchronously via `ai_turn` WebSocket/poll events rather than embedded in the create response.
 - Turns alternate trainee ↔ AI. After each trainee upload, the backend immediately triggers the AI reply while separately handling ASR and streams the resulting AI turn to clients over the per-session WebSocket (`/ws/sessions/{sessionId}`).
-- The client measures idle time (default 8s) and total session duration (default 5m, overridable per scenario), attaching its notion of session start (`clientSessionStartedAt`, sent when creating the session) and per-turn timestamps to every request.
+- The client measures idle time (default 8s) and total session duration (default 5m, overridable per scenario), attaching its notion of session start (`clientSessionStartedAt`, sent when creating the session) and per-turn timestamps (`startedAt`/`endedAt`) to every request; omissions result in HTTP 422 to keep drift enforcement deterministic.
 - The server recalculates timers; if drift exceeds 2 seconds, server values override client reports. The server is the source of truth for session state and termination reasons.
 - Sessions end when: the trainee manually stops, the client closes, idle or total duration exceeds thresholds, or the per-turn objective check decides the goal succeeded/failed. Termination reasons are stored with the session.
-- After every AI reply, the server invokes a configurable text-only objective-check model; if it reports success/failure, the server ends the session immediately and records the cause.
+- After every AI reply, the server invokes the Objective Check Model Contract; if it reports success/failure, the server ends the session immediately and records the cause.
 - Termination events are pushed over WebSocket with a poll-after-turn fallback; server decisions win on disagreement.
 
 #### Audio & Media Contract
@@ -166,9 +170,27 @@ before implementation, with mocks/stubs specified for any external services.
 - Each scenario lists communication skills chosen from a shared skill library; only those skills are scored for that session.
 - When a session ends, the system triggers an asynchronous evaluation task that compiles transcripts/audio metadata and calls a configurable text-only LLM to score each skill on a 1–5 rubric (1=poor, 3=adequate, 5=excellent), attach per-skill notes, and generate an overall summary of strengths/gaps.
 - Evaluations run via FastAPI in-process background tasks with status fields `pending`, `running`, `failed`, and `completed`; the task engine retries with backoff while the API instance remains healthy, and trainees can requeue jobs via API if additional attempts are needed.
+  - Requeue guardrails: POST `/api/sessions/{id}/evaluation` is only accepted when the prior evaluation is `failed`; it transitions the record back to `pending`, increments `attempts`, and spawns a single background task (idempotent if a job is already `pending`/`running`). Requests in other states return HTTP 409 with the current status to prevent duplicate concurrent jobs.
 - The default evaluator is the GPT-5 mini endpoint hosted at `https://api.chataiapi.com/v1/chat/completions`. Requests use bearer `secretKey`, include `{"model":"gpt-5-mini","messages":[...]}` payloads, and responses return OpenAI-style `choices` plus moderation metadata; the backend extracts ratings/feedback from the assistant message and records token usage for observability. Configuration is driven via `CHATAI_API_BASE`, `CHATAI_API_KEY`, and `CHATAI_API_MODEL` (default `gpt-5-mini`).
 - Prompting enforces a deterministic JSON response by requesting the assistant call a tool named `evaluation_result` with schema `{scores:[{skillId:string,rating:integer,note:string}],summary:string}`; background tasks reject/retry any response that does not supply valid JSON per this schema before persisting data.
 - Trainees poll/fetch evaluation status; once completed, stored ratings/feedback are re-used for subsequent views without re-triggering the evaluator.
+
+#### Shared Skill Library Contract
+
+- Storage: `Skill` LeanCloud LObject with fields `{objectId, name, category, rubric, description, createdAt, updatedAt}`. Admins seed/edit these records out-of-band (no UI in this release). Skills are immutable once referenced by a scenario to keep rubric text stable per evaluation.
+- Referencing: `Scenario.skills` holds ordered skill IDs that define which rubric rows apply. The backend validates that every referenced ID exists before allowing a scenario to publish.
+- Exposure: Clients fetch `GET /api/skills` (catalog) or rely on `scenario.skillSummaries` returned from `GET /api/scenarios*` which inlines `{skillId, name, rubric}` for quick rendering. Evaluations echo `skillId` plus `note`, and the frontend matches them with cached `Skill` metadata to display names.
+- Seeding workflow: the planned `scripts/seed_scenarios.py` helper (currently TBD) ingests both skills and scenarios in one pass. It first reads the skills file (JSON shaped as `[{"externalId":"skill_active_listening","name":"Active Listening","category":"Feedback","rubric":"5=...","description":"..."}]`), upserts each Skill (storing the `externalId` for deterministic lookups), then loads scenarios referencing those `externalId` values. Until the script lands, import `seed-data/sample-skills.json` and `seed-data/sample-scenarios.json` via the LeanCloud dashboard to populate required records.
+
+#### Objective Check Model Contract
+
+- Purpose: determines after every AI reply whether session objectives succeeded, failed, or should continue. The backend calls the model synchronously so it can terminate sessions within the drift budget.
+- Configuration: `OBJECTIVE_CHECK_API_BASE` (default `https://api.chataiapi.com/v1`), `OBJECTIVE_CHECK_API_KEY`, and `OBJECTIVE_CHECK_MODEL` (default `gpt-5-mini`). Unless overridden, this matches the GPT-5 mini OpenAI-compatible endpoint already used for evaluations.
+- Request: POST `{base}/chat/completions` with bearer auth and payload `{"model":OBJECTIVE_CHECK_MODEL,"messages":[{role:"system",content:"You assess whether the trainee achieved the objective..."},{role:"user",content:<structured transcript + end criteria>}],"tools":[{"type":"function","function":{"name":"objective_check_result","parameters":{"type":"object","properties":{"status":{"type":"string","enum":["continue","succeeded","failed"]},"reason":{"type":"string"}},"required":["status"]}}}]}`. The backend supplies the latest transcript summary, scenario objectives/end criteria, and server timestamps so the tool has full context.
+- Response: the assistant MUST call the `objective_check_result` tool. `status="continue"` allows the session to proceed; `status="succeeded"` or `"failed"` causes immediate termination with `terminationReason=objective_met`/`objective_failed`. `reason` is persisted for observability.
+- Persistence: when `status` is terminal, the backend records `objectiveStatus` plus `objectiveReason` on the PracticeSession (mirrored in API responses and logs) so clients can display why the model decided to stop.
+- Timeouts: synchronous deadline of 4 seconds; one retry on timeout/5xx before falling back to server-side heuristic (session continues). All requests log latency and response payloads (minus transcripts) for drift budget sizing.
+- Testing guidance: provide a stub HTTP server that honors the tool schema so per-turn termination logic can be unit-tested; rejected/malformed responses are treated as `continue` and surfaced in logs.
 
 #### Observability & Metrics Contract
 

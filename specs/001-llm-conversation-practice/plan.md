@@ -172,18 +172,20 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
 Will break into incremental stories during `/speckit.tasks`, roughly:
 1. **Backend foundations**: scaffold FastAPI project, env loading, LeanCloud + qwen clients, health
    + observability plumbing, pytest fixtures/mocks.
-2. **Session lifecycle**: scenario catalog endpoints, session start/manual stop/delete, WebSocket hub,
-   idle/duration enforcement, LeanCloud persistence + cascading deletes.
+2. **Session lifecycle**: scenario catalog endpoints (including `/api/skills` + scenario `skillSummaries`),
+   session start/manual stop/delete, WebSocket hub, idle/duration enforcement, LeanCloud persistence +
+   cascading deletes, and initial scenario/skill seed helpers (placeholder scripts wired to sample JSON).
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation via OpenAI SDK
    (streaming text+WAV audio) with WebSocket push plumbing, WAV→MP3 transcode, qwen ASR integration,
    retries + telemetry, history listing.
-4. **Evaluation & ASR tasks**: FastAPI background task orchestration, enqueue markers in LeanCloud,
-   GPT-5 mini (chataiapi.com) client wrapper, state transitions, HTTP evaluation status endpoint,
-   requeue hook, instrumentation.
-5. **Frontend**: Next.js app scaffolding, scenario browser, practice room with audio capture + stream,
-   history/evaluation screens, WebSocket termination handling.
-6. **Testing/automation**: contract tests against OpenAPI, MSW mocks, Playwright happy-path practice
-   + history flows, CI wiring.
+4. **Objective checks, evaluation & ASR tasks**: implement synchronous Objective Check Model client +
+   enforcement (including `objectiveStatus`/`objectiveReason` persistence and drift-safe retries), FastAPI
+   background task orchestration for ASR/evaluations, GPT-5 mini (chataiapi.com) client wrapper, state
+   transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
+5. **Frontend**: Next.js app scaffolding, scenario browser (with skill metadata), practice room with audio
+   capture + stream, history/evaluation screens, WebSocket termination handling.
+6. **Testing/automation**: contract tests against OpenAPI (sessions/turns/skills/objective-check hooks),
+   MSW mocks, Playwright happy-path practice + history flows, CI wiring.
 
 ## Constitution Check (Post-Design)
 

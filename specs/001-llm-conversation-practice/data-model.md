@@ -12,7 +12,8 @@ FastAPI + frontend clients can rely on contracts.
 - `aiPersona` (object, required) — `{name, role, background}` describing the AI roleplayer.
 - `traineePersona` (object, required) — metadata surfaced to trainee.
 - `endCriteria` (array[string], required, min 1) — textual stop conditions shown to objective checker.
-- `skills` (array[string], required) — skill IDs from global library that drive evaluation rubric.
+- `skills` (array[string], required) — skill IDs from global library that drive evaluation rubric (stored in `Skill` records).
+- `skillSummaries` (virtual, array[object]) — `{skillId, name, rubric}` returned via API for convenience; derived by joining `skills` with the library at read time.
 - `idleLimitSeconds` (int, optional, default 8) — overrides contract default if set.
 - `durationLimitSeconds` (int, optional, default 300) — overrides contract default if set.
 - `prompt` (string, required) — system/prompt text for AI initiation turn.
@@ -23,6 +24,17 @@ Relationships: `Scenario` referenced by `PracticeSession` (1:N) and `Turn` (thro
 
 Validation: enforce presence of persona/background/endCriteria before publish; idle/duration limits
 clamped to positive values and <= 900 seconds to prevent abuse.
+
+## Skill
+- `objectId`
+- `externalId` (string, required, unique) — deterministic identifier used by seed scripts and tests to join scenarios ↔ skills.
+- `name` (string, required, unique) — label shown in the UI/evaluations.
+- `category` (string, required) — taxonomy bucket for filtering (e.g., `Feedback`, `Conflict`).
+- `rubric` (string, required) — markdown text describing ratings 1–5.
+- `description` (string, optional) — additional context for admins.
+- `createdAt/updatedAt`.
+
+Skills are seeded/administered out-of-band via `scripts/seed_skills.py` (JSON input described in the spec). Scenarios reference immutable `objectId` values, so edits require cloning a skill and migrating scenarios intentionally.
 
 ## PracticeSession
 - `objectId`
@@ -36,6 +48,7 @@ clamped to positive values and <= 900 seconds to prevent abuse.
 - `totalDurationSeconds` (int) — server-calculated; validated against drift rule.
 - `idleLimitSeconds` / `durationLimitSeconds` (ints) — cached from scenario/client with overrides.
 - `objectiveStatus` (enum: `unknown`, `succeeded`, `failed`).
+- `objectiveReason` (string, optional) — last explanation returned by the objective-check model when it decided to end the session.
 - `evaluationId` (pointer → Evaluation, optional).
 - `wsChannel` (string) — channel/room ID for WebSocket pushes.
 - `createdAt/updatedAt`.
@@ -59,10 +72,11 @@ no lingering soft-deleted state exposed to clients.
 - `audioUrl` (virtual) — rendered in API responses as a short-lived signed URL; not stored in the Turn record.
 - `transcript` (string, optional) — AI transcript persists immediately; trainee transcript may be
   null/placeholder until ASR finishes (tracked via `asrStatus` below).
-- `context` (string, optional) — trainee-supplied metadata.
+- `context` (string, optional) — trainee-supplied metadata, echoed back to clients.
 - `asrStatus` (enum: `pending`, `completed`, `failed`) — trainee turns only.
+- `startedAt` / `endedAt` (dates, required) — timestamps supplied by client per turn; server stores validated versions for drift enforcement.
 - `createdAt` (date) — first persisted time; used for idle/duration enforcement.
-- `latencyMs` (int) — server measured for observability.
+- `latencyMs` (int) — server measured for observability; exposed in telemetry APIs.
 
 Constraints: MP3 blob stored as LeanCloud LFile (<128 KB). Insert order must match `sequence`,
 enforced via unique index per session + server-authoritative increments. Retries reuse same sequence

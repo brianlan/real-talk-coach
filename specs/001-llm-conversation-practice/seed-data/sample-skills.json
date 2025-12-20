@@ -1,0 +1,16 @@
+[
+  {
+    "externalId": "skill_active_listening",
+    "name": "Active Listening",
+    "category": "Feedback",
+    "rubric": "1 = misses key points; 3 = reflects key facts; 5 = paraphrases intent and feelings.",
+    "description": "Measures how well the trainee captures and reflects the partner's statements."
+  },
+  {
+    "externalId": "skill_clear_ask",
+    "name": "Clear Ask",
+    "category": "Negotiation",
+    "rubric": "1 = vague or conflicting ask; 3 = specific but timid; 5 = confident and actionable with rationale.",
+    "description": "Captures whether the trainee states a concrete request/outcome."
+  }
+]

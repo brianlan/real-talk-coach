@@ -37,6 +37,22 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Scenario'
+  /api/skills:
+    get:
+      summary: List shared/global skills
+      tags: [Skills]
+      responses:
+        '200':
+          description: Skill catalog used by scenarios/evaluations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Skill'
   /api/scenarios/{scenarioId}:
     get:
       summary: Fetch a specific scenario
@@ -222,6 +238,7 @@ paths:
                 $ref: '#/components/schemas/Evaluation'
     post:
       summary: Re-enqueue evaluation if failed
+      description: Only allowed when the current evaluation status is `failed`; transitions the record back to `pending`, increments attempts, and starts a single background task. Other states return HTTP 409 with the current status.
       tags: [Evaluation]
       parameters:
         - in: path
@@ -232,6 +249,8 @@ paths:
       responses:
         '202':
           description: Evaluation re-queued
+        '409':
+          description: Evaluation is not in `failed` state; includes current status payload
 components:
   schemas:
     Scenario:
@@ -259,11 +278,38 @@ components:
           type: array
           items:
             type: string
+        skillSummaries:
+          type: array
+          items:
+            type: object
+            properties:
+              skillId:
+                type: string
+              name:
+                type: string
+              rubric:
+                type: string
+          description: convenience join between scenario skills and skill library for rendering
         idleLimitSeconds:
           type: integer
         durationLimitSeconds:
           type: integer
         prompt:
+          type: string
+    Skill:
+      type: object
+      properties:
+        id:
+          type: string
+        externalId:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        rubric:
+          type: string
+        description:
           type: string
     Persona:
       type: object
@@ -281,6 +327,9 @@ components:
           type: string
         scenarioId:
           type: string
+        stubUserId:
+          type: string
+          description: Fixed identifier for this single-tenant release
         status:
           type: string
           enum: [pending, active, ended]
@@ -307,6 +356,15 @@ components:
         wsChannel:
           type: string
           description: WebSocket channel identifier (clients connect to ws://.../ws/sessions/{id} to receive ai_turn/termination events)
+        objectiveStatus:
+          type: string
+          enum: [unknown, succeeded, failed]
+        objectiveReason:
+          type: string
+          nullable: true
+        evaluationId:
+          type: string
+          nullable: true
     SessionPage:
       type: object
       properties:
@@ -363,9 +421,21 @@ components:
         createdAt:
           type: string
           format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        context:
+          type: string
+          nullable: true
+        latencyMs:
+          type: integer
+          nullable: true
     TraineeTurnInput:
       type: object
-      required: [sequence, audioBase64]
+      required: [sequence, audioBase64, startedAt, endedAt]
       properties:
         sequence:
           type: integer
@@ -378,9 +448,11 @@ components:
         startedAt:
           type: string
           format: date-time
+          description: client-side timestamp when the trainee began speaking
         endedAt:
           type: string
           format: date-time
+          description: client-side timestamp when audio capture stopped; used for drift enforcement
     TurnReceipt:
       type: object
       properties:
@@ -415,6 +487,14 @@ components:
           type: integer
         lastError:
           type: string
+          nullable: true
+        queuedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
           nullable: true
     SkillScore:
       type: object
