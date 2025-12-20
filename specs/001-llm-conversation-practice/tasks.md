@@ -30,10 +30,15 @@ external services, and keep them automated.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
+- [ ] T004a [P] Author pytest unit/contract tests that pin FastAPI lifespan hooks, router mounts, and default CORS behavior in `backend/tests/unit/test_main.py` before any `backend/app/main.py` code exists.
 - [ ] T004 Scaffold FastAPI entrypoint with lifespan hooks, router mounts, and CORS defaults in `backend/app/main.py` per plan structure.
+- [ ] T005a [P] Write tests in `backend/tests/unit/test_config.py` verifying the settings loader rejects missing/invalid env vars with actionable errors.
 - [ ] T005 [P] Implement strongly typed settings loader with env validation in `backend/app/config.py` for LeanCloud/qwen/evaluator/objective-check secrets.
+- [ ] T006a [P] Create MockTransport-backed tests in `backend/tests/unit/test_leancloud_client.py` asserting retries, signed URL helpers, and error surfacing for the LeanCloud client.
 - [ ] T006 [P] Create LeanCloud REST client with httpx session pooling, retries, and signed file helpers in `backend/app/clients/leancloud.py`.
+- [ ] T007a [P] Add tests in `backend/tests/unit/test_llm_clients.py` covering qwen (generation + ASR) and GPT-5 mini wrapper timeouts, retries, and JSON contracts.
 - [ ] T007 [P] Build qwen (generation+ASR) and GPT-5 mini evaluation client wrappers with timeout/retry policies in `backend/app/clients/llm.py`.
+- [ ] T008a [P] Write telemetry helper tests in `backend/tests/unit/test_tracing.py` ensuring structured logs/metrics emit sessionId/turnId and SC-00x attributes.
 - [ ] T008 [P] Add structured logging + OpenTelemetry helpers in `backend/app/telemetry/tracing.py` for session/turn metrics.
 - [ ] T009 Establish pytest fixtures + httpx MockTransport stubs for LeanCloud/qwen/evaluator in `backend/tests/conftest.py`.
 - [ ] T010 Implement deterministic scenario/skill importer script `scripts/seed_scenarios.py` that honors `seed-data/*.json` contracts.
@@ -50,10 +55,12 @@ external services, and keep them automated.
 ### Tests for User Story 1 ⚠️
 
 - [ ] T012 [P] [US1] Add contract tests for `GET /api/scenarios*`, `GET /api/skills`, `POST /api/sessions`, and `POST /api/sessions/{sessionId}/turns` in `backend/tests/contract/test_sessions.py` and `backend/tests/contract/test_turns.py` using MockTransport.
+- [ ] T012a [P] [US1] Add contract test in `backend/tests/contract/test_turns.py` proving audio payloads >128 KB receive HTTP 413 with actionable guidance.
 - [ ] T013 [P] [US1] Implement integration test covering trainee turn upload → AI reply → termination (idle + manual stop) in `backend/tests/integration/test_practice_flow.py`.
 - [ ] T014 [P] [US1] Create Playwright happy-path test for selecting a scenario and completing a conversation in `frontend/tests/e2e/practice.spec.ts` with mocked WebSocket events.
 - [ ] T015 [P] [US1] Add contract test that rejects POST `/api/sessions` when personas/objectives/endCriteria are incomplete in `backend/tests/contract/test_sessions.py` (expects HTTP 422 with actionable errors).
 - [ ] T016 [P] [US1] Extend integration coverage to simulate objective-check succeed/fail outcomes via stubbed responses in `backend/tests/integration/test_practice_flow.py`.
+- [ ] T016a [P] [US1] Add integration test in `backend/tests/integration/test_practice_flow.py` simulating qwen generation/ASR outages to ensure sessions terminate gracefully with retry messaging.
 
 ### Implementation for User Story 1
 
@@ -62,12 +69,16 @@ external services, and keep them automated.
 - [ ] T019 [US1] Model PracticeSession/Turn schemas and validators enforcing timestamps + drift in `backend/app/models/session.py`.
 - [ ] T020 [US1] Build `/api/sessions` REST routes (list/create/detail/delete/manual-stop) in `backend/app/api/routes/sessions.py` with LeanCloud persistence + cascade hooks.
 - [ ] T021 [US1] Implement `POST /api/sessions/{sessionId}/turns` in `backend/app/api/routes/turns.py` validating session state, sequence, timestamps, and delegating to the turn pipeline service.
+- [ ] T021a [US1] Enforce MP3 size/bitrate validation in `backend/app/api/routes/turns.py`, returning HTTP 413 with actionable errors when payloads exceed LeanCloud limits.
 - [ ] T022 [US1] Implement per-session WebSocket hub with `ai_turn`, `termination`, `evaluation_ready` events in `backend/app/api/routes/session_socket.py`.
 - [ ] T023 [US1] Create turn pipeline orchestrator (upload audio → qwen generation → LeanCloud storage) with ASR background task handling in `backend/app/services/turn_pipeline.py`.
+- [ ] T023a [US1] Extend `backend/app/services/turn_pipeline.py` to detect qwen generation/ASR failures, persist termination reasons, emit guidance over WebSocket, and notify observability sinks.
+- [ ] T023b [US1] Add missing/corrupt audio recovery in `backend/app/services/turn_pipeline.py`, preserving turn order, prompting clients to resend, and ensuring retries don’t corrupt session state.
 - [ ] T024 [US1] Integrate Configurable Objective Check Model client and termination enforcement in `backend/app/services/objective_check.py`.
 - [ ] T025 [US1] Persist manual stop reasons + timer breaches via service hooks in `backend/app/services/session_service.py` to satisfy FR-003/FR-005/FR-007.
 - [ ] T026 [US1] Enforce session/turn timestamp validation (startedAt/endedAt required, drift +/-2s) with HTTP 422 responses in `backend/app/api/routes/sessions.py` and `backend/app/api/routes/turns.py`.
 - [ ] T027 [US1] Add contract tests for timestamp validation/drift enforcement (missing timestamps → 422) in `backend/tests/contract/test_sessions.py` and `backend/tests/contract/test_turns.py`.
+- [ ] T027a [US1] Add contract test in `backend/tests/contract/test_turns.py` verifying missing/corrupt audio uploads trigger HTTP 422 with “resend turn” guidance while preserving session data.
 - [ ] T028 [US1] Inject `STUB_USER_ID` scoping for all practice/evaluation/history queries in `backend/app/api/routes/` to uphold the single-tenant requirement.
 - [ ] T029 [US1] Instrument session lifecycle + turn pipeline with structured logs and metrics covering SC-001 (completion rate) and SC-002 (termination latency), including unit tests that assert emission hooks via `backend/app/telemetry/tracing.py`.
 - [ ] T030 [US1] Implement OpenTelemetry traces across `/api/sessions`, `backend/app/services/turn_pipeline.py`, and `backend/app/clients/*` so request → qwen → LeanCloud spans are emitted; add tests asserting span metadata (sessionId, turnId, latency).
@@ -76,7 +87,9 @@ external services, and keep them automated.
 - [ ] T033 [P] [US1] Build scenario catalog page with filters/search in `frontend/app/(dashboard)/scenarios/page.tsx` consuming `/api/scenarios` + `/api/skills`.
 - [ ] T034 [P] [US1] Implement scenario detail view + session start CTA in `frontend/app/(dashboard)/scenarios/[scenarioId]/page.tsx` calling `/api/sessions`.
 - [ ] T035 [US1] Create practice room UI with WebSocket turn stream, manual stop controls, and termination banners in `frontend/app/practice/[sessionId]/page.tsx`.
+- [ ] T035a [US1] Surface explicit qwen outage states in `frontend/app/practice/[sessionId]/page.tsx`, including retry CTA and preserved transcript context.
 - [ ] T036 [P] [US1] Implement reusable audio capture + MP3 encoding hook in `frontend/services/audio/useAudioRecorder.ts` enforcing 128 KB limit guidance.
+- [ ] T036a [P] [US1] Enhance `frontend/services/audio/useAudioRecorder.ts` and `frontend/services/api/sessions.ts` so “resend audio” responses replay the failed turn without duplicating state.
 - [ ] T037 [P] [US1] Add API/WebSocket clients for sessions/turns in `frontend/services/api/sessions.ts` with idle/timeout telemetry submission.
 
 **Checkpoint**: User Story 1 delivers the conversational MVP end-to-end.
@@ -144,7 +157,8 @@ external services, and keep them automated.
 - [ ] T060 [P] Document architecture decisions, API surface, and background task flows in `docs/architecture/practice-coach.md`.
 - [ ] T061 [P] Add objective-check + timer drift unit/regression coverage in `backend/tests/unit/test_objective_check.py`.
 - [ ] T062 Run end-to-end quickstart validation script covering lint/test/playwright in `scripts/ci/validate-feature.sh` and update CI docs if needed.
-- [ ] T063 Capture and enforce `<20` session guardrails plus graceful degradation guidance in `backend/app/services/session_service.py` and supporting docs/tests.
+- [ ] T063a Capture and enforce `<20` session guardrails in `backend/app/services/session_service.py`, including queueing ≤5 pending sessions, returning HTTP 429 with the specified message, and unit/integration tests proving the behavior.
+- [ ] T063b Emit saturation metrics/alerts + document the graceful degradation runbook (SC-001/SC-004 linkage) in `backend/app/telemetry/tracing.py` and `docs/architecture/practice-coach.md`.
 
 ---
 

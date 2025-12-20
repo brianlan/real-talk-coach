@@ -123,7 +123,7 @@ before implementation, with mocks/stubs specified for any external services.
 
 ### Non-Functional Requirements
 
-- **NFR-001**: Size infrastructure and concurrency controls for fewer than 20 simultaneous practice sessions (single-team pilot load), ensuring graceful degradation if exceeded.
+- **NFR-001**: System MUST enforce a hard cap of 20 concurrent PracticeSessions; when the cap is hit, queue up to 5 pending session starts for ≤30 seconds and then reject additional requests with HTTP 429 “pilot capacity exceeded, retry shortly.” Every rejection must publish saturation metrics/alerts so operators can verify graceful degradation.
 
 ### Key Entities *(include if feature involves data)*
 
