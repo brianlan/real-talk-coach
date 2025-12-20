@@ -67,7 +67,7 @@ external services, and keep them automated.
 - [ ] T024 [US1] Persist manual stop reasons + timer breaches via service hooks in `backend/app/services/session_service.py` to satisfy FR-003/FR-005/FR-007.
 - [ ] T025 [US1] Enforce scenario completeness validation before session start with actionable HTTP 422 errors in `backend/app/services/session_service.py`.
 - [ ] T026 [US1] Inject `STUB_USER_ID` scoping for all practice/evaluation/history queries in `backend/app/api/routes/` to uphold the single-tenant requirement.
-- [ ] T027 [US1] Instrument session lifecycle and turn pipeline code paths with structured logs/metrics via `backend/app/telemetry/tracing.py`.
+- [ ] T027 [US1] Instrument session lifecycle + turn pipeline with structured logs and metrics covering SC-001 (completion rate) and SC-002 (termination latency), including unit tests that assert emission hooks via `backend/app/telemetry/tracing.py`.
 - [ ] T028 [P] [US1] Build scenario catalog page with filters/search in `frontend/app/(dashboard)/scenarios/page.tsx` consuming `/api/scenarios` + `/api/skills`.
 - [ ] T029 [P] [US1] Implement scenario detail view + session start CTA in `frontend/app/(dashboard)/scenarios/[scenarioId]/page.tsx` calling `/api/sessions`.
 - [ ] T030 [US1] Create practice room UI with WebSocket turn stream, manual stop controls, and termination banners in `frontend/app/practice/[sessionId]/page.tsx`.
@@ -98,7 +98,7 @@ external services, and keep them automated.
 - [ ] T039 [US2] Wire GPT-5 mini prompt/response parsing + observability in `backend/app/services/evaluation_service.py`.
 - [ ] T040 [P] [US2] Build frontend evaluation panel component in `frontend/components/session/EvaluationPanel.tsx` showing per-skill ratings + notes.
 - [ ] T041 [US2] Implement polling/requeue hooks for evaluations in `frontend/services/api/evaluationClient.ts` and integrate with practice/history views.
-- [ ] T042 [US2] Instrument evaluation runner + API responses with structured logs/metrics covering SC-003 in `backend/app/tasks/evaluation_runner.py` and `backend/app/api/routes/evaluations.py`.
+- [ ] T042 [US2] Instrument evaluation runner + API responses with structured logs and metrics for SC-003 (queue-to-complete latency) plus verification tests in `backend/app/tasks/evaluation_runner.py` and `backend/app/api/routes/evaluations.py`.
 
 **Checkpoint**: Evaluations run asynchronously, expose progress, and display actionable feedback.
 
@@ -118,7 +118,7 @@ external services, and keep them automated.
 
 ### Implementation for User Story 3
 
-- [ ] T046 [P] [US3] Implement history list query with filters/search/sort in `backend/app/api/routes/history.py` returning `SessionPage` responses.
+- [ ] T046 [P] [US3] Implement history list query with filters/search/sort in `backend/app/api/routes/history.py`, emitting SC-004 metrics (history access latency/two-step success) alongside the `SessionPage` responses.
 - [ ] T047 [US3] Create session deletion + LeanCloud cascade orchestrator in `backend/app/services/session_cleanup.py` for DELETE `/api/sessions/{id}`.
 - [ ] T048 [US3] Add "practice again" helper that clones scenario metadata and reuses POST `/api/sessions` to start new runs in `backend/app/api/routes/sessions.py`.
 - [ ] T049 [P] [US3] Build history list UI with filters/search in `frontend/app/(dashboard)/history/page.tsx`.

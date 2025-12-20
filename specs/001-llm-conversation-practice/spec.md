@@ -101,7 +101,7 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-001**: System MUST provide a catalog of practice scenarios capturing category, title, description, objective, participant backgrounds/personas, and explicit end criteria.
 - **FR-002**: Trainee MUST be able to start a practice session by selecting a scenario and reviewing its details before the AI initiates the first turn in the specified persona.
 - **FR-003**: System MUST implement the Session Lifecycle Contract defined in Supporting Contracts (scenario validation, AI-first turn, timer handling, manual stops, per-turn objective checks, and server-authoritative termination/push events).
-- **FR-004**: System MUST capture and persist each turn's transcript and associated audio reference (LeanCloud LFile) with timestamps and speaker roles, exactly as described in the Audio & Media Contract.
+- **FR-004**: System MUST capture every trainee/AI turn (transcript, speaker role, timestamps) and persist the associated LeanCloud audio reference exactly as described in the Audio & Media Contract, ensuring storage state always mirrors what was captured during the session.
 - **FR-005**: Manual termination controls MUST remain available throughout the session per the Session Lifecycle Contract, and the server MUST record the trainee-selected reason.
 - **FR-006**: Trainee turn handling MUST follow the Audio & Media Contract (audio + optional context input, immediate AI reply, asynchronous qwen ASR transcription, retries that preserve turn order).
 - **FR-007**: Idle and total duration telemetry MUST be measured and reported by the client but validated/overridden by the server, matching the Session Lifecycle Contract.
@@ -111,7 +111,7 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-011**: System operates without authentication; practice/history/evaluation endpoints assume a single-tenant, stubbed user ID to scope sessions/history/deletes; admin scenario management is out-of-band (no admin UI).
 - **FR-012**: Observability MUST follow the Observability & Metrics Contract (structured logs with session/turn IDs + latencies, metrics mapped to SC-001–SC-004, and traces across request → AI call → storage).
 - **FR-013**: Codec, size limits, storage method, encryption, and retries MUST comply with the Audio & Media Contract.
-- **FR-014**: Turn records MUST persist audio references and transcripts in the manner specified by the Audio & Media Contract (AI transcript from generation response, trainee transcript from async ASR, no raw base64 duplication).
+- **FR-014**: _(Consolidated into FR-004 to avoid duplication; requirements for turn storage are governed entirely by FR-004 + the Audio & Media Contract.)_
 - **FR-015**: All qwen3-omni-flash interactions (generation + ASR) MUST satisfy the bearer-auth JSON contract, timeout, and retry rules documented in the Audio & Media Contract.
 - **FR-016**: Deleting a session MUST hard-delete session/evaluation records and cascade to delete associated LeanCloud LFiles; LObject references are removed; no soft delete.
 - **FR-017**: Upon session completion, the system MUST execute the Evaluation Flow Contract (enqueue job, text-only LLM scoring per scenario-defined skills, 1–5 rubric with notes, retry/backoff, relaxed SC-003 SLO).
