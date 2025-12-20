@@ -76,16 +76,17 @@ pnpm playwright test   # e2e, uses stubbed qwen/LeanCloud MSW handlers
 - Audio uploads in dev mode save to temp files + fake LeanCloud IDs.
 
 ## Smoke Flow
-1. Seed scenarios via `/scripts/seed_scenarios.py` (see Scenario Seeding Notes below for current status).
+1. Seed scenarios via `python scripts/seed_scenarios.py --skills specs/001-llm-conversation-practice/seed-data/sample-skills.json --scenarios specs/001-llm-conversation-practice/seed-data/sample-scenarios.json` (see Scenario & Skill Seeding Notes for CLI guidance).
 2. Visit `http://localhost:3000`, pick a scenario, start practice.
 3. Observe the AI initiation turn streaming automatically, then exchange a few turns (browser mic permission required).
 4. Wait for evaluation ready toast, then open history and replay (history requests include the required `historyStepCount` query parameter so telemetry works).
 
 ### Scenario & Skill Seeding Notes
-- **Script contract**: `python scripts/seed_scenarios.py --skills specs/001-llm-conversation-practice/seed-data/sample-skills.json --scenarios specs/001-llm-conversation-practice/seed-data/sample-scenarios.json`. The script (TBD) will upsert Skill records first (using the `externalId` field for deterministic lookups), then create Scenario LObjects that reference the corresponding LeanCloud `objectId`s. It requires the LeanCloud env vars listed above plus `STUB_USER_ID`.
-- **Status**: Script implementation is TBD; until it lands, import `seed-data/sample-skills.json` into the `Skill` class and `seed-data/sample-scenarios.json` into the `Scenario` class via the LeanCloud dashboard (`Data > <Class> > Import > JSON`) so smoke tests have seed data.
-- **Format**: Sample files in `specs/001-llm-conversation-practice/seed-data/` illustrate the schema for both skills (including `externalId`) and scenarios; update them (or provide your own) before running the script once it exists.
+- **Script contract**: Run `python scripts/seed_scenarios.py --skills specs/001-llm-conversation-practice/seed-data/sample-skills.json --scenarios specs/001-llm-conversation-practice/seed-data/sample-scenarios.json`. The helper upserts all Skill records via `externalId`, then creates Scenario LObjects referencing the resulting LeanCloud IDs, logging per-record success/failure and exiting non-zero on validation errors.
+- **Fallback**: If the script fails, temporarily import `seed-data/*.json` through the LeanCloud dashboard and capture the manual steps in your runbook; treat this as an exception rather than the default workflow.
+- **Format**: Sample files in `specs/001-llm-conversation-practice/seed-data/` illustrate the schema for both skills (including `externalId`) and scenarios; copy or edit them before rerunning the script.
 - **Skill mapping**: Scenario `skills` entries contain skill `externalId`s; the script matches them to the Skill objects it just upserted and stores the resulting LeanCloud `objectId` array on each Scenario.
+- **Verification**: Successful runs print a summary such as `Seed complete: 4 skills, 6 scenarios`; investigate any non-zero exit status or missing counts before proceeding.
 
 ## Deployment Notes
 - Package backend as container image with uvicorn + gunicorn workers, horizontal pod autoscale

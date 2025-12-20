@@ -32,7 +32,7 @@ assumption to size infra and background task load.
 **Testing**: Pytest + httpx AsyncClient, pytest-asyncio for backend; Vitest + Testing Library + Playwright for frontend/e2e  
 **Target Platform**: Backend: Linux containers (uvicorn workers); Frontend: modern evergreen browsers  
 **Project Type**: Full-stack web (separate backend + frontend packages)  
-**Performance Goals**: Termination events dispatched <=2s after condition; evaluations within 60s p90; client latency budget <500ms for turn ACKs  
+**Performance Goals**: Termination events dispatched <=2s after condition; evaluations within 60s p90; Target: client latency budget <500ms for turn ACKs (monitor-only)  
 **Constraints**: Mono MP3 <128 KB per turn, qwen request timeout 10s with 2 retries, timer drift <=2s, graceful degradation above 20 sessions  
 **Scale/Scope**: Pilot of <20 concurrent sessions, dozens of predefined scenarios, single-tenant stub user
 
@@ -174,14 +174,17 @@ Will break into incremental stories during `/speckit.tasks`, roughly:
    checks, baseline telemetry scaffolding (logs/metrics/traces hooks), pytest fixtures/mocks.
 2. **Session lifecycle**: scenario catalog endpoints (including `/api/skills` + scenario `skillSummaries`),
    session start/manual stop/delete, immediate AI turn 0 kickoff, WebSocket hub, idle/duration enforcement,
-   LeanCloud persistence + cascading deletes, and initial scenario/skill seed helpers (placeholder scripts wired to sample JSON).
+   LeanCloud persistence + cascading deletes, <20 session cap with ≤5 pending queue enforcement, and production scenario/skill seed helpers.
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation via OpenAI SDK
    (streaming text+WAV audio) with WebSocket push plumbing, WAV→MP3 transcode, qwen ASR integration,
    retries + telemetry, history listing.
 4. **Objective checks, evaluation & ASR tasks**: implement synchronous Objective Check Model client +
    enforcement (including `objectiveStatus`/`objectiveReason` persistence and drift-safe retries), FastAPI
    background task orchestration for ASR/evaluations, GPT-5 mini (chataiapi.com) client wrapper, state
-   transitions, HTTP evaluation status endpoint, requeue hook, instrumentation.
+   transitions, HTTP evaluation status endpoint, requeue hook, instrumentation, and the wiring that calls
+   `evaluation_runner.enqueue()` the moment a session reaches a terminal state.
+
+Session lifecycle deliverables therefore include both the NFR-001 concurrency guardrail and the evaluation-enqueue trigger so US2 builds on an existing automation hook instead of introducing it later.
 5. **Frontend**: Next.js app scaffolding, scenario browser (with skill metadata), practice room with audio
    capture + stream, history/evaluation screens (history APIs include required `historyStepCount` telemetry),
    WebSocket termination handling.

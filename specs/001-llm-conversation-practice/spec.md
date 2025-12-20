@@ -113,13 +113,12 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-013**: Codec, size limits, storage method, encryption, and retries MUST comply with the Audio & Media Contract.
 - **FR-014**: _(Consolidated into FR-004 to avoid duplication; requirements for turn storage are governed entirely by FR-004 + the Audio & Media Contract.)_
 - **FR-015**: All qwen3-omni-flash interactions (generation + ASR) MUST satisfy the bearer-auth JSON contract, timeout, and retry rules documented in the Audio & Media Contract.
-- **FR-016**: Deleting a session MUST hard-delete session/evaluation records and cascade to delete associated LeanCloud LFiles; LObject references are removed; no soft delete.
+- **FR-016**: System MUST retain transcripts and audio until the trainee deletes the session and provide DELETE `/api/sessions/{id}` that hard-deletes the session, turns, evaluations, and LeanCloud LFiles in one cascade. The endpoint returns HTTP 204 when the cascade completes, and subsequent fetches respond 404 so clients can treat either response as confirmation.
 - **FR-017**: Upon session completion, the system MUST execute the Evaluation Flow Contract (enqueue job, text-only LLM scoring per scenario-defined skills, 1–5 rubric with notes, retry/backoff, relaxed SC-003 SLO).
 - **FR-018**: Evaluation APIs MUST expose status and serve cached results exactly as defined in the Evaluation Flow Contract (pending/failed/completed states, no re-evaluation on repeat views).
 - **FR-019**: System MUST list historical practice sessions with filters/sorting (e.g., by date, scenario) and provide access to detail view including transcript, audio references, and evaluation; default sort newest-first (server-side `sort=startedAtDesc`), optional `sort=startedAtAsc` for oldest-first, page size 20, filters by scenario and category, search by title/objective substring.
 - **FR-020**: System MUST allow the trainee to start a new session using any previously saved scenario, preserving the original session data intact.
 - **FR-021**: System MUST validate scenario completeness (personas, objectives, end criteria) before allowing practice to start and return actionable errors for missing fields.
-- **FR-022**: System MUST retain transcripts and audio until the trainee deletes them and provide a way to delete specific sessions and associated media; DELETE `/api/sessions/{id}` returns HTTP 204 when the cascade completes, and future fetches respond 404 so clients can treat either outcome as confirmation.
 
 ### Non-Functional Requirements
 
@@ -180,7 +179,7 @@ before implementation, with mocks/stubs specified for any external services.
 - Storage: `Skill` LeanCloud LObject with fields `{objectId, name, category, rubric, description, createdAt, updatedAt}`. Admins seed/edit these records out-of-band (no UI in this release). Skills are immutable once referenced by a scenario to keep rubric text stable per evaluation.
 - Referencing: `Scenario.skills` holds ordered skill IDs that define which rubric rows apply. The backend validates that every referenced ID exists before allowing a scenario to publish.
 - Exposure: Clients fetch `GET /api/skills` (catalog) or rely on `scenario.skillSummaries` returned from `GET /api/scenarios*` which inlines `{skillId, name, rubric}` for quick rendering. Evaluations echo `skillId` plus `note`, and the frontend matches them with cached `Skill` metadata to display names.
-- Seeding workflow: the planned `scripts/seed_scenarios.py` helper (currently TBD) ingests both skills and scenarios in one pass. It first reads the skills file (JSON shaped as `[{"externalId":"skill_active_listening","name":"Active Listening","category":"Feedback","rubric":"5=...","description":"..."}]`), upserts each Skill (storing the `externalId` for deterministic lookups), then loads scenarios referencing those `externalId` values. Until the script lands, import `seed-data/sample-skills.json` and `seed-data/sample-scenarios.json` via the LeanCloud dashboard to populate required records.
+- Seeding workflow: run `python scripts/seed_scenarios.py --skills specs/001-llm-conversation-practice/seed-data/sample-skills.json --scenarios specs/001-llm-conversation-practice/seed-data/sample-scenarios.json`. The helper upserts Skill records first (tracking each `externalId` for deterministic lookups), then persists Scenario LObjects referencing the resulting LeanCloud IDs. It logs per-record status, exits non-zero on validation errors, and manual dashboard imports are now only a fallback when the script fails.
 
 #### Objective Check Model Contract
 

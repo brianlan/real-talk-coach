@@ -61,6 +61,7 @@ external services, and keep them automated.
 - [ ] T015 [P] [US1] Add contract test that rejects POST `/api/sessions` when personas/objectives/endCriteria are incomplete in `backend/tests/contract/test_sessions.py` (expects HTTP 422 with actionable errors).
 - [ ] T016 [P] [US1] Extend integration coverage to simulate objective-check succeed/fail outcomes via stubbed responses in `backend/tests/integration/test_practice_flow.py`.
 - [ ] T016a [P] [US1] Add integration test in `backend/tests/integration/test_practice_flow.py` simulating qwen generation/ASR outages to ensure sessions terminate gracefully with retry messaging.
+- [ ] T016b [P] [US1] Extend integration coverage to assert session completion enqueues an evaluation job by mocking `evaluation_runner.enqueue` inside `backend/tests/integration/test_practice_flow.py`.
 
 ### Implementation for User Story 1
 
@@ -75,7 +76,10 @@ external services, and keep them automated.
 - [ ] T023a [US1] Extend `backend/app/services/turn_pipeline.py` to detect qwen generation/ASR failures, persist termination reasons, emit guidance over WebSocket, and notify observability sinks.
 - [ ] T023b [US1] Add missing/corrupt audio recovery in `backend/app/services/turn_pipeline.py`, preserving turn order, prompting clients to resend, and ensuring retries don’t corrupt session state.
 - [ ] T024 [US1] Integrate Configurable Objective Check Model client and termination enforcement in `backend/app/services/objective_check.py`.
+- [ ] T024a [US1] Invoke `backend/app/tasks/evaluation_runner.enqueue()` whenever a session transitions to a terminal state in `backend/app/services/session_service.py`, ensuring idempotency and log coverage.
 - [ ] T025 [US1] Persist manual stop reasons + timer breaches via service hooks in `backend/app/services/session_service.py` to satisfy FR-003/FR-005/FR-007.
+- [ ] T025a [US1] Enforce the `<20` concurrent session cap with ≤5 pending queue plus HTTP 429 “pilot capacity exceeded” responses in `backend/app/services/session_service.py`, including contract/integration tests for saturation.
+- [ ] T025b [P] [US1] Emit saturation metrics/alerts (SC-001/SC-004 linkage) and document the graceful degradation runbook in `backend/app/telemetry/tracing.py` and `docs/architecture/practice-coach.md`.
 - [ ] T026 [US1] Enforce session/turn timestamp validation (startedAt/endedAt required, drift +/-2s) with HTTP 422 responses in `backend/app/api/routes/sessions.py` and `backend/app/api/routes/turns.py`.
 - [ ] T027 [US1] Add contract tests for timestamp validation/drift enforcement (missing timestamps → 422) in `backend/tests/contract/test_sessions.py` and `backend/tests/contract/test_turns.py`.
 - [ ] T027a [US1] Add contract test in `backend/tests/contract/test_turns.py` verifying missing/corrupt audio uploads trigger HTTP 422 with “resend turn” guidance while preserving session data.
@@ -157,8 +161,6 @@ external services, and keep them automated.
 - [ ] T060 [P] Document architecture decisions, API surface, and background task flows in `docs/architecture/practice-coach.md`.
 - [ ] T061 [P] Add objective-check + timer drift unit/regression coverage in `backend/tests/unit/test_objective_check.py`.
 - [ ] T062 Run end-to-end quickstart validation script covering lint/test/playwright in `scripts/ci/validate-feature.sh` and update CI docs if needed.
-- [ ] T063a Capture and enforce `<20` session guardrails in `backend/app/services/session_service.py`, including queueing ≤5 pending sessions, returning HTTP 429 with the specified message, and unit/integration tests proving the behavior.
-- [ ] T063b Emit saturation metrics/alerts + document the graceful degradation runbook (SC-001/SC-004 linkage) in `backend/app/telemetry/tracing.py` and `docs/architecture/practice-coach.md`.
 
 ---
 
