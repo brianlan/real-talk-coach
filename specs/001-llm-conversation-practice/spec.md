@@ -111,7 +111,6 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-011**: System operates without authentication; practice/history/evaluation endpoints assume a single-tenant, stubbed user ID to scope sessions/history/deletes; admin scenario management is out-of-band (no admin UI).
 - **FR-012**: Observability MUST follow the Observability & Metrics Contract (structured logs with session/turn IDs + latencies, metrics mapped to SC-001–SC-004, and traces across request → AI call → storage).
 - **FR-013**: Codec, size limits, storage method, encryption, and retries MUST comply with the Audio & Media Contract.
-- **FR-014**: _(Consolidated into FR-004 to avoid duplication; requirements for turn storage are governed entirely by FR-004 + the Audio & Media Contract.)_
 - **FR-015**: All qwen3-omni-flash interactions (generation + ASR) MUST satisfy the bearer-auth JSON contract, timeout, and retry rules documented in the Audio & Media Contract.
 - **FR-016**: System MUST retain transcripts and audio until the trainee deletes the session and provide DELETE `/api/sessions/{id}` that hard-deletes the session, turns, evaluations, and LeanCloud LFiles in one cascade. The endpoint returns HTTP 204 when the cascade completes, and subsequent fetches respond 404 so clients can treat either response as confirmation.
 - **FR-017**: Upon session completion, the system MUST execute the Evaluation Flow Contract (enqueue job, text-only LLM scoring per scenario-defined skills, 1–5 rubric with notes, retry/backoff, relaxed SC-003 SLO).

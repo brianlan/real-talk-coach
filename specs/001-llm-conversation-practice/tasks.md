@@ -135,7 +135,7 @@ external services, and keep them automated.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T049 [P] [US3] Add contract tests for session history pagination/filtering, delete cascade, and the required `historyStepCount` query parameter in `backend/tests/contract/test_history.py`.
+- [ ] T049 [P] [US3] Add contract tests for session history pagination/filtering, delete cascade, default `sort=startedAtDesc`, optional `sort=startedAtAsc`, page size 20, title/objective substring search, and the required `historyStepCount` query parameter in `backend/tests/contract/test_history.py`.
 - [ ] T050 [P] [US3] Implement integration test covering history detail fetch + practice-again handoff, ensuring `historyStepCount` hints propagate to metrics, in `backend/tests/integration/test_history_replay.py`.
 - [ ] T051 [P] [US3] Add Playwright test for browsing history and replaying a session in `frontend/tests/e2e/history.spec.ts`.
 
