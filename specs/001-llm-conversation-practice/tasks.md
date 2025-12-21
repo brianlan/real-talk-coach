@@ -18,9 +18,9 @@ external services, and keep them automated.
 
 **Purpose**: Establish environment scaffolding and developer workflows before feature work begins.
 
-- [ ] T001 Create `backend/.env.example` capturing LeanCloud, DashScope/qwen, evaluator, and stub user variables from quickstart.md.
-- [ ] T002 Create `frontend/.env.local.example` with `NEXT_PUBLIC_API_BASE` and `NEXT_PUBLIC_WS_BASE` placeholders for local/dev/prod targets.
-- [ ] T003 Update `README.md` with backend/frontend install, run, and test commands mirroring `specs/001-llm-conversation-practice/quickstart.md`.
+- [X] T001 Create `backend/.env.example` capturing LeanCloud, DashScope/qwen, evaluator, and stub user variables from quickstart.md.
+- [X] T002 Create `frontend/.env.local.example` with `NEXT_PUBLIC_API_BASE` and `NEXT_PUBLIC_WS_BASE` placeholders for local/dev/prod targets.
+- [X] T003 Update `README.md` with backend/frontend install, run, and test commands mirroring `specs/001-llm-conversation-practice/quickstart.md`.
 
 ---
 
@@ -30,12 +30,12 @@ external services, and keep them automated.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004a [P] Author pytest unit/contract tests that pin FastAPI lifespan hooks, router mounts, and default CORS behavior in `backend/tests/unit/test_main.py` before any `backend/app/main.py` code exists.
-- [ ] T004 Scaffold FastAPI entrypoint with lifespan hooks, router mounts, and CORS defaults in `backend/app/main.py` per plan structure.
-- [ ] T005a [P] Write tests in `backend/tests/unit/test_config.py` verifying the settings loader rejects missing/invalid env vars with actionable errors.
-- [ ] T005 [P] Implement strongly typed settings loader with env validation in `backend/app/config.py` for LeanCloud/qwen/evaluator/objective-check secrets.
-- [ ] T006a [P] Create MockTransport-backed tests in `backend/tests/unit/test_leancloud_client.py` asserting retries, signed URL helpers, and error surfacing for the LeanCloud client.
-- [ ] T006 [P] Create LeanCloud REST client with httpx session pooling, retries, and signed file helpers in `backend/app/clients/leancloud.py`.
+- [X] T004a [P] Author pytest unit/contract tests that pin FastAPI lifespan hooks, router mounts, and default CORS behavior in `backend/tests/unit/test_main.py` before any `backend/app/main.py` code exists.
+- [X] T004 Scaffold FastAPI entrypoint with lifespan hooks, router mounts, and CORS defaults in `backend/app/main.py` per plan structure.
+- [X] T005a [P] Write tests in `backend/tests/unit/test_config.py` verifying the settings loader rejects missing/invalid env vars with actionable errors.
+- [X] T005 [P] Implement strongly typed settings loader with env validation in `backend/app/config.py` for LeanCloud/qwen/evaluator/objective-check secrets.
+- [X] T006a [P] Create MockTransport-backed tests in `backend/tests/unit/test_leancloud_client.py` asserting retries, signed URL helpers, and error surfacing for the LeanCloud client.
+- [X] T006 [P] Create LeanCloud REST client with httpx session pooling, retries, and signed file helpers in `backend/app/clients/leancloud.py`.
 - [ ] T007a [P] Add tests in `backend/tests/unit/test_llm_clients.py` covering qwen (generation + ASR) and GPT-5 mini wrapper timeouts, retries, and JSON contracts.
 - [ ] T007 [P] Build qwen (generation+ASR) and GPT-5 mini evaluation client wrappers with timeout/retry policies in `backend/app/clients/llm.py`.
 - [ ] T008a [P] Write telemetry helper tests in `backend/tests/unit/test_tracing.py` ensuring structured logs/metrics emit sessionId/turnId and SC-00x attributes.
