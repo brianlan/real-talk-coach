@@ -24,6 +24,6 @@ def test_router_mounts_api_prefix():
 
 def test_cors_defaults():
     middleware = _get_cors_middleware()
-    assert middleware.options["allow_origins"] == CORS_ORIGINS
-    assert middleware.options["allow_methods"] == ["*"]
-    assert middleware.options["allow_headers"] == ["*"]
+    assert middleware.kwargs["allow_origins"] == CORS_ORIGINS
+    assert middleware.kwargs["allow_methods"] == ["*"]
+    assert middleware.kwargs["allow_headers"] == ["*"]
