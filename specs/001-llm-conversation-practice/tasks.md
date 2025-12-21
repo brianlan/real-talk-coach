@@ -36,8 +36,8 @@ external services, and keep them automated.
 - [X] T005 [P] Implement strongly typed settings loader with env validation in `backend/app/config.py` for LeanCloud/qwen/evaluator/objective-check secrets.
 - [X] T006a [P] Create MockTransport-backed tests in `backend/tests/unit/test_leancloud_client.py` asserting retries, signed URL helpers, and error surfacing for the LeanCloud client.
 - [X] T006 [P] Create LeanCloud REST client with httpx session pooling, retries, and signed file helpers in `backend/app/clients/leancloud.py`.
-- [ ] T007a [P] Add tests in `backend/tests/unit/test_llm_clients.py` covering qwen (generation + ASR) and GPT-5 mini wrapper timeouts, retries, and JSON contracts.
-- [ ] T007 [P] Build qwen (generation+ASR) and GPT-5 mini evaluation client wrappers with timeout/retry policies in `backend/app/clients/llm.py`.
+- [X] T007a [P] Add tests in `backend/tests/unit/test_llm_clients.py` covering qwen (generation + ASR) and GPT-5 mini wrapper timeouts, retries, and JSON contracts.
+- [X] T007 [P] Build qwen (generation+ASR) and GPT-5 mini evaluation client wrappers with timeout/retry policies in `backend/app/clients/llm.py`.
 - [ ] T008a [P] Write telemetry helper tests in `backend/tests/unit/test_tracing.py` ensuring structured logs/metrics emit sessionId/turnId and SC-00x attributes.
 - [ ] T008 [P] Add structured logging + OpenTelemetry helpers in `backend/app/telemetry/tracing.py` for session/turn metrics.
 - [ ] T009 Establish pytest fixtures + httpx MockTransport stubs for LeanCloud/qwen/evaluator in `backend/tests/conftest.py`.
