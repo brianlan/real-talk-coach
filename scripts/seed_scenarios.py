@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 sys.path.append(str(BACKEND_ROOT))
 
-from app.clients.leancloud import LeanCloudClient
+from app.clients.leancloud import LeanCloudClient, LeanCloudError
 from app.config import SettingsError, load_settings
 
 
@@ -72,6 +72,18 @@ async def _fetch_by_external_id(
     if results:
         return results[0]
     return None
+
+
+async def _ensure_class(client: LeanCloudClient, class_name: str) -> None:
+    try:
+        await client.post_json(f"/1.1/schemas/{class_name}", {"className": class_name})
+    except LeanCloudError as exc:
+        body = exc.body or ""
+        if "exists" in body.lower():
+            return
+        if exc.status_code in {400, 404}:
+            return
+        raise
 
 
 async def _upsert_skill(client: LeanCloudClient, skill: dict[str, Any]) -> str:
@@ -147,6 +159,8 @@ async def _run(skills_path: Path, scenarios_path: Path) -> int:
 
     skill_map: dict[str, str] = {}
     try:
+        await _ensure_class(client, "Skill")
+        await _ensure_class(client, "Scenario")
         for skill in skills:
             object_id = await _upsert_skill(client, skill)
             skill_map[skill["externalId"]] = object_id
