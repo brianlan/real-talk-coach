@@ -41,7 +41,7 @@ external services, and keep them automated.
 - [X] T008a [P] Write telemetry helper tests in `backend/tests/unit/test_tracing.py` ensuring structured logs/metrics emit sessionId/turnId and SC-00x attributes.
 - [X] T008 [P] Add structured logging + OpenTelemetry helpers in `backend/app/telemetry/tracing.py` for session/turn metrics.
 - [X] T009 Establish pytest fixtures + httpx MockTransport stubs for LeanCloud/qwen/evaluator in `backend/tests/conftest.py`.
-- [ ] T010 Implement deterministic scenario/skill importer script `scripts/seed_scenarios.py` that honors `seed-data/*.json` contracts.
+- [X] T010 Implement deterministic scenario/skill importer script `scripts/seed_scenarios.py` that honors `seed-data/*.json` contracts.
 - [ ] T011 [P] Create shared frontend providers (QueryClient, WebSocket context, global styles) in `frontend/app/layout.tsx` and `frontend/app/providers/app-providers.tsx`.
 
 ---

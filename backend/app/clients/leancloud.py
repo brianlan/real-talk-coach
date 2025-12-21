@@ -81,6 +81,9 @@ class LeanCloudClient:
     async def post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request_json("POST", path, json=payload)
 
+    async def put_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request_json("PUT", path, json=payload)
+
     async def delete_json(self, path: str) -> dict[str, Any]:
         return await self.request_json("DELETE", path)
 
