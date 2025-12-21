@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -12,7 +14,7 @@ async def test_qwen_generate_retries_and_parses():
         calls["count"] += 1
         if calls["count"] == 1:
             return httpx.Response(502, text="bad gateway")
-        payload = request.json()
+        payload = json.loads(request.content)
         assert payload["model"] == "qwen3-omni-flash"
         assert request.headers["Authorization"].startswith("Bearer ")
         return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
