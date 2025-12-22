@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 
-@dataclass(frozen=True)
+@dataclass
 class LLMError(Exception):
     message: str
     status_code: int | None = None

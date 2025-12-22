@@ -4,11 +4,37 @@ import httpx
 import pytest
 
 from app.main import app
+from app.api.routes import turns as turns_routes
+
+
+@pytest.fixture(autouse=True)
+def _set_env(monkeypatch):
+    monkeypatch.setenv("LEAN_APP_ID", "app")
+    monkeypatch.setenv("LEAN_APP_KEY", "key")
+    monkeypatch.setenv("LEAN_MASTER_KEY", "master")
+    monkeypatch.setenv("LEAN_SERVER_URL", "https://api.leancloud.cn")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
+    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("CHATAI_API_KEY", "secret")
+    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
+    monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("STUB_USER_ID", "pilot-user")
+
+
+@pytest.fixture(autouse=True)
+def _stub_pipeline(monkeypatch):
+    async def _noop_pipeline(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(turns_routes, "enqueue_turn_pipeline", _noop_pipeline)
 
 
 @pytest.mark.asyncio
 async def test_practice_flow_turns_and_termination():
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/sessions",
             json={
@@ -41,7 +67,8 @@ async def test_practice_flow_turns_and_termination():
 
 @pytest.mark.asyncio
 async def test_objective_check_outcomes_trigger_session_end():
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/sessions",
             json={
@@ -75,14 +102,15 @@ async def test_objective_check_outcomes_trigger_session_end():
 
         stop_response = await client.post(
             f"/api/sessions/{session['id']}/manual-stop",
-            json={\"reason\": \"manual\"},
+            json={"reason": "manual"},
         )
         assert stop_response.status_code == 202
 
 
 @pytest.mark.asyncio
 async def test_qwen_outage_graceful_termination():
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/sessions",
             json={
@@ -107,7 +135,7 @@ async def test_qwen_outage_graceful_termination():
 
         stop_response = await client.post(
             f"/api/sessions/{session['id']}/manual-stop",
-            json={\"reason\": \"qa_error\"},
+            json={"reason": "qa_error"},
         )
         assert stop_response.status_code == 202
 
@@ -121,7 +149,8 @@ async def test_session_completion_enqueues_evaluation(monkeypatch):
 
     monkeypatch.setattr("app.tasks.evaluation_runner.enqueue", fake_enqueue)
 
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/sessions",
             json={
@@ -134,7 +163,7 @@ async def test_session_completion_enqueues_evaluation(monkeypatch):
 
         stop_response = await client.post(
             f"/api/sessions/{session['id']}/manual-stop",
-            json={\"reason\": \"manual\"},
+            json={"reason": "manual"},
         )
         assert stop_response.status_code == 202
 

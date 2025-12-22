@@ -65,14 +65,14 @@ external services, and keep them automated.
 
 ### Implementation for User Story 1
 
-- [ ] T017 [P] [US1] Implement LeanCloud repositories for Scenario, Skill, PracticeSession, and Turn classes in `backend/app/repositories/scenario_repository.py` and `backend/app/repositories/session_repository.py`.
-- [ ] T018 [P] [US1] Expose scenario + skill catalog APIs per OpenAPI contract in `backend/app/api/routes/scenarios.py` including search/filter logic.
-- [ ] T019 [US1] Model PracticeSession/Turn schemas and validators enforcing timestamps + drift in `backend/app/models/session.py`.
-- [ ] T020 [US1] Build `/api/sessions` REST routes (list/create/detail/delete/manual-stop) in `backend/app/api/routes/sessions.py` with LeanCloud persistence + cascade hooks.
-- [ ] T021 [US1] Implement `POST /api/sessions/{sessionId}/turns` in `backend/app/api/routes/turns.py` validating session state, sequence, timestamps, and delegating to the turn pipeline service.
-- [ ] T021a [US1] Enforce MP3 size/bitrate validation in `backend/app/api/routes/turns.py`, returning HTTP 413 with actionable errors when payloads exceed LeanCloud limits.
-- [ ] T022 [US1] Implement per-session WebSocket hub with `ai_turn`, `termination`, `evaluation_ready` events in `backend/app/api/routes/session_socket.py`.
-- [ ] T023 [US1] Create turn pipeline orchestrator (upload audio → qwen generation → LeanCloud storage) with ASR background task handling in `backend/app/services/turn_pipeline.py`.
+- [X] T017 [P] [US1] Implement LeanCloud repositories for Scenario, Skill, PracticeSession, and Turn classes in `backend/app/repositories/scenario_repository.py` and `backend/app/repositories/session_repository.py`.
+- [X] T018 [P] [US1] Expose scenario + skill catalog APIs per OpenAPI contract in `backend/app/api/routes/scenarios.py` including search/filter logic.
+- [X] T019 [US1] Model PracticeSession/Turn schemas and validators enforcing timestamps + drift in `backend/app/models/session.py`.
+- [X] T020 [US1] Build `/api/sessions` REST routes (list/create/detail/delete/manual-stop) in `backend/app/api/routes/sessions.py` with LeanCloud persistence + cascade hooks.
+- [X] T021 [US1] Implement `POST /api/sessions/{sessionId}/turns` in `backend/app/api/routes/turns.py` validating session state, sequence, timestamps, and delegating to the turn pipeline service.
+- [X] T021a [US1] Enforce MP3 size/bitrate validation in `backend/app/api/routes/turns.py`, returning HTTP 413 with actionable errors when payloads exceed LeanCloud limits.
+- [X] T022 [US1] Implement per-session WebSocket hub with `ai_turn`, `termination`, `evaluation_ready` events in `backend/app/api/routes/session_socket.py`.
+- [X] T023 [US1] Create turn pipeline orchestrator (upload audio → qwen generation → LeanCloud storage) with ASR background task handling in `backend/app/services/turn_pipeline.py`.
 - [ ] T023a [US1] Extend `backend/app/services/turn_pipeline.py` to detect qwen generation/ASR failures, persist termination reasons, emit guidance over WebSocket, and notify observability sinks.
 - [ ] T023b [US1] Add missing/corrupt audio recovery in `backend/app/services/turn_pipeline.py`, preserving turn order, prompting clients to resend, and ensuring retries don’t corrupt session state.
 - [ ] T024 [US1] Integrate Configurable Objective Check Model client and termination enforcement in `backend/app/services/objective_check.py`.

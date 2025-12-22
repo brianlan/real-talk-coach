@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 
-@dataclass(frozen=True)
+@dataclass
 class LeanCloudError(Exception):
     message: str
     status_code: int | None = None
@@ -86,6 +86,23 @@ class LeanCloudClient:
 
     async def delete_json(self, path: str) -> dict[str, Any]:
         return await self.request_json("DELETE", path)
+
+    async def upload_file(
+        self, name: str, content: bytes, content_type: str
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/1.1/files/{name}",
+            content=content,
+            headers={"Content-Type": content_type},
+        )
+        if not response.is_success:
+            raise LeanCloudError(
+                f"LeanCloud error {response.status_code}: {response.text}",
+                status_code=response.status_code,
+                body=response.text,
+            )
+        return response.json()
 
     async def create_signed_urls(
         self, urls: list[str], ttl_seconds: int = 900
