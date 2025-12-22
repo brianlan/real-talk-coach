@@ -54,14 +54,14 @@ external services, and keep them automated.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T012 [P] [US1] Add contract tests for `GET /api/scenarios*`, `GET /api/skills`, `POST /api/sessions`, and `POST /api/sessions/{sessionId}/turns` in `backend/tests/contract/test_sessions.py` and `backend/tests/contract/test_turns.py` using MockTransport.
-- [ ] T012a [P] [US1] Add contract test in `backend/tests/contract/test_turns.py` proving audio payloads >128 KB receive HTTP 413 with actionable guidance.
-- [ ] T013 [P] [US1] Implement integration test covering trainee turn upload → AI reply → termination (idle + manual stop) in `backend/tests/integration/test_practice_flow.py`.
-- [ ] T014 [P] [US1] Create Playwright happy-path test for selecting a scenario and completing a conversation in `frontend/tests/e2e/practice.spec.ts` with mocked WebSocket events.
-- [ ] T015 [P] [US1] Add contract test that rejects POST `/api/sessions` when personas/objectives/endCriteria are incomplete in `backend/tests/contract/test_sessions.py` (expects HTTP 422 with actionable errors).
-- [ ] T016 [P] [US1] Extend integration coverage to simulate objective-check succeed/fail outcomes via stubbed responses in `backend/tests/integration/test_practice_flow.py`.
-- [ ] T016a [P] [US1] Add integration test in `backend/tests/integration/test_practice_flow.py` simulating qwen generation/ASR outages to ensure sessions terminate gracefully with retry messaging.
-- [ ] T016b [P] [US1] Extend integration coverage to assert session completion enqueues an evaluation job by mocking `evaluation_runner.enqueue` inside `backend/tests/integration/test_practice_flow.py`.
+- [X] T012 [P] [US1] Add contract tests for `GET /api/scenarios*`, `GET /api/skills`, `POST /api/sessions`, and `POST /api/sessions/{sessionId}/turns` in `backend/tests/contract/test_sessions.py` and `backend/tests/contract/test_turns.py` using MockTransport.
+- [X] T012a [P] [US1] Add contract test in `backend/tests/contract/test_turns.py` proving audio payloads >128 KB receive HTTP 413 with actionable guidance.
+- [X] T013 [P] [US1] Implement integration test covering trainee turn upload → AI reply → termination (idle + manual stop) in `backend/tests/integration/test_practice_flow.py`.
+- [X] T014 [P] [US1] Create Playwright happy-path test for selecting a scenario and completing a conversation in `frontend/tests/e2e/practice.spec.ts` with mocked WebSocket events.
+- [X] T015 [P] [US1] Add contract test that rejects POST `/api/sessions` when personas/objectives/endCriteria are incomplete in `backend/tests/contract/test_sessions.py` (expects HTTP 422 with actionable errors).
+- [X] T016 [P] [US1] Extend integration coverage to simulate objective-check succeed/fail outcomes via stubbed responses in `backend/tests/integration/test_practice_flow.py`.
+- [X] T016a [P] [US1] Add integration test in `backend/tests/integration/test_practice_flow.py` simulating qwen generation/ASR outages to ensure sessions terminate gracefully with retry messaging.
+- [X] T016b [P] [US1] Extend integration coverage to assert session completion enqueues an evaluation job by mocking `evaluation_runner.enqueue` inside `backend/tests/integration/test_practice_flow.py`.
 
 ### Implementation for User Story 1
 
