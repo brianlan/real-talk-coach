@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import httpx
 import pytest
 from fastapi import status
@@ -53,15 +55,21 @@ async def test_capacity_limit_returns_429(monkeypatch):
         create_session = staticmethod(lambda payload: _session("pending"))
         update_session = staticmethod(lambda session_id, payload: _session("pending"))
 
+    class FakeScenarioRepo:
+        async def get(self, scenario_id: str):
+            return type("Scenario", (), {"prompt": "Hello"})()
+
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeRepo()
+    app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        now = datetime.now(timezone.utc).isoformat()
         response = await client.post(
             "/api/sessions",
             json={
                 "scenarioId": "scenario-1",
-                "clientSessionStartedAt": "2025-01-01T00:00:00Z",
+                "clientSessionStartedAt": now,
             },
         )
 
@@ -69,6 +77,7 @@ async def test_capacity_limit_returns_429(monkeypatch):
     assert "pilot capacity exceeded" in response.text
 
     app.dependency_overrides.pop(sessions_routes._repo, None)
+    app.dependency_overrides.pop(sessions_routes._scenario_repo, None)
 
 
 @pytest.mark.asyncio
@@ -81,15 +90,21 @@ async def test_pending_limit_returns_429(monkeypatch):
         create_session = staticmethod(lambda payload: _session("pending"))
         update_session = staticmethod(lambda session_id, payload: _session("pending"))
 
+    class FakeScenarioRepo:
+        async def get(self, scenario_id: str):
+            return type("Scenario", (), {"prompt": "Hello"})()
+
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeRepo()
+    app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        now = datetime.now(timezone.utc).isoformat()
         response = await client.post(
             "/api/sessions",
             json={
                 "scenarioId": "scenario-1",
-                "clientSessionStartedAt": "2025-01-01T00:00:00Z",
+                "clientSessionStartedAt": now,
             },
         )
 
@@ -97,3 +112,4 @@ async def test_pending_limit_returns_429(monkeypatch):
     assert "pilot capacity exceeded" in response.text
 
     app.dependency_overrides.pop(sessions_routes._repo, None)
+    app.dependency_overrides.pop(sessions_routes._scenario_repo, None)

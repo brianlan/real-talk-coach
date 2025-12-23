@@ -86,15 +86,15 @@ external services, and keep them automated.
 - [X] T028 [US1] Inject `STUB_USER_ID` scoping for all practice/evaluation/history queries in `backend/app/api/routes/` to uphold the single-tenant requirement.
 - [X] T029 [US1] Instrument session lifecycle + turn pipeline with structured logs and metrics covering SC-001 (completion rate) and SC-002 (termination latency), including unit tests that assert emission hooks via `backend/app/telemetry/tracing.py`.
 - [X] T030 [US1] Implement OpenTelemetry traces across `/api/sessions`, `backend/app/services/turn_pipeline.py`, and `backend/app/clients/*` so request → qwen → LeanCloud spans are emitted; add tests asserting span metadata (sessionId, turnId, latency).
-- [ ] T031 [US1] Trigger AI initiation turn (sequence 0) immediately after session creation in `backend/app/services/session_service.py`, persist the AI turn, and ensure it streams over `/ws/sessions/{id}` before trainee input.
-- [ ] T032 [P] [US1] Extend integration tests in `backend/tests/integration/test_practice_flow.py` to verify AI turn 0 is emitted after POST `/api/sessions` succeeds.
-- [ ] T033 [P] [US1] Build scenario catalog page with filters/search in `frontend/app/(dashboard)/scenarios/page.tsx` consuming `/api/scenarios` + `/api/skills`.
-- [ ] T034 [P] [US1] Implement scenario detail view + session start CTA in `frontend/app/(dashboard)/scenarios/[scenarioId]/page.tsx` calling `/api/sessions`.
-- [ ] T035 [US1] Create practice room UI with WebSocket turn stream, manual stop controls, and termination banners in `frontend/app/practice/[sessionId]/page.tsx`.
-- [ ] T035a [US1] Surface explicit qwen outage states in `frontend/app/practice/[sessionId]/page.tsx`, including retry CTA and preserved transcript context.
-- [ ] T036 [P] [US1] Implement reusable audio capture + MP3 encoding hook in `frontend/services/audio/useAudioRecorder.ts` enforcing 128 KB limit guidance.
-- [ ] T036a [P] [US1] Enhance `frontend/services/audio/useAudioRecorder.ts` and `frontend/services/api/sessions.ts` so “resend audio” responses replay the failed turn without duplicating state.
-- [ ] T037 [P] [US1] Add API/WebSocket clients for sessions/turns in `frontend/services/api/sessions.ts` with idle/timeout telemetry submission.
+- [X] T031 [US1] Trigger AI initiation turn (sequence 0) immediately after session creation in `backend/app/services/session_service.py`, persist the AI turn, and ensure it streams over `/ws/sessions/{id}` before trainee input.
+- [X] T032 [P] [US1] Extend integration tests in `backend/tests/integration/test_practice_flow.py` to verify AI turn 0 is emitted after POST `/api/sessions` succeeds.
+- [X] T033 [P] [US1] Build scenario catalog page with filters/search in `frontend/app/(dashboard)/scenarios/page.tsx` consuming `/api/scenarios` + `/api/skills`.
+- [X] T034 [P] [US1] Implement scenario detail view + session start CTA in `frontend/app/(dashboard)/scenarios/[scenarioId]/page.tsx` calling `/api/sessions`.
+- [X] T035 [US1] Create practice room UI with WebSocket turn stream, manual stop controls, and termination banners in `frontend/app/practice/[sessionId]/page.tsx`.
+- [X] T035a [US1] Surface explicit qwen outage states in `frontend/app/practice/[sessionId]/page.tsx`, including retry CTA and preserved transcript context.
+- [X] T036 [P] [US1] Implement reusable audio capture + MP3 encoding hook in `frontend/services/audio/useAudioRecorder.ts` enforcing 128 KB limit guidance.
+- [X] T036a [P] [US1] Enhance `frontend/services/audio/useAudioRecorder.ts` and `frontend/services/api/sessions.ts` so “resend audio” responses replay the failed turn without duplicating state.
+- [X] T037 [P] [US1] Add API/WebSocket clients for sessions/turns in `frontend/services/api/sessions.ts` with idle/timeout telemetry submission.
 
 **Checkpoint**: User Story 1 delivers the conversational MVP end-to-end.
 

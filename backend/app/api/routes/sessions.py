@@ -10,7 +10,12 @@ from app.config import load_settings
 from app.models.session import PracticeSessionCreate, enforce_drift
 from app.repositories.scenario_repository import ScenarioRepository
 from app.repositories.session_repository import PracticeSessionRecord, SessionRepository
-from app.services.session_service import CapacityError, ensure_capacity, terminate_session
+from app.services.session_service import (
+    CapacityError,
+    ensure_capacity,
+    initiate_session,
+    terminate_session,
+)
 from app.telemetry.tracing import emit_event
 from app.telemetry.otel import start_span
 
@@ -116,6 +121,7 @@ async def list_sessions(
 async def create_session(
     payload: PracticeSessionCreate,
     repo: SessionRepository = Depends(_repo),
+    scenario_repo: ScenarioRepository = Depends(_scenario_repo),
 ):
     with start_span(
         "sessions.create",
@@ -156,14 +162,17 @@ async def create_session(
             }
         )
 
-        if record.ws_channel.endswith("/pending"):
-            record = await repo.update_session(
-                record.id,
-                {"wsChannel": f"/ws/sessions/{record.id}"},
-            ) or record
-        emit_event("session.created", session_id=record.id)
+    if record.ws_channel.endswith("/pending"):
+        record = await repo.update_session(
+            record.id,
+            {"wsChannel": f"/ws/sessions/{record.id}"},
+        ) or record
+    emit_event("session.created", session_id=record.id)
+    scenario = await scenario_repo.get(payload.scenarioId)
+    prompt = scenario.prompt if scenario else "Session started."
+    await initiate_session(repo, record.id, transcript=prompt)
 
-        return _session_response(record)
+    return _session_response(record)
 
 
 @router.get("/sessions/{session_id}")

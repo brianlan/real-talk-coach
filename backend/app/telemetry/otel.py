@@ -10,4 +10,4 @@ def start_span(name: str, attributes: dict[str, Any] | None = None):
     try:
         yield span
     finally:
-        return
+        pass

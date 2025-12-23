@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import httpx
 import pytest
 
@@ -29,6 +31,14 @@ def _stub_pipeline(monkeypatch):
         return None
 
     monkeypatch.setattr(turns_routes, "enqueue_turn_pipeline", _noop_pipeline)
+
+    async def fake_broadcast(self, session_id, payload):
+        return None
+
+    monkeypatch.setattr(
+        "app.api.routes.session_socket.hub.broadcast",
+        fake_broadcast,
+    )
 
 
 @pytest.mark.asyncio
@@ -168,3 +178,32 @@ async def test_session_completion_enqueues_evaluation(monkeypatch):
         assert stop_response.status_code == 202
 
     assert calls["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ai_turn_zero_emitted_on_session_create(monkeypatch):
+    events = []
+
+    async def fake_broadcast(self, session_id, payload):
+        events.append((session_id, payload))
+
+    monkeypatch.setattr(
+        "app.api.routes.session_socket.hub.broadcast",
+        fake_broadcast,
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/sessions",
+            json={
+                "scenarioId": "scenario-1",
+                "clientSessionStartedAt": now,
+            },
+        )
+        assert response.status_code == 201
+
+    assert any(
+        payload.get("type") == "ai_turn" and payload.get("turn", {}).get("sequence") == 0
+        for _, payload in events
+    )

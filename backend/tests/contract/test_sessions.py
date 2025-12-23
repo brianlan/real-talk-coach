@@ -73,7 +73,7 @@ def _override_repo():
 
     created_session: PracticeSessionRecord | None = None
 
-    async def _list_sessions():
+    async def _list_sessions(stub_user_id=None):
         return []
 
     async def _create_session(payload):
@@ -137,16 +137,44 @@ def _override_repo():
             evaluation_id=payload.get("evaluationId"),
         )
 
+    async def _add_turn(payload):
+        return type(
+            "Turn",
+            (),
+            {
+                "id": "turn-0",
+                "session_id": payload["sessionId"],
+                "sequence": payload["sequence"],
+                "speaker": payload["speaker"],
+                "transcript": payload["transcript"],
+                "audio_file_id": payload["audioFileId"],
+                "audio_url": payload["audioUrl"],
+                "asr_status": payload["asrStatus"],
+                "created_at": payload["createdAt"],
+                "started_at": payload["startedAt"],
+                "ended_at": payload["endedAt"],
+                "context": payload.get("context"),
+                "latency_ms": payload.get("latencyMs"),
+            },
+        )()
+
     class FakeSessionRepo:
         list_sessions = staticmethod(_list_sessions)
         create_session = staticmethod(_create_session)
         update_session = staticmethod(_update_session)
+        add_turn = staticmethod(_add_turn)
+
+    class FakeScenarioRepo:
+        async def get(self, scenario_id: str):
+            return type("Scenario", (), {"prompt": "Hello"})()
 
     app.dependency_overrides[scenarios_routes._repo] = lambda: FakeRepo()
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeSessionRepo()
+    app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()
     yield
     app.dependency_overrides.pop(scenarios_routes._repo, None)
     app.dependency_overrides.pop(sessions_routes._repo, None)
+    app.dependency_overrides.pop(sessions_routes._scenario_repo, None)
 
 
 @pytest.mark.asyncio

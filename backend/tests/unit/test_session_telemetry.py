@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.api.routes import sessions as sessions_routes
-from app.repositories.session_repository import PracticeSessionRecord
+from app.repositories.session_repository import PracticeSessionRecord, TurnRecord
 
 
 @pytest.mark.asyncio
@@ -55,9 +55,31 @@ async def test_session_created_emits_event(monkeypatch):
         create_session = staticmethod(_create_session)
         update_session = staticmethod(_update_session)
         list_sessions = staticmethod(lambda stub_user_id=None: _list_sessions())
+        add_turn = staticmethod(lambda payload: _add_turn(payload))
 
     async def _list_sessions():
         return []
+
+    async def _add_turn(payload):
+        return TurnRecord(
+            id="turn-0",
+            session_id=payload["sessionId"],
+            sequence=payload["sequence"],
+            speaker=payload["speaker"],
+            transcript=payload["transcript"],
+            audio_file_id=payload["audioFileId"],
+            audio_url=payload["audioUrl"],
+            asr_status=payload["asrStatus"],
+            created_at=payload["createdAt"],
+            started_at=payload["startedAt"],
+            ended_at=payload["endedAt"],
+            context=payload.get("context"),
+            latency_ms=payload.get("latencyMs"),
+        )
+
+    class FakeScenarioRepo:
+        async def get(self, scenario_id: str):
+            return type("Scenario", (), {"prompt": "Hello"})()
 
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
@@ -79,7 +101,11 @@ async def test_session_created_emits_event(monkeypatch):
         clientSessionStartedAt=datetime.now(timezone.utc).isoformat(),
     )
 
-    await sessions_routes.create_session(payload, repo=FakeRepo())
+    await sessions_routes.create_session(
+        payload,
+        repo=FakeRepo(),
+        scenario_repo=FakeScenarioRepo(),
+    )
 
     assert calls
     assert calls[0][0] == "session.created"

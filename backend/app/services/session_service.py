@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from app.api.routes.session_socket import hub
@@ -79,11 +80,12 @@ async def initiate_session(
     *,
     transcript: str,
 ) -> None:
+    now = datetime.now(timezone.utc).isoformat()
     session = await repo.update_session(
         session_id,
         {
             "status": "active",
-            "startedAt": session_id,  # placeholder; will be overwritten by backend timestamps
+            "startedAt": now,
         },
     )
     if not session:
@@ -97,9 +99,9 @@ async def initiate_session(
             "audioFileId": "pending",
             "audioUrl": None,
             "asrStatus": None,
-            "createdAt": session.started_at,
-            "startedAt": session.started_at,
-            "endedAt": session.started_at,
+            "createdAt": now,
+            "startedAt": now,
+            "endedAt": now,
             "context": None,
             "latencyMs": None,
         }
