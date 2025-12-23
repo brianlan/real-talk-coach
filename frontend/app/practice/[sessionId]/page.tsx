@@ -1,9 +1,10 @@
 import PracticeRoom from "./practice-room";
 
-export default function PracticePage({
+export default async function PracticePage({
   params,
 }: {
-  params: { sessionId: string };
+  params: Promise<{ sessionId: string }>;
 }) {
-  return <PracticeRoom sessionId={params.sessionId} />;
+  const resolvedParams = await params;
+  return <PracticeRoom sessionId={resolvedParams.sessionId} />;
 }

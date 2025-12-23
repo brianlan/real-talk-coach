@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from app.clients.leancloud import LeanCloudClient
+from app.clients.leancloud import LeanCloudClient, LeanCloudError
 
 
 @dataclass(frozen=True)
@@ -131,10 +131,32 @@ class SessionRepository:
         results = response.get("results", [])
         return [_turn_from_lc(item) for item in results]
 
+    async def get_turn(self, turn_id: str) -> TurnRecord | None:
+        try:
+            payload = await self._client.get_json(f"/1.1/classes/Turn/{turn_id}")
+        except Exception:
+            return None
+        return _turn_from_lc(payload)
+
     async def list_sessions(self, stub_user_id: str | None = None) -> list[PracticeSessionRecord]:
         params = None
         if stub_user_id:
             params = {"where": json.dumps({"stubUserId": stub_user_id})}
-        response = await self._client.get_json("/1.1/classes/PracticeSession", params=params)
+        try:
+            response = await self._client.get_json(
+                "/1.1/classes/PracticeSession", params=params
+            )
+        except LeanCloudError as exc:
+            if exc.status_code == 404 and exc.body:
+                try:
+                    payload = json.loads(exc.body)
+                except json.JSONDecodeError:
+                    payload = {}
+                if payload.get("code") == 101:
+                    return []
+            raise
         results = response.get("results", [])
         return [_session_from_lc(item) for item in results]
+
+    async def delete_session(self, session_id: str) -> None:
+        await self._client.delete_json(f"/1.1/classes/PracticeSession/{session_id}")

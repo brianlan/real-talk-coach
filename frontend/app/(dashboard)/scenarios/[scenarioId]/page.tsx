@@ -31,9 +31,10 @@ async function createSession(scenarioId: string) {
 export default async function ScenarioDetailPage({
   params,
 }: {
-  params: { scenarioId: string };
+  params: Promise<{ scenarioId: string }>;
 }) {
-  const scenario = await fetchScenario(params.scenarioId);
+  const resolvedParams = await params;
+  const scenario = await fetchScenario(resolvedParams.scenarioId);
   if (!scenario) {
     return (
       <main style={{ padding: "48px 24px" }}>
@@ -44,7 +45,7 @@ export default async function ScenarioDetailPage({
 
   async function startPractice() {
     "use server";
-    const session = await createSession(params.scenarioId);
+    const session = await createSession(resolvedParams.scenarioId);
     if (!session?.id) {
       redirect("/scenarios");
     }

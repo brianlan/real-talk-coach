@@ -99,7 +99,6 @@ async def initiate_session(
             "audioFileId": "pending",
             "audioUrl": None,
             "asrStatus": None,
-            "createdAt": now,
             "startedAt": now,
             "endedAt": now,
             "context": None,

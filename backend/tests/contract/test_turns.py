@@ -62,7 +62,7 @@ def _override_repo(monkeypatch):
             audio_file_id=payload["audioFileId"],
             audio_url=None,
             asr_status=payload["asrStatus"],
-            created_at=payload["createdAt"],
+            created_at=payload.get("createdAt"),
             started_at=payload["startedAt"],
             ended_at=payload["endedAt"],
             context=payload.get("context"),

@@ -57,7 +57,16 @@ async def test_capacity_limit_returns_429(monkeypatch):
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):
-            return type("Scenario", (), {"prompt": "Hello"})()
+            return type(
+                "Scenario",
+                (),
+                {
+                    "prompt": "Hello",
+                    "status": "published",
+                    "idle_limit_seconds": 8,
+                    "duration_limit_seconds": 300,
+                },
+            )()
 
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeRepo()
     app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()
@@ -92,7 +101,16 @@ async def test_pending_limit_returns_429(monkeypatch):
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):
-            return type("Scenario", (), {"prompt": "Hello"})()
+            return type(
+                "Scenario",
+                (),
+                {
+                    "prompt": "Hello",
+                    "status": "published",
+                    "idle_limit_seconds": 8,
+                    "duration_limit_seconds": 300,
+                },
+            )()
 
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeRepo()
     app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()

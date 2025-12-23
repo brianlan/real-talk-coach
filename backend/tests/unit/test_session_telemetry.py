@@ -70,7 +70,7 @@ async def test_session_created_emits_event(monkeypatch):
             audio_file_id=payload["audioFileId"],
             audio_url=payload["audioUrl"],
             asr_status=payload["asrStatus"],
-            created_at=payload["createdAt"],
+            created_at=payload.get("createdAt"),
             started_at=payload["startedAt"],
             ended_at=payload["endedAt"],
             context=payload.get("context"),
@@ -79,7 +79,16 @@ async def test_session_created_emits_event(monkeypatch):
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):
-            return type("Scenario", (), {"prompt": "Hello"})()
+            return type(
+                "Scenario",
+                (),
+                {
+                    "prompt": "Hello",
+                    "status": "published",
+                    "idle_limit_seconds": 8,
+                    "duration_limit_seconds": 300,
+                },
+            )()
 
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")

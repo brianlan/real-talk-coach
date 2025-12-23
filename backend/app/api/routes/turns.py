@@ -109,7 +109,6 @@ async def submit_turn(
                 "audioFileId": "pending",
                 "audioUrl": None,
                 "asrStatus": "pending",
-                "createdAt": datetime.now(timezone.utc).isoformat(),
                 "startedAt": payload.startedAt.isoformat(),
                 "endedAt": payload.endedAt.isoformat(),
                 "context": payload.context,

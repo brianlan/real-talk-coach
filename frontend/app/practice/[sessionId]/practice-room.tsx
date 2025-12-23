@@ -35,6 +35,41 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
   const recorder = useAudioRecorder();
 
   useEffect(() => {
+    let isMounted = true;
+    const loadSession = async () => {
+      const response = await fetch(
+        `${apiBase}/api/sessions/${sessionId}?historyStepCount=1`,
+        { cache: "no-store" }
+      );
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      if (!isMounted) {
+        return;
+      }
+      const initialTurns = (data.turns ?? []) as Turn[];
+      setTurns(initialTurns);
+      if (initialTurns.length) {
+        const maxSequence = Math.max(...initialTurns.map((turn) => turn.sequence));
+        setSequence(maxSequence + 1);
+      }
+      const session = data.session;
+      if (session?.status === "ended") {
+        setTermination({
+          reason: session.terminationReason ?? "ended",
+          terminatedAt: session.endedAt ?? new Date().toISOString(),
+        });
+        setMessage("Session ended");
+      }
+    };
+    loadSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
     const socket = connectSessionSocket(sessionId);
     socket.onmessage = (event) => {
       const payload = JSON.parse(event.data) as SessionEvent;

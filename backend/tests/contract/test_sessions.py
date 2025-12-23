@@ -150,7 +150,7 @@ def _override_repo():
                 "audio_file_id": payload["audioFileId"],
                 "audio_url": payload["audioUrl"],
                 "asr_status": payload["asrStatus"],
-                "created_at": payload["createdAt"],
+                "created_at": payload.get("createdAt"),
                 "started_at": payload["startedAt"],
                 "ended_at": payload["endedAt"],
                 "context": payload.get("context"),
@@ -166,7 +166,16 @@ def _override_repo():
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):
-            return type("Scenario", (), {"prompt": "Hello"})()
+            return type(
+                "Scenario",
+                (),
+                {
+                    "prompt": "Hello",
+                    "status": "published",
+                    "idle_limit_seconds": 8,
+                    "duration_limit_seconds": 300,
+                },
+            )()
 
     app.dependency_overrides[scenarios_routes._repo] = lambda: FakeRepo()
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeSessionRepo()

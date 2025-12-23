@@ -35,12 +35,13 @@ async function fetchSkills() {
 export default async function ScenariosPage({
   searchParams,
 }: {
-  searchParams?: { search?: string; category?: string };
+  searchParams?: Promise<{ search?: string; category?: string }>;
 }) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const [scenarios, skills] = await Promise.all([
     fetchScenarios({
-      search: searchParams?.search,
-      category: searchParams?.category,
+      search: resolvedSearchParams.search,
+      category: resolvedSearchParams.category,
     }),
     fetchSkills(),
   ]);
@@ -76,7 +77,7 @@ export default async function ScenariosPage({
           <input
             type="search"
             name="search"
-            defaultValue={searchParams?.search ?? ""}
+            defaultValue={resolvedSearchParams.search ?? ""}
             placeholder="Search by title or objective"
             style={{
               flex: "1 1 240px",
@@ -88,7 +89,7 @@ export default async function ScenariosPage({
           />
           <select
             name="category"
-            defaultValue={searchParams?.category ?? ""}
+            defaultValue={resolvedSearchParams.category ?? ""}
             style={{
               minWidth: 180,
               padding: "10px 12px",

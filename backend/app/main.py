@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.api.routes.session_socket import router as session_socket_router
 
 CORS_ORIGINS = [
     "http://localhost:3000",
@@ -29,3 +30,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router, prefix="/api")
+app.include_router(session_socket_router)

@@ -108,12 +108,26 @@ async def list_sessions(
     category: str | None = None,
     search: str | None = None,
     sort: str = Query("startedAtDesc"),
+    repo: SessionRepository = Depends(_repo),
 ):
+    sessions = await repo.list_sessions(load_settings().stub_user_id)
+    items = [
+        session
+        for session in sessions
+        if (not scenarioId or session.scenario_id == scenarioId)
+    ]
+    if sort == "startedAtAsc":
+        items.sort(key=lambda item: item.started_at or "")
+    else:
+        items.sort(key=lambda item: item.started_at or "", reverse=True)
+    start = (page - 1) * pageSize
+    end = start + pageSize
+    paged = items[start:end]
     return {
-        "items": [],
+        "items": [_session_response(item) for item in paged],
         "page": page,
         "pageSize": pageSize,
-        "total": 0,
+        "total": len(items),
     }
 
 
@@ -128,6 +142,12 @@ async def create_session(
         {"scenarioId": payload.scenarioId},
     ):
         settings = load_settings()
+        scenario = await scenario_repo.get(payload.scenarioId)
+        if not scenario or scenario.status != "published":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Scenario is not available for practice.",
+            )
         try:
             enforce_drift(payload.clientSessionStartedAt, datetime.now(timezone.utc))
         except ValueError as exc:
@@ -152,8 +172,8 @@ async def create_session(
                 "startedAt": now,
                 "endedAt": None,
                 "totalDurationSeconds": None,
-                "idleLimitSeconds": None,
-                "durationLimitSeconds": None,
+                "idleLimitSeconds": scenario.idle_limit_seconds,
+                "durationLimitSeconds": scenario.duration_limit_seconds,
                 "wsChannel": "/ws/sessions/pending",
                 "objectiveStatus": "unknown",
                 "objectiveReason": None,
@@ -168,7 +188,6 @@ async def create_session(
             {"wsChannel": f"/ws/sessions/{record.id}"},
         ) or record
     emit_event("session.created", session_id=record.id)
-    scenario = await scenario_repo.get(payload.scenarioId)
     prompt = scenario.prompt if scenario else "Session started."
     await initiate_session(repo, record.id, transcript=prompt)
 
@@ -199,7 +218,11 @@ async def get_session(
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_session(session_id: str):
+async def delete_session(session_id: str, repo: SessionRepository = Depends(_repo)):
+    session = await repo.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await repo.delete_session(session_id)
     return None
 
 
