@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -88,11 +89,12 @@ def _audio_payload(size_bytes: int) -> str:
 
 @pytest.mark.asyncio
 async def test_turn_submission_contract():
+    now = datetime.now(timezone.utc)
     payload = {
         "sequence": 0,
         "audioBase64": _audio_payload(16),
-        "startedAt": "2025-01-01T00:00:00Z",
-        "endedAt": "2025-01-01T00:00:01Z",
+        "startedAt": now.isoformat(),
+        "endedAt": (now).isoformat(),
     }
 
     transport = httpx.ASGITransport(app=app)
@@ -107,11 +109,12 @@ async def test_turn_submission_contract():
 
 @pytest.mark.asyncio
 async def test_turn_rejects_oversized_audio():
+    now = datetime.now(timezone.utc)
     payload = {
         "sequence": 0,
         "audioBase64": _audio_payload(131073),
-        "startedAt": "2025-01-01T00:00:00Z",
-        "endedAt": "2025-01-01T00:00:01Z",
+        "startedAt": now.isoformat(),
+        "endedAt": now.isoformat(),
     }
 
     transport = httpx.ASGITransport(app=app)
@@ -121,3 +124,32 @@ async def test_turn_rejects_oversized_audio():
     assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
     body = response.json()
     assert "128" in str(body).lower()
+
+
+@pytest.mark.asyncio
+async def test_turn_rejects_missing_timestamps():
+    payload = {"sequence": 0, "audioBase64": _audio_payload(16)}
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/sessions/session-1/turns", json=payload)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.asyncio
+async def test_turn_rejects_missing_audio_guidance():
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sequence": 0,
+        "audioBase64": "",
+        "startedAt": now.isoformat(),
+        "endedAt": now.isoformat(),
+    }
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/sessions/session-1/turns", json=payload)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "resend" in response.text.lower()

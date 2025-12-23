@@ -73,19 +73,19 @@ external services, and keep them automated.
 - [X] T021a [US1] Enforce MP3 size/bitrate validation in `backend/app/api/routes/turns.py`, returning HTTP 413 with actionable errors when payloads exceed LeanCloud limits.
 - [X] T022 [US1] Implement per-session WebSocket hub with `ai_turn`, `termination`, `evaluation_ready` events in `backend/app/api/routes/session_socket.py`.
 - [X] T023 [US1] Create turn pipeline orchestrator (upload audio → qwen generation → LeanCloud storage) with ASR background task handling in `backend/app/services/turn_pipeline.py`.
-- [ ] T023a [US1] Extend `backend/app/services/turn_pipeline.py` to detect qwen generation/ASR failures, persist termination reasons, emit guidance over WebSocket, and notify observability sinks.
-- [ ] T023b [US1] Add missing/corrupt audio recovery in `backend/app/services/turn_pipeline.py`, preserving turn order, prompting clients to resend, and ensuring retries don’t corrupt session state.
-- [ ] T024 [US1] Integrate Configurable Objective Check Model client and termination enforcement in `backend/app/services/objective_check.py`.
-- [ ] T024a [US1] Invoke `backend/app/tasks/evaluation_runner.enqueue()` whenever a session transitions to a terminal state in `backend/app/services/session_service.py`, ensuring idempotency and log coverage.
-- [ ] T025 [US1] Persist manual stop reasons + timer breaches via service hooks in `backend/app/services/session_service.py` to satisfy FR-003/FR-005/FR-007.
-- [ ] T025a [US1] Enforce the `<20` concurrent session cap with ≤5 pending queue plus HTTP 429 “pilot capacity exceeded” responses in `backend/app/services/session_service.py`, including contract/integration tests for saturation.
-- [ ] T025b [P] [US1] Emit saturation metrics/alerts (SC-001/SC-004 linkage) and document the graceful degradation runbook in `backend/app/telemetry/tracing.py` and `docs/architecture/practice-coach.md`.
-- [ ] T026 [US1] Enforce session/turn timestamp validation (startedAt/endedAt required, drift +/-2s) with HTTP 422 responses in `backend/app/api/routes/sessions.py` and `backend/app/api/routes/turns.py`.
-- [ ] T027 [US1] Add contract tests for timestamp validation/drift enforcement (missing timestamps → 422) in `backend/tests/contract/test_sessions.py` and `backend/tests/contract/test_turns.py`.
-- [ ] T027a [US1] Add contract test in `backend/tests/contract/test_turns.py` verifying missing/corrupt audio uploads trigger HTTP 422 with “resend turn” guidance while preserving session data.
-- [ ] T028 [US1] Inject `STUB_USER_ID` scoping for all practice/evaluation/history queries in `backend/app/api/routes/` to uphold the single-tenant requirement.
-- [ ] T029 [US1] Instrument session lifecycle + turn pipeline with structured logs and metrics covering SC-001 (completion rate) and SC-002 (termination latency), including unit tests that assert emission hooks via `backend/app/telemetry/tracing.py`.
-- [ ] T030 [US1] Implement OpenTelemetry traces across `/api/sessions`, `backend/app/services/turn_pipeline.py`, and `backend/app/clients/*` so request → qwen → LeanCloud spans are emitted; add tests asserting span metadata (sessionId, turnId, latency).
+- [X] T023a [US1] Extend `backend/app/services/turn_pipeline.py` to detect qwen generation/ASR failures, persist termination reasons, emit guidance over WebSocket, and notify observability sinks.
+- [X] T023b [US1] Add missing/corrupt audio recovery in `backend/app/services/turn_pipeline.py`, preserving turn order, prompting clients to resend, and ensuring retries don’t corrupt session state.
+- [X] T024 [US1] Integrate Configurable Objective Check Model client and termination enforcement in `backend/app/services/objective_check.py`.
+- [X] T024a [US1] Invoke `backend/app/tasks/evaluation_runner.enqueue()` whenever a session transitions to a terminal state in `backend/app/services/session_service.py`, ensuring idempotency and log coverage.
+- [X] T025 [US1] Persist manual stop reasons + timer breaches via service hooks in `backend/app/services/session_service.py` to satisfy FR-003/FR-005/FR-007.
+- [X] T025a [US1] Enforce the `<20` concurrent session cap with ≤5 pending queue plus HTTP 429 “pilot capacity exceeded” responses in `backend/app/services/session_service.py`, including contract/integration tests for saturation.
+- [X] T025b [P] [US1] Emit saturation metrics/alerts (SC-001/SC-004 linkage) and document the graceful degradation runbook in `backend/app/telemetry/tracing.py` and `docs/architecture/practice-coach.md`.
+- [X] T026 [US1] Enforce session/turn timestamp validation (startedAt/endedAt required, drift +/-2s) with HTTP 422 responses in `backend/app/api/routes/sessions.py` and `backend/app/api/routes/turns.py`.
+- [X] T027 [US1] Add contract tests for timestamp validation/drift enforcement (missing timestamps → 422) in `backend/tests/contract/test_sessions.py` and `backend/tests/contract/test_turns.py`.
+- [X] T027a [US1] Add contract test in `backend/tests/contract/test_turns.py` verifying missing/corrupt audio uploads trigger HTTP 422 with “resend turn” guidance while preserving session data.
+- [X] T028 [US1] Inject `STUB_USER_ID` scoping for all practice/evaluation/history queries in `backend/app/api/routes/` to uphold the single-tenant requirement.
+- [X] T029 [US1] Instrument session lifecycle + turn pipeline with structured logs and metrics covering SC-001 (completion rate) and SC-002 (termination latency), including unit tests that assert emission hooks via `backend/app/telemetry/tracing.py`.
+- [X] T030 [US1] Implement OpenTelemetry traces across `/api/sessions`, `backend/app/services/turn_pipeline.py`, and `backend/app/clients/*` so request → qwen → LeanCloud spans are emitted; add tests asserting span metadata (sessionId, turnId, latency).
 - [ ] T031 [US1] Trigger AI initiation turn (sequence 0) immediately after session creation in `backend/app/services/session_service.py`, persist the AI turn, and ensure it streams over `/ws/sessions/{id}` before trainee input.
 - [ ] T032 [P] [US1] Extend integration tests in `backend/tests/integration/test_practice_flow.py` to verify AI turn 0 is emitted after POST `/api/sessions` succeeds.
 - [ ] T033 [P] [US1] Build scenario catalog page with filters/search in `frontend/app/(dashboard)/scenarios/page.tsx` consuming `/api/scenarios` + `/api/skills`.

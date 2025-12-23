@@ -130,3 +130,11 @@ class SessionRepository:
         )
         results = response.get("results", [])
         return [_turn_from_lc(item) for item in results]
+
+    async def list_sessions(self, stub_user_id: str | None = None) -> list[PracticeSessionRecord]:
+        params = None
+        if stub_user_id:
+            params = {"where": json.dumps({"stubUserId": stub_user_id})}
+        response = await self._client.get_json("/1.1/classes/PracticeSession", params=params)
+        results = response.get("results", [])
+        return [_session_from_lc(item) for item in results]

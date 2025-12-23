@@ -7,9 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.clients.leancloud import LeanCloudClient
 from app.config import load_settings
-from app.models.session import PracticeSessionCreate
+from app.models.session import PracticeSessionCreate, enforce_drift
 from app.repositories.scenario_repository import ScenarioRepository
 from app.repositories.session_repository import PracticeSessionRecord, SessionRepository
+from app.services.session_service import CapacityError, ensure_capacity, terminate_session
+from app.telemetry.tracing import emit_event
+from app.telemetry.otel import start_span
 
 router = APIRouter()
 
@@ -114,34 +117,53 @@ async def create_session(
     payload: PracticeSessionCreate,
     repo: SessionRepository = Depends(_repo),
 ):
-    settings = load_settings()
-    now = datetime.now(timezone.utc).isoformat()
-    record = await repo.create_session(
-        {
-            "scenarioId": payload.scenarioId,
-            "stubUserId": settings.stub_user_id,
-            "status": "pending",
-            "clientSessionStartedAt": payload.clientSessionStartedAt.isoformat(),
-            "startedAt": now,
-            "endedAt": None,
-            "totalDurationSeconds": None,
-            "idleLimitSeconds": None,
-            "durationLimitSeconds": None,
-            "wsChannel": "/ws/sessions/pending",
-            "objectiveStatus": "unknown",
-            "objectiveReason": None,
-            "terminationReason": None,
-            "evaluationId": None,
-        }
-    )
+    with start_span(
+        "sessions.create",
+        {"scenarioId": payload.scenarioId},
+    ):
+        settings = load_settings()
+        try:
+            enforce_drift(payload.clientSessionStartedAt, datetime.now(timezone.utc))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+        try:
+            await ensure_capacity(repo, max_active=20)
+        except CapacityError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=str(exc),
+            ) from exc
+        now = datetime.now(timezone.utc).isoformat()
+        record = await repo.create_session(
+            {
+                "scenarioId": payload.scenarioId,
+                "stubUserId": settings.stub_user_id,
+                "status": "pending",
+                "clientSessionStartedAt": payload.clientSessionStartedAt.isoformat(),
+                "startedAt": now,
+                "endedAt": None,
+                "totalDurationSeconds": None,
+                "idleLimitSeconds": None,
+                "durationLimitSeconds": None,
+                "wsChannel": "/ws/sessions/pending",
+                "objectiveStatus": "unknown",
+                "objectiveReason": None,
+                "terminationReason": None,
+                "evaluationId": None,
+            }
+        )
 
-    if record.ws_channel.endswith("/pending"):
-        record = await repo.update_session(
-            record.id,
-            {"wsChannel": f"/ws/sessions/{record.id}"},
-        ) or record
+        if record.ws_channel.endswith("/pending"):
+            record = await repo.update_session(
+                record.id,
+                {"wsChannel": f"/ws/sessions/{record.id}"},
+            ) or record
+        emit_event("session.created", session_id=record.id)
 
-    return _session_response(record)
+        return _session_response(record)
 
 
 @router.get("/sessions/{session_id}")
@@ -153,6 +175,9 @@ async def get_session(
 ):
     session = await repo.get_session(session_id)
     if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    settings = load_settings()
+    if session.stub_user_id != settings.stub_user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     turns = await repo.list_turns(session_id)
     scenario = await scenario_repo.get(session.scenario_id)
@@ -175,18 +200,24 @@ async def manual_stop(
     payload: dict[str, Any],
     repo: SessionRepository = Depends(_repo),
 ):
-    reason = payload.get("reason")
-    if reason not in {"manual", "qa_error", "media_error"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+    with start_span("sessions.manual_stop", {"sessionId": session_id}):
+        reason = payload.get("reason")
+        if reason not in {"manual", "qa_error", "media_error"}:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-    record = await repo.update_session(
-        session_id,
-        {
-            "status": "ended",
-            "terminationReason": reason,
-            "endedAt": datetime.now(timezone.utc).isoformat(),
-        },
-    )
+    ended_at = datetime.now(timezone.utc).isoformat()
+    update_payload = {
+        "status": "ended",
+        "terminationReason": reason,
+        "endedAt": ended_at,
+    }
+    record = await repo.update_session(session_id, update_payload)
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await terminate_session(repo, session_id, reason, ended_at)
+    emit_event(
+        "session.terminated",
+        session_id=session_id,
+        attributes={"reason": reason},
+    )
     return {"status": "acknowledged"}

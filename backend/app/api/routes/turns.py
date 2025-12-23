@@ -9,9 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.clients.leancloud import LeanCloudClient
 from app.config import load_settings
-from app.models.session import TurnInput
+from app.models.session import TurnInput, enforce_drift
 from app.repositories.session_repository import SessionRepository
 from app.services.turn_pipeline import enqueue_turn_pipeline
+from app.telemetry.otel import start_span
 
 router = APIRouter()
 
@@ -31,6 +32,11 @@ def _repo() -> SessionRepository:
 
 
 def _audio_size_bytes(audio_base64: str) -> int:
+    if not audio_base64:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Missing audio payload; please resend the turn.",
+        )
     if len(audio_base64) > MAX_AUDIO_BASE64_CHARS:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -51,59 +57,72 @@ async def submit_turn(
     payload: TurnInput,
     repo: SessionRepository = Depends(_repo),
 ):
-    size = _audio_size_bytes(payload.audioBase64)
-    if size > MAX_AUDIO_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Audio exceeds 128 KB; shorten or split the turn.",
+    with start_span(
+        "turns.create",
+        {"sessionId": session_id, "sequence": payload.sequence},
+    ):
+        size = _audio_size_bytes(payload.audioBase64)
+        if size > MAX_AUDIO_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Audio exceeds 128 KB; shorten or split the turn.",
+            )
+
+        session = await repo.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+        if session.status == "ended":
+            return {"sessionId": session_id, "turnId": "", "aiTurnId": None, "status": "closed"}
+
+        try:
+            enforce_drift(payload.startedAt, datetime.now(timezone.utc))
+            enforce_drift(payload.endedAt, datetime.now(timezone.utc))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
+        existing_turns = await repo.list_turns(session_id)
+        existing_sequences = {turn.sequence for turn in existing_turns}
+        if payload.sequence in existing_sequences:
+            return {
+                "sessionId": session_id,
+                "turnId": "",
+                "aiTurnId": None,
+                "status": "duplicate",
+            }
+        expected_sequence = max(existing_sequences, default=-1) + 1
+        if payload.sequence != expected_sequence:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid sequence; expected {expected_sequence}.",
+            )
+
+        record = await repo.add_turn(
+            {
+                "sessionId": session_id,
+                "sequence": payload.sequence,
+                "speaker": "trainee",
+                "transcript": None,
+                "audioFileId": "pending",
+                "audioUrl": None,
+                "asrStatus": "pending",
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+                "startedAt": payload.startedAt.isoformat(),
+                "endedAt": payload.endedAt.isoformat(),
+                "context": payload.context,
+                "latencyMs": None,
+            }
+        )
+        await enqueue_turn_pipeline(
+            session_id=session_id, turn_id=record.id, audio_base64=payload.audioBase64
         )
 
-    session = await repo.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-
-    if session.status == "ended":
-        return {"sessionId": session_id, "turnId": "", "aiTurnId": None, "status": "closed"}
-
-    existing_turns = await repo.list_turns(session_id)
-    existing_sequences = {turn.sequence for turn in existing_turns}
-    if payload.sequence in existing_sequences:
         return {
             "sessionId": session_id,
-            "turnId": "",
+            "turnId": record.id,
             "aiTurnId": None,
-            "status": "duplicate",
+            "status": "accepted",
         }
-    expected_sequence = max(existing_sequences, default=-1) + 1
-    if payload.sequence != expected_sequence:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid sequence; expected {expected_sequence}.",
-        )
-
-    record = await repo.add_turn(
-        {
-            "sessionId": session_id,
-            "sequence": payload.sequence,
-            "speaker": "trainee",
-            "transcript": None,
-            "audioFileId": "pending",
-            "audioUrl": None,
-            "asrStatus": "pending",
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-            "startedAt": payload.startedAt.isoformat(),
-            "endedAt": payload.endedAt.isoformat(),
-            "context": payload.context,
-            "latencyMs": None,
-        }
-    )
-    await enqueue_turn_pipeline(
-        session_id=session_id, turn_id=record.id, audio_base64=payload.audioBase64
-    )
-
-    return {
-        "sessionId": session_id,
-        "turnId": record.id,
-        "aiTurnId": None,
-        "status": "accepted",
-    }

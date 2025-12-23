@@ -4,9 +4,13 @@ import httpx
 import pytest
 from fastapi import status
 
+from datetime import datetime, timezone
+
 from app.api.routes import scenarios as scenarios_routes
+from app.api.routes import sessions as sessions_routes
 from app.main import app
 from app.repositories.scenario_repository import Scenario, Skill
+from app.repositories.session_repository import PracticeSessionRecord
 
 
 @pytest.fixture(autouse=True)
@@ -67,9 +71,93 @@ def _override_repo():
         list_skills = staticmethod(_list_skills)
         get = staticmethod(_get)
 
+    created_session: PracticeSessionRecord | None = None
+
+    async def _list_sessions():
+        return []
+
+    async def _create_session(payload):
+        nonlocal created_session
+        created_session = PracticeSessionRecord(
+            id="session-1",
+            scenario_id=payload["scenarioId"],
+            stub_user_id=payload["stubUserId"],
+            status=payload["status"],
+            client_session_started_at=payload["clientSessionStartedAt"],
+            started_at=payload["startedAt"],
+            ended_at=payload["endedAt"],
+            total_duration_seconds=payload["totalDurationSeconds"],
+            idle_limit_seconds=payload["idleLimitSeconds"],
+            duration_limit_seconds=payload["durationLimitSeconds"],
+            ws_channel=payload["wsChannel"],
+            objective_status=payload["objectiveStatus"],
+            objective_reason=payload["objectiveReason"],
+            termination_reason=payload["terminationReason"],
+            evaluation_id=payload["evaluationId"],
+        )
+        return created_session
+
+    async def _update_session(session_id, payload):
+        nonlocal created_session
+        if created_session is not None:
+            return PracticeSessionRecord(
+                id=session_id,
+                scenario_id=created_session.scenario_id,
+                stub_user_id=created_session.stub_user_id,
+                status=payload.get("status", created_session.status),
+                client_session_started_at=created_session.client_session_started_at,
+                started_at=created_session.started_at,
+                ended_at=payload.get("endedAt", created_session.ended_at),
+                total_duration_seconds=created_session.total_duration_seconds,
+                idle_limit_seconds=created_session.idle_limit_seconds,
+                duration_limit_seconds=created_session.duration_limit_seconds,
+                ws_channel=payload.get("wsChannel", created_session.ws_channel),
+                objective_status=created_session.objective_status,
+                objective_reason=created_session.objective_reason,
+                termination_reason=payload.get(
+                    "terminationReason", created_session.termination_reason
+                ),
+                evaluation_id=created_session.evaluation_id,
+            )
+        return PracticeSessionRecord(
+            id=session_id,
+            scenario_id="scenario-1",
+            stub_user_id="pilot-user",
+            status=payload.get("status", "pending"),
+            client_session_started_at=payload.get("clientSessionStartedAt", ""),
+            started_at=payload.get("startedAt"),
+            ended_at=payload.get("endedAt"),
+            total_duration_seconds=payload.get("totalDurationSeconds"),
+            idle_limit_seconds=payload.get("idleLimitSeconds"),
+            duration_limit_seconds=payload.get("durationLimitSeconds"),
+            ws_channel=payload.get("wsChannel", "/ws/sessions/session-1"),
+            objective_status=payload.get("objectiveStatus", "unknown"),
+            objective_reason=payload.get("objectiveReason"),
+            termination_reason=payload.get("terminationReason"),
+            evaluation_id=payload.get("evaluationId"),
+        )
+
+    class FakeSessionRepo:
+        list_sessions = staticmethod(_list_sessions)
+        create_session = staticmethod(_create_session)
+        update_session = staticmethod(_update_session)
+
     app.dependency_overrides[scenarios_routes._repo] = lambda: FakeRepo()
+    app.dependency_overrides[sessions_routes._repo] = lambda: FakeSessionRepo()
     yield
     app.dependency_overrides.pop(scenarios_routes._repo, None)
+    app.dependency_overrides.pop(sessions_routes._repo, None)
+
+
+@pytest.mark.asyncio
+async def test_create_session_missing_timestamps_rejected():
+    payload = {"scenarioId": "scenario-1"}
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/sessions", json=payload)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 @pytest.mark.asyncio
@@ -96,9 +184,10 @@ async def test_list_skills_contract():
 
 @pytest.mark.asyncio
 async def test_create_session_contract():
+    now = datetime.now(timezone.utc).isoformat()
     payload = {
         "scenarioId": "scenario-1",
-        "clientSessionStartedAt": "2025-01-01T00:00:00Z",
+        "clientSessionStartedAt": now,
     }
 
     transport = httpx.ASGITransport(app=app)
@@ -115,9 +204,10 @@ async def test_create_session_contract():
 
 @pytest.mark.asyncio
 async def test_create_session_rejects_incomplete_scenario():
+    now = datetime.now(timezone.utc).isoformat()
     payload = {
         "scenarioId": "scenario-1",
-        "clientSessionStartedAt": "2025-01-01T00:00:00Z",
+        "clientSessionStartedAt": now,
         "personas": {},
         "objectives": [],
         "endCriteria": [],

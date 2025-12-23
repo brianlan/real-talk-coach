@@ -10,6 +10,8 @@ from app.clients.leancloud import LeanCloudClient
 from app.clients.llm import QwenClient
 from app.config import load_settings
 from app.repositories.session_repository import SessionRepository
+from app.telemetry.otel import start_span
+from app.telemetry.tracing import emit_event, emit_metric
 
 QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 QWEN_MODEL = "qwen3-omni-flash"
@@ -25,6 +27,24 @@ def _parse_qwen_text(response: dict[str, Any]) -> str:
         return ""
     message = choices[0].get("message", {})
     return message.get("content", "")
+
+
+def _turn_payload(turn) -> dict[str, Any]:
+    return {
+        "id": turn.id,
+        "sessionId": turn.session_id,
+        "sequence": turn.sequence,
+        "speaker": turn.speaker,
+        "transcript": turn.transcript,
+        "audioFileId": turn.audio_file_id,
+        "audioUrl": turn.audio_url,
+        "asrStatus": turn.asr_status,
+        "createdAt": turn.created_at,
+        "startedAt": turn.started_at,
+        "endedAt": turn.ended_at,
+        "context": turn.context,
+        "latencyMs": turn.latency_ms,
+    }
 
 
 async def enqueue_turn_pipeline(*, session_id: str, turn_id: str, audio_base64: str) -> None:
@@ -46,89 +66,142 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
     repo = SessionRepository(lc_client)
 
     try:
-        audio_bytes = base64.b64decode(audio_base64)
-        upload = await lc_client.upload_file(
-            f"turn-{turn_id}.mp3", audio_bytes, "audio/mpeg"
-        )
-        file_id = upload.get("objectId") or upload.get("name")
-        await repo.update_turn(
-            turn_id,
-            {
-                "audioFileId": file_id,
-                "audioUrl": upload.get("url"),
-                "asrStatus": "pending",
-                "updatedAt": _utc_now(),
-            },
-        )
+        with start_span(
+            "turn.pipeline",
+            {"sessionId": session_id, "turnId": turn_id},
+        ):
+            try:
+                audio_bytes = base64.b64decode(audio_base64, validate=True)
+            except ValueError:
+                await _handle_audio_error(repo, session_id, turn_id, "Audio decode failed")
+                return
 
-        turns = await repo.list_turns(session_id)
-        max_sequence = max((turn.sequence for turn in turns), default=-1)
-
-        generation_task = qwen_client.generate(
-            {
-                "model": QWEN_MODEL,
-                "messages": [
-                    {"role": "system", "content": "You are an AI coach."},
-                    {"role": "user", "content": "Respond to the trainee."},
-                ],
-            }
-        )
-        asr_task = qwen_client.asr({"model": QWEN_MODEL, "input": audio_base64})
-
-        generation_response, asr_response = await asyncio.gather(
-            generation_task, asr_task, return_exceptions=True
-        )
-
-        transcript = ""
-        if not isinstance(generation_response, Exception):
-            transcript = _parse_qwen_text(generation_response)
-
-        ai_turn = await repo.add_turn(
-            {
-                "sessionId": session_id,
-                "sequence": max_sequence + 1,
-                "speaker": "ai",
-                "transcript": transcript or None,
-                "audioFileId": file_id or "pending",
-                "audioUrl": upload.get("url"),
-                "asrStatus": None,
-                "createdAt": _utc_now(),
-                "startedAt": _utc_now(),
-                "endedAt": _utc_now(),
-                "context": None,
-                "latencyMs": None,
-            }
-        )
-
-        await hub.broadcast(
-            session_id,
-            {
-                "type": "ai_turn",
-                "turn": {
-                    "id": ai_turn.id,
-                    "sessionId": ai_turn.session_id,
-                    "sequence": ai_turn.sequence,
-                    "speaker": ai_turn.speaker,
-                    "transcript": ai_turn.transcript,
-                    "audioFileId": ai_turn.audio_file_id,
-                    "audioUrl": ai_turn.audio_url,
-                    "asrStatus": ai_turn.asr_status,
-                    "createdAt": ai_turn.created_at,
-                    "startedAt": ai_turn.started_at,
-                    "endedAt": ai_turn.ended_at,
-                    "context": ai_turn.context,
-                    "latencyMs": ai_turn.latency_ms,
-                },
-            },
-        )
-
-        if isinstance(asr_response, Exception):
-            await repo.update_turn(turn_id, {"asrStatus": "failed"})
-        else:
+            upload = await lc_client.upload_file(
+                f"turn-{turn_id}.mp3", audio_bytes, "audio/mpeg"
+            )
+            file_id = upload.get("objectId") or upload.get("name")
             await repo.update_turn(
                 turn_id,
-                {"asrStatus": "completed", "transcript": asr_response.get("text")},
+                {
+                    "audioFileId": file_id,
+                    "audioUrl": upload.get("url"),
+                    "asrStatus": "pending",
+                    "updatedAt": _utc_now(),
+                },
             )
+
+            turns = await repo.list_turns(session_id)
+            max_sequence = max((turn.sequence for turn in turns), default=-1)
+
+            generation_task = qwen_client.generate(
+                {
+                    "model": QWEN_MODEL,
+                    "messages": [
+                        {"role": "system", "content": "You are an AI coach."},
+                        {"role": "user", "content": "Respond to the trainee."},
+                    ],
+                }
+            )
+            asr_task = qwen_client.asr({"model": QWEN_MODEL, "input": audio_base64})
+
+            generation_response, asr_response = await asyncio.gather(
+                generation_task, asr_task, return_exceptions=True
+            )
+
+            if isinstance(generation_response, Exception):
+                await _terminate_for_qwen_error(repo, session_id)
+                return
+
+            transcript = _parse_qwen_text(generation_response)
+            ai_turn = await repo.add_turn(
+                {
+                    "sessionId": session_id,
+                    "sequence": max_sequence + 1,
+                    "speaker": "ai",
+                    "transcript": transcript or None,
+                    "audioFileId": file_id or "pending",
+                    "audioUrl": upload.get("url"),
+                    "asrStatus": None,
+                    "createdAt": _utc_now(),
+                    "startedAt": _utc_now(),
+                    "endedAt": _utc_now(),
+                    "context": None,
+                    "latencyMs": None,
+                }
+            )
+
+            await hub.broadcast(
+                session_id,
+                {
+                    "type": "ai_turn",
+                    "turn": _turn_payload(ai_turn),
+                },
+            )
+            emit_metric(
+                "turn.ai_created",
+                1,
+                session_id=session_id,
+                turn_id=ai_turn.id,
+            )
+
+            if isinstance(asr_response, Exception):
+                await repo.update_turn(turn_id, {"asrStatus": "failed"})
+            else:
+                await repo.update_turn(
+                    turn_id,
+                    {"asrStatus": "completed", "transcript": asr_response.get("text")},
+                )
     finally:
         await qwen_client.close()
         await lc_client.close()
+
+
+async def _terminate_for_qwen_error(repo: SessionRepository, session_id: str) -> None:
+    await repo.update_session(
+        session_id,
+        {
+            "status": "ended",
+            "terminationReason": "qa_error",
+            "endedAt": _utc_now(),
+        },
+    )
+    emit_event(
+        "session.terminated",
+        session_id=session_id,
+        attributes={"reason": "qa_error", "source": "qwen"},
+    )
+    await hub.broadcast(
+        session_id,
+        {
+            "type": "termination",
+            "termination": {"reason": "qa_error", "terminatedAt": _utc_now()},
+            "message": "Qwen is unavailable. Please retry your turn.",
+        },
+    )
+
+
+async def _handle_audio_error(
+    repo: SessionRepository, session_id: str, turn_id: str, reason: str
+) -> None:
+    await repo.update_turn(turn_id, {"asrStatus": "failed", "audioFileId": "missing"})
+    emit_event(
+        "turn.audio_error",
+        session_id=session_id,
+        turn_id=turn_id,
+        attributes={"reason": reason},
+    )
+    emit_metric(
+        "turn.audio_error",
+        1,
+        session_id=session_id,
+        turn_id=turn_id,
+        attributes={"reason": reason},
+    )
+    await hub.broadcast(
+        session_id,
+        {
+            "type": "termination",
+            "termination": {"reason": "media_error", "terminatedAt": _utc_now()},
+            "message": "Audio upload failed. Please resend your turn.",
+        },
+    )
