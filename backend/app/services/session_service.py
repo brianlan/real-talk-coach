@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from app.api.routes.session_socket import hub
 from app.repositories.session_repository import SessionRepository
 from app.tasks.evaluation_runner import enqueue
 from app.telemetry.tracing import emit_metric
@@ -78,7 +77,7 @@ async def initiate_session(
     repo: SessionRepository,
     session_id: str,
     *,
-    transcript: str,
+    scenario: Any,
 ) -> None:
     now = datetime.now(timezone.utc).isoformat()
     session = await repo.update_session(
@@ -90,39 +89,6 @@ async def initiate_session(
     )
     if not session:
         return
-    ai_turn = await repo.add_turn(
-        {
-            "sessionId": session_id,
-            "sequence": 0,
-            "speaker": "ai",
-            "transcript": transcript,
-            "audioFileId": "pending",
-            "audioUrl": None,
-            "asrStatus": None,
-            "startedAt": now,
-            "endedAt": now,
-            "context": None,
-            "latencyMs": None,
-        }
-    )
-    await hub.broadcast(
-        session_id,
-        {
-            "type": "ai_turn",
-            "turn": {
-                "id": ai_turn.id,
-                "sessionId": ai_turn.session_id,
-                "sequence": ai_turn.sequence,
-                "speaker": ai_turn.speaker,
-                "transcript": ai_turn.transcript,
-                "audioFileId": ai_turn.audio_file_id,
-                "audioUrl": ai_turn.audio_url,
-                "asrStatus": ai_turn.asr_status,
-                "createdAt": ai_turn.created_at,
-                "startedAt": ai_turn.started_at,
-                "endedAt": ai_turn.ended_at,
-                "context": ai_turn.context,
-                "latencyMs": ai_turn.latency_ms,
-            },
-        },
-    )
+    from app.services.turn_pipeline import generate_initial_ai_turn
+
+    await generate_initial_ai_turn(session_id=session_id, scenario=scenario)

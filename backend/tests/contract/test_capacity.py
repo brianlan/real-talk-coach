@@ -25,6 +25,16 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
 
 
+@pytest.fixture(autouse=True)
+def _stub_initial_turn(monkeypatch):
+    async def _noop_initial_turn(*args, **kwargs):
+        return None
+    monkeypatch.setattr(
+        "app.services.turn_pipeline.generate_initial_ai_turn",
+        _noop_initial_turn,
+    )
+
+
 def _session(status_value: str) -> PracticeSessionRecord:
     return PracticeSessionRecord(
         id=f"session-{status_value}",

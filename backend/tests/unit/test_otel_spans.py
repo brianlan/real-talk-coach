@@ -98,6 +98,12 @@ async def test_session_create_starts_span(monkeypatch):
             )()
 
     monkeypatch.setattr(sessions_routes, "start_span", fake_start_span)
+    async def _noop_initial_turn(*args, **kwargs):
+        return None
+    monkeypatch.setattr(
+        "app.services.turn_pipeline.generate_initial_ai_turn",
+        _noop_initial_turn,
+    )
 
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")

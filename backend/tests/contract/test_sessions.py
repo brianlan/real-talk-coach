@@ -30,7 +30,7 @@ def _set_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _override_repo():
+def _override_repo(monkeypatch):
     async def _list_published(*args, **kwargs):
         return [
             Scenario(
@@ -180,6 +180,12 @@ def _override_repo():
     app.dependency_overrides[scenarios_routes._repo] = lambda: FakeRepo()
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeSessionRepo()
     app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()
+    async def _noop_initial_turn(*args, **kwargs):
+        return None
+    monkeypatch.setattr(
+        "app.services.turn_pipeline.generate_initial_ai_turn",
+        _noop_initial_turn,
+    )
     yield
     app.dependency_overrides.pop(scenarios_routes._repo, None)
     app.dependency_overrides.pop(sessions_routes._repo, None)

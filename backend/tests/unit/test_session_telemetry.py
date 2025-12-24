@@ -104,6 +104,12 @@ async def test_session_created_emits_event(monkeypatch):
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
 
     monkeypatch.setattr(sessions_routes, "emit_event", fake_emit_event)
+    async def _noop_initial_turn(*args, **kwargs):
+        return None
+    monkeypatch.setattr(
+        "app.services.turn_pipeline.generate_initial_ai_turn",
+        _noop_initial_turn,
+    )
 
     payload = sessions_routes.PracticeSessionCreate(
         scenarioId="scenario-1",

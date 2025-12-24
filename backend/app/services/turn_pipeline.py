@@ -68,6 +68,173 @@ def _turn_payload(turn) -> dict[str, Any]:
     }
 
 
+def _persona_block(persona: dict[str, Any] | None, label: str) -> str:
+    if not persona:
+        return f"{label}: (not provided)"
+    name = persona.get("name") or "Unknown"
+    role = persona.get("role") or "Unknown"
+    background = persona.get("background") or "Not provided"
+    return f"{label}: {name} ({role}). Background: {background}"
+
+
+def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
+    title = getattr(scenario, "title", "") or ""
+    description = getattr(scenario, "description", "") or ""
+    objective = getattr(scenario, "objective", "") or ""
+    end_criteria = getattr(scenario, "end_criteria", None) or getattr(
+        scenario, "endCriteria", []
+    )
+    prompt = getattr(scenario, "prompt", "") or ""
+    ai_persona = getattr(scenario, "ai_persona", None) or getattr(
+        scenario, "aiPersona", None
+    )
+    trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
+        scenario, "traineePersona", None
+    )
+    criteria_text = ", ".join(end_criteria) if end_criteria else "Not provided"
+
+    system_lines = [
+        "You are the AI roleplayer for a practice conversation.",
+        _persona_block(ai_persona, "Your persona"),
+        _persona_block(trainee_persona, "Trainee persona"),
+    ]
+    if title:
+        system_lines.append(f"Scenario title: {title}")
+    if description:
+        system_lines.append(f"Scenario description: {description}")
+    if objective:
+        system_lines.append(f"Objective: {objective}")
+    system_lines.append(f"End criteria: {criteria_text}")
+    system_lines.append("You must start the conversation as the AI.")
+
+    user_prompt = prompt or "Begin the conversation in character."
+    return [
+        {"role": "system", "content": "\n".join(system_lines)},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
+    settings = load_settings()
+    lc_client = LeanCloudClient(
+        app_id=settings.lean_app_id,
+        app_key=settings.lean_app_key,
+        master_key=settings.lean_master_key,
+        server_url=settings.lean_server_url,
+    )
+    qwen_client = QwenClient(
+        base_url=QWEN_BASE_URL,
+        api_key=settings.dashscope_api_key,
+    )
+    repo = SessionRepository(lc_client)
+
+    try:
+        with start_span(
+            "turn.initiation",
+            {"sessionId": session_id},
+        ):
+            messages = _build_initiation_messages(scenario)
+            try:
+                generation_response = await qwen_client.generate(
+                    {"model": QWEN_MODEL, "messages": messages}
+                )
+            except Exception:
+                await _terminate_for_qwen_error(repo, session_id)
+                return
+
+            transcript = _parse_qwen_text(generation_response)
+            now = _utc_now()
+            ai_turn = await repo.add_turn(
+                {
+                    "sessionId": session_id,
+                    "sequence": 0,
+                    "speaker": "ai",
+                    "transcript": transcript or "",
+                    "audioFileId": "pending",
+                    "audioUrl": "",
+                    "asrStatus": "not_applicable",
+                    "startedAt": now,
+                    "endedAt": now,
+                    "context": "",
+                    "latencyMs": -1,
+                }
+            )
+
+            ai_audio_url = None
+            ai_audio_id = None
+            try:
+                wav_bytes = _extract_qwen_audio(generation_response)
+                if wav_bytes:
+                    mp3_bytes = convert_wav_to_mp3(wav_bytes)
+                    upload_ai = await lc_client.upload_file(
+                        f"turn-{ai_turn.id}.mp3", mp3_bytes, "audio/mpeg"
+                    )
+                    ai_audio_id = upload_ai.get("objectId") or upload_ai.get("name")
+                    ai_audio_url = upload_ai.get("url")
+            except AudioConversionError as exc:
+                emit_event(
+                    "turn.audio_error",
+                    session_id=session_id,
+                    turn_id=ai_turn.id,
+                    attributes={"reason": str(exc)},
+                )
+
+            if ai_audio_id:
+                await repo.update_turn(
+                    ai_turn.id,
+                    {
+                        "audioFileId": ai_audio_id,
+                        "audioUrl": ai_audio_url or "",
+                    },
+                )
+                ai_turn = await repo.get_turn(ai_turn.id)
+
+            await hub.broadcast(
+                session_id,
+                {
+                    "type": "ai_turn",
+                    "turn": _turn_payload(ai_turn),
+                },
+            )
+            emit_metric(
+                "turn.ai_created",
+                1,
+                session_id=session_id,
+                turn_id=ai_turn.id,
+            )
+
+            if transcript:
+                end_criteria = getattr(scenario, "end_criteria", None) or getattr(
+                    scenario, "endCriteria", []
+                )
+                objective = getattr(scenario, "objective", "") or ""
+                if end_criteria or objective:
+                    objective_result = await run_objective_check(
+                        scenario_objective=objective,
+                        transcript=transcript,
+                        end_criteria=end_criteria,
+                    )
+                    if objective_result.status in {"succeeded", "failed"}:
+                        await repo.update_session(
+                            session_id,
+                            {
+                                "objectiveStatus": objective_result.status,
+                                "objectiveReason": objective_result.reason,
+                            },
+                        )
+                        await terminate_session(
+                            repo,
+                            session_id,
+                            "objective_met"
+                            if objective_result.status == "succeeded"
+                            else "objective_failed",
+                            _utc_now(),
+                        )
+    finally:
+        await qwen_client.close()
+        await lc_client.close()
+
+
 async def enqueue_turn_pipeline(*, session_id: str, turn_id: str, audio_base64: str) -> None:
     await _process_turn(session_id=session_id, turn_id=turn_id, audio_base64=audio_base64)
 

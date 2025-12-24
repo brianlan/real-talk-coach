@@ -188,8 +188,7 @@ async def create_session(
             {"wsChannel": f"/ws/sessions/{record.id}"},
         ) or record
     emit_event("session.created", session_id=record.id)
-    prompt = scenario.prompt if scenario else "Session started."
-    await initiate_session(repo, record.id, transcript=prompt)
+    await initiate_session(repo, record.id, scenario=scenario)
 
     return _session_response(record)
 

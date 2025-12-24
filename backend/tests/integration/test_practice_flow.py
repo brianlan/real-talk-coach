@@ -31,6 +31,12 @@ def _stub_pipeline(monkeypatch):
         return None
 
     monkeypatch.setattr(turns_routes, "enqueue_turn_pipeline", _noop_pipeline)
+    async def _noop_initial_turn(*args, **kwargs):
+        return None
+    monkeypatch.setattr(
+        "app.services.turn_pipeline.generate_initial_ai_turn",
+        _noop_initial_turn,
+    )
 
     async def fake_broadcast(self, session_id, payload):
         return None
