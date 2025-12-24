@@ -112,8 +112,18 @@ class SessionRepository:
         return _session_from_lc(record)
 
     async def add_turn(self, payload: dict[str, Any]) -> TurnRecord:
-        response = await self._client.post_json("/1.1/classes/Turn", payload)
-        record = payload | response
+        defaults = {
+            "audioUrl": "",
+            "asrStatus": "not_applicable",
+            "context": "",
+            "latencyMs": -1,
+        }
+        normalized = {**defaults, **payload}
+        for key, default in defaults.items():
+            if normalized.get(key) is None:
+                normalized[key] = default
+        response = await self._client.post_json("/1.1/classes/Turn", normalized)
+        record = normalized | response
         return _turn_from_lc(record)
 
     async def update_turn(self, turn_id: str, payload: dict[str, Any]) -> TurnRecord | None:

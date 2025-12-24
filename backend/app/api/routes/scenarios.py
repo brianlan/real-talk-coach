@@ -51,7 +51,6 @@ def _skill_response(item):
 
 @router.get("/scenarios")
 async def list_scenarios(
-    historyStepCount: int = Query(..., ge=1),
     category: str | None = None,
     search: str | None = None,
     limit: int = Query(20, le=100),
