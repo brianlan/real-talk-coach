@@ -23,7 +23,12 @@ export function useAudioRecorder(): UseAudioRecorder {
   const start = useCallback(async () => {
     setError(null);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
+    const preferredType = "audio/webm;codecs=opus";
+    const options: MediaRecorderOptions = {
+      audioBitsPerSecond: 24000,
+      ...(MediaRecorder.isTypeSupported(preferredType) ? { mimeType: preferredType } : {}),
+    };
+    const recorder = new MediaRecorder(stream, options);
     chunksRef.current = [];
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {

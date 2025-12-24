@@ -11,7 +11,12 @@ from app.clients.llm import QwenClient
 from app.config import load_settings
 from app.repositories.scenario_repository import ScenarioRepository
 from app.repositories.session_repository import SessionRepository
-from app.services.audio import AudioConversionError, convert_wav_to_mp3, decode_audio_base64
+from app.services.audio import (
+    AudioConversionError,
+    convert_audio_to_mp3,
+    convert_wav_to_mp3,
+    decode_audio_base64,
+)
 from app.services.objective_check import run_objective_check
 from app.services.session_service import terminate_session
 from app.telemetry.otel import start_span
@@ -91,9 +96,14 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
             except ValueError:
                 await _handle_audio_error(repo, session_id, turn_id, "Audio decode failed")
                 return
+            try:
+                mp3_bytes = convert_audio_to_mp3(audio_bytes)
+            except AudioConversionError:
+                await _handle_audio_error(repo, session_id, turn_id, "Audio conversion failed")
+                return
 
             upload = await lc_client.upload_file(
-                f"turn-{turn_id}.mp3", audio_bytes, "audio/mpeg"
+                f"turn-{turn_id}.mp3", mp3_bytes, "audio/mpeg"
             )
             file_id = upload.get("objectId") or upload.get("name")
             await repo.update_turn(
@@ -117,7 +127,8 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                     ],
                 }
             )
-            asr_task = qwen_client.asr({"model": QWEN_MODEL, "input": audio_base64})
+            mp3_base64 = base64.b64encode(mp3_bytes).decode("utf-8")
+            asr_task = qwen_client.asr({"model": QWEN_MODEL, "input": mp3_base64})
 
             generation_response, asr_response = await asyncio.gather(
                 generation_task, asr_task, return_exceptions=True

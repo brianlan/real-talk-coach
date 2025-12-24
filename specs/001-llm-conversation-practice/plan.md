@@ -159,7 +159,8 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   every trainee turn includes `startedAt/endedAt` so the backend can compute drift and idle/total duration.
 - Turn handling module wraps the OpenAI-compatible qwen SDK (`stream=True`, `modalities=["text","audio"]`,
   `audio={"voice": …, "format": "wav"}`), decodes streamed WAV chunks, transcodes them to mono ≤24 kbps
-  MP3, and persists LeanCloud references alongside transcripts.
+  MP3, and persists LeanCloud references alongside transcripts. The browser records low-bitrate WebM/Opus,
+  and the backend transcodes it to MP3 before LeanCloud upload to satisfy the 128 KB LFile constraint.
 - Evaluation API exposes cached results plus a safe requeue endpoint; FastAPI background tasks pick
   up pending evaluations/ASR work, handle retries while the process stays alive, and update LeanCloud.
   Evaluations call GPT-5 mini via `https://api.chataiapi.com/v1/chat/completions` with bearer secrets

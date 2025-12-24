@@ -49,3 +49,37 @@ def convert_wav_to_mp3(wav_bytes: bytes) -> bytes:
                 f"ffmpeg conversion failed: {exc.stderr.decode('utf-8', errors='ignore')}"
             ) from exc
         return mp3_path.read_bytes()
+
+
+def convert_audio_to_mp3(audio_bytes: bytes, input_suffix: str = ".webm") -> bytes:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        input_path = Path(tmp_dir) / f"input{input_suffix}"
+        mp3_path = Path(tmp_dir) / "output.mp3"
+        input_path.write_bytes(audio_bytes)
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(input_path),
+                    "-ac",
+                    "1",
+                    "-b:a",
+                    "24k",
+                    str(mp3_path),
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            raise AudioConversionError("ffmpeg is required for audio->MP3 conversion") from exc
+        except subprocess.CalledProcessError as exc:
+            raise AudioConversionError(
+                f"ffmpeg conversion failed: {exc.stderr.decode('utf-8', errors='ignore')}"
+            ) from exc
+        return mp3_path.read_bytes()

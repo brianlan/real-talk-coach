@@ -74,6 +74,7 @@ pnpm playwright test   # e2e, uses stubbed qwen/LeanCloud MSW handlers
 - Backend tests use httpx MockTransport for qwen and LeanCloud.
 - Frontend tests rely on MSW handlers seeded with canned scenarios.
 - Audio uploads in dev mode save to temp files + fake LeanCloud IDs.
+- Browser recordings are captured as low-bitrate WebM/Opus; the backend transcodes to MP3 before LeanCloud upload to meet the 128 KB constraint.
 
 ## Smoke Flow
 1. Seed scenarios via `python scripts/seed_scenarios.py --skills specs/001-llm-conversation-practice/seed-data/sample-skills.json --scenarios specs/001-llm-conversation-practice/seed-data/sample-scenarios.json` (see Scenario & Skill Seeding Notes for CLI guidance).
