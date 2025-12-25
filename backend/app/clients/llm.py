@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-import json
 from typing import Any
 
-import httpx
+from openai import AsyncOpenAI
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,126 +30,140 @@ class _BaseLLMClient:
         *,
         base_url: str,
         api_key: str,
-        timeout: float = 10.0,
-        retries: int = 2,
-        transport: httpx.BaseTransport | None = None,
+        timeout: float = 60.0,
     ) -> None:
-        self._retries = retries
-        self._client = httpx.AsyncClient(
+        self._client = AsyncOpenAI(
+            api_key=api_key,
             base_url=base_url,
             timeout=timeout,
-            transport=transport,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
         )
 
     async def close(self) -> None:
-        await self._client.aclose()
-
-    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        last_error: Exception | None = None
-        for attempt in range(self._retries + 1):
-            try:
-                response = await self._client.request(method, path, **kwargs)
-            except httpx.RequestError as exc:
-                last_error = exc
-            else:
-                if response.status_code >= 500:
-                    last_error = LLMError(
-                        f"LLM error {response.status_code}",
-                        status_code=response.status_code,
-                        body=response.text,
-                    )
-                else:
-                    return response
-            if attempt < self._retries:
-                continue
-        raise LLMError("LLM request failed") from last_error
-
-    async def _request_json(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        response = await self._request(method, path, **kwargs)
-        if not response.is_success:
-            raise LLMError(
-                f"LLM error {response.status_code}: {response.text}",
-                status_code=response.status_code,
-                body=response.text,
-            )
-        return response.json()
-
-    async def _request_stream(
-        self, method: str, path: str, **kwargs: Any
-    ) -> dict[str, Any]:
-        async with self._client.stream(method, path, **kwargs) as response:
-            if response.status_code >= 400:
-                body = await response.aread()
-                raise LLMError(
-                    f"LLM error {response.status_code}: {body}",
-                    status_code=response.status_code,
-                    body=body.decode("utf-8", errors="ignore"),
-                )
-
-            text_parts: list[str] = []
-            audio_parts: list[str] = []
-            async for line in response.aiter_lines():
-                if not line or not line.startswith("data:"):
-                    continue
-                data = line[len("data:") :].strip()
-                if not data or data == "[DONE]":
-                    continue
-                try:
-                    chunk = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-                choices = chunk.get("choices", [])
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {})
-                content = delta.get("content")
-                if content:
-                    text_parts.append(content)
-                audio = delta.get("audio")
-                if isinstance(audio, dict):
-                    audio_data = audio.get("data") or audio.get("content")
-                    if audio_data:
-                        audio_parts.append(audio_data)
-
-            message: dict[str, Any] = {"content": "".join(text_parts)}
-            if audio_parts:
-                message["audio"] = {"data": "".join(audio_parts)}
-            return {"choices": [{"message": message}]}
+        await self._client.close()
 
 
 class QwenClient(_BaseLLMClient):
     async def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
-        if payload.get("stream"):
-            last_error: Exception | None = None
-            for attempt in range(self._retries + 1):
-                try:
-                    response = await self._request_stream(
-                        "POST", "/chat/completions", json=payload
-                    )
-                    _require_field(response, "choices", "qwen generation")
-                    return response
-                except Exception as exc:
-                    last_error = exc
-                    if attempt < self._retries:
-                        continue
-            raise LLMError("LLM request failed") from last_error
-        else:
-            response = await self._request_json("POST", "/chat/completions", json=payload)
-            _require_field(response, "choices", "qwen generation")
-            return response
+        """
+        Call Qwen API for generation (supports streaming).
+
+        Args:
+            payload: Dictionary containing model, messages, modalities, audio, stream params
+
+        Returns:
+            Dictionary with choices containing message with content and optionally audio
+        """
+        try:
+            logger.info(f"QwenClient.generate called with payload keys: {payload.keys()}")
+            # Extract parameters from payload
+            model = payload.get("model")
+            messages = payload.get("messages")
+            modalities = payload.get("modalities", ["text"])
+            audio_config = payload.get("audio")
+            stream = payload.get("stream", False)
+            stream_options = payload.get("stream_options")
+
+            logger.info(f"Model: {model}, Modalities: {modalities}, Stream: {stream}, Audio config: {audio_config}")
+
+            # Build OpenAI client parameters
+            client_params = {
+                "model": model,
+                "messages": messages,
+                "stream": stream,
+            }
+
+            # Add modality and audio config if generating audio
+            if "audio" in modalities and audio_config:
+                client_params["modalities"] = modalities
+                client_params["audio"] = audio_config
+
+            # Add stream options if streaming
+            if stream and stream_options:
+                client_params["stream_options"] = stream_options
+
+            # Make the API call
+            completion = await self._client.chat.completions.create(**client_params)
+
+            # Process the response
+            text_parts = []
+            audio_parts = []
+
+            if stream:
+                # Stream processing: collect all chunks
+                async for chunk in completion:
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+
+                        # Collect text content
+                        if hasattr(delta, "content") and delta.content:
+                            text_parts.append(delta.content)
+
+                        # Collect audio data
+                        if hasattr(delta, "audio") and delta.audio:
+                            audio_data = delta.audio.get("data")
+                            if audio_data:
+                                audio_parts.append(audio_data)
+            else:
+                # Non-stream processing: single response
+                if completion.choices:
+                    message = completion.choices[0].message
+
+                    # Get text content
+                    if hasattr(message, "content") and message.content:
+                        text_parts.append(message.content)
+
+                    # Get audio data
+                    if hasattr(message, "audio") and message.audio:
+                        audio_data = message.audio.get("data")
+                        if audio_data:
+                            audio_parts.append(audio_data)
+
+            # Build response in the format expected by the rest of the codebase
+            response_message: dict[str, Any] = {"content": "".join(text_parts)}
+            if audio_parts:
+                response_message["audio"] = {"data": "".join(audio_parts)}
+
+            return {"choices": [{"message": response_message}]}
+
+        except Exception as exc:
+            raise LLMError(f"Qwen generation failed: {str(exc)}") from exc
 
     async def asr(self, payload: dict[str, Any]) -> dict[str, Any]:
-        response = await self._request_json("POST", "/audio/transcriptions", json=payload)
-        _require_field(response, "text", "qwen asr")
-        return response
+        """
+        Call Qwen API for Automatic Speech Recognition.
+
+        Args:
+            payload: Dictionary containing model and input (audio data)
+
+        Returns:
+            Dictionary with transcribed text
+        """
+        try:
+            response = await self._client.audio.transcriptions.create(**payload)
+            _require_field({"text": response.text}, "text", "qwen asr")
+            return {"text": response.text}
+        except Exception as exc:
+            raise LLMError(f"Qwen ASR failed: {str(exc)}") from exc
 
 
 class EvaluatorClient(_BaseLLMClient):
     async def evaluate(self, payload: dict[str, Any]) -> dict[str, Any]:
-        response = await self._request_json("POST", "/chat/completions", json=payload)
-        _require_field(response, "choices", "evaluator")
-        return response
+        """
+        Call evaluator API for evaluation (non-streaming, text only).
+
+        Args:
+            payload: Dictionary containing model, messages, and other params
+
+        Returns:
+            Dictionary with choices containing message
+        """
+        try:
+            completion = await self._client.chat.completions.create(**payload)
+            _require_field(
+                {"choices": [{"message": {"content": completion.choices[0].message.content}}]},
+                "choices",
+                "evaluator",
+            )
+            return {"choices": [{"message": {"content": completion.choices[0].message.content}}]}
+        except Exception as exc:
+            raise LLMError(f"Evaluator failed: {str(exc)}") from exc

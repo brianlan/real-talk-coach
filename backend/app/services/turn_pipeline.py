@@ -135,6 +135,9 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
 
 
 async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
+    import logging
+    logger = logging.getLogger(__name__)
+
     settings = load_settings()
     lc_client = LeanCloudClient(
         app_id=settings.lean_app_id,
@@ -153,6 +156,7 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
             "turn.initiation",
             {"sessionId": session_id},
         ):
+            logger.info(f"[{session_id}] Starting AI turn initiation")
             messages = _build_initiation_messages(scenario)
             try:
                 payload = _qwen_generation_payload(
@@ -160,8 +164,11 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
                     messages=messages,
                     voice_id=settings.qwen_voice_id,
                 )
+                logger.info(f"[{session_id}] Calling Qwen API with model: {QWEN_MODEL}, voice_id: {settings.qwen_voice_id}")
                 generation_response = await qwen_client.generate(payload)
+                logger.info(f"[{session_id}] Qwen API call successful")
             except Exception as exc:
+                logger.error(f"[{session_id}] Qwen generation failed: {exc}", exc_info=True)
                 emit_event(
                     "turn.initiation_failed",
                     session_id=session_id,

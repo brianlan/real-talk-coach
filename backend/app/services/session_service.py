@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -7,6 +8,8 @@ from app.repositories.session_repository import SessionRepository
 from app.tasks.evaluation_runner import enqueue
 from app.telemetry.tracing import emit_metric
 from app.config import load_settings
+
+logger = logging.getLogger(__name__)
 
 
 class CapacityError(Exception):
@@ -79,6 +82,7 @@ async def initiate_session(
     *,
     scenario: Any,
 ) -> None:
+    logger.info(f"[{session_id}] initiate_session called")
     now = datetime.now(timezone.utc).isoformat()
     session = await repo.update_session(
         session_id,
@@ -88,7 +92,10 @@ async def initiate_session(
         },
     )
     if not session:
+        logger.error(f"[{session_id}] Failed to update session status")
         return
     from app.services.turn_pipeline import generate_initial_ai_turn
 
+    logger.info(f"[{session_id}] About to call generate_initial_ai_turn")
     await generate_initial_ai_turn(session_id=session_id, scenario=scenario)
+    logger.info(f"[{session_id}] generate_initial_ai_turn completed")
