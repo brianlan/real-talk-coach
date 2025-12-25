@@ -26,8 +26,8 @@ assumption to size infra and background task load.
   the iteration process.
 -->
 
-**Language/Version**: Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15  
-**Primary Dependencies**: FastAPI, Uvicorn, httpx, WebSockets, LeanCloud REST APIs, qwen3-omni-flash, OpenAI Python SDK (DashScope compatible), GPT-5 mini text-only API (https://api.chataiapi.com), Next.js/React, Web Audio API  
+**Language/Version**: Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15
+**Primary Dependencies**: FastAPI, Uvicorn, OpenAI Python AsyncClient (≥1.52.0), WebSockets, LeanCloud REST APIs, qwen3-omni-flash, GPT-5 mini text-only API (https://api.chataiapi.com), Next.js/React, Web Audio API  
 **Storage**: LeanCloud LObject/LFile for structured data + audio references  
 **Testing**: Pytest + httpx AsyncClient, pytest-asyncio for backend; Vitest + Testing Library + Playwright for frontend/e2e  
 **Target Platform**: Backend: Linux containers (uvicorn workers); Frontend: modern evergreen browsers  
@@ -157,10 +157,7 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   status so UI can show pending transcripts.
 - Client-provided timing data is formalized: `/api/sessions` accepts `clientSessionStartedAt`, and
   every trainee turn includes `startedAt/endedAt` so the backend can compute drift and idle/total duration.
-- Turn handling module wraps the OpenAI-compatible qwen SDK (`stream=True`, `modalities=["text","audio"]`,
-  `audio={"voice": …, "format": "wav"}`), decodes streamed WAV chunks, transcodes them to mono ≤24 kbps
-  MP3, and persists LeanCloud references alongside transcripts. The browser records low-bitrate WebM/Opus,
-  and the backend transcodes it to MP3 before LeanCloud upload to satisfy the 128 KB LFile constraint.
+- Turn handling module wraps the OpenAI Python AsyncClient for qwen (`stream=True`, `modalities=["text","audio"]`, `audio={"voice": …, "format": "wav"}`). The AsyncClient automatically handles Server-Sent Events (SSE) streaming format and accumulates text and audio chunks. **Implementation Note**: Qwen returns raw PCM audio data (16-bit signed integer, 24kHz, mono) without WAV headers. The backend detects audio format by checking for "RIFF" header bytes and converts raw PCM to MP3 using ffmpeg with appropriate flags (`-f s16le -ar 24000 -ac 1` for PCM, standard WAV handling for files with RIFF headers). The converted MP3 is uploaded to LeanCloud with references persisted alongside transcripts. The browser records low-bitrate WebM/Opus, and the backend transcodes it to MP3 before LeanCloud upload to satisfy the 128 KB LFile constraint.
 - Evaluation API exposes cached results plus a safe requeue endpoint; FastAPI background tasks pick
   up pending evaluations/ASR work, handle retries while the process stays alive, and update LeanCloud.
   Evaluations call GPT-5 mini via `https://api.chataiapi.com/v1/chat/completions` with bearer secrets

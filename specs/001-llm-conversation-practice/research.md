@@ -16,8 +16,9 @@
    **Rationale**: Satisfies MVP goals without provisioning additional worker infrastructure; acceptable tradeoff since durability can be handled manually (requeue) if a process restarts.  
    **Alternatives considered**: Celery + Redis (adds ops surface); dedicated LeanCloud polling worker (more moving parts for this MVP); fire-and-forget without status tracking (no visibility for UI).
 
-5. **Finding**: Qwen3-omni-flash exposes an OpenAI-compatible streaming API via DashScope (`https://dashscope.aliyuncs.com/compatible-mode/v1`). Every request must set `stream=True`, `modalities=["text","audio"]`, and `audio={"voice": "<voiceId>", "format": "wav"}`; responses stream incremental text plus base64 WAV audio.
-   **Implication**: Backend will use the OpenAI Python SDK (≥1.52.0), decode the WAV chunks, transcode them to mono MP3 (<128 KB) before storing in LeanCloud, using `DASHSCOPE_API_KEY` for authentication.  
+5. **Finding**: Qwen3-omni-flash exposes an OpenAI-compatible streaming API via DashScope (`https://dashscope.aliyuncs.com/compatible-mode/v1`). Every request must set `stream=True`, `modalities=["text","audio"]`, and `audio={"voice": "<voiceId>", "format": "wav"}`; responses stream incremental text plus base64 audio data.
+   **Implication**: Backend uses the OpenAI Python AsyncClient (≥1.52.0) for reliable streaming response handling. The client automatically handles Server-Sent Events (SSE) format and accumulates text and audio chunks. **Implementation Note**: Qwen returns raw PCM audio data (16-bit signed integer, 24kHz, mono) without WAV headers, not WAV format as initially planned. The backend detects audio format by checking for "RIFF" header and converts raw PCM to MP3 using ffmpeg with `-f s16le -ar 24000 -ac 1` flags. Audio is then uploaded to LeanCloud using `DASHSCOPE_API_KEY` for authentication.
+   **Supported Voice IDs**: Cherry (recommended), Serena, Ethan, Chelsie for qwen3-omni-flash.  
 
 6. **Finding**: The text-only evaluator will call GPT-5 mini hosted at `https://api.chataiapi.com/v1/chat/completions` with bearer `secretKey`, reusing OpenAI chat semantics (messages array, `model`, moderation metadata).  
    **Implication**: Evaluation tasks can use standard httpx/OpenAI client patterns, capture token usage from the response, and map the assistant message to rubric scores without building a bespoke protocol.
