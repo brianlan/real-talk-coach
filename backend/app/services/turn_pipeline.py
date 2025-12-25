@@ -138,6 +138,9 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
     import logging
     logger = logging.getLogger(__name__)
 
+    print(f"[{session_id}] ===== generate_initial_ai_turn called =====")  # DEBUG
+    logger.info(f"[{session_id}] Starting AI turn initiation")
+
     settings = load_settings()
     lc_client = LeanCloudClient(
         app_id=settings.lean_app_id,
@@ -164,10 +167,13 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
                     messages=messages,
                     voice_id=settings.qwen_voice_id,
                 )
+                print(f"[{session_id}] Calling Qwen API with model: {QWEN_MODEL}, voice_id: {settings.qwen_voice_id}")  # DEBUG
                 logger.info(f"[{session_id}] Calling Qwen API with model: {QWEN_MODEL}, voice_id: {settings.qwen_voice_id}")
                 generation_response = await qwen_client.generate(payload)
+                print(f"[{session_id}] Qwen API call successful, response: {generation_response}")  # DEBUG
                 logger.info(f"[{session_id}] Qwen API call successful")
             except Exception as exc:
+                print(f"[{session_id}] Qwen generation failed: {exc}")  # DEBUG
                 logger.error(f"[{session_id}] Qwen generation failed: {exc}", exc_info=True)
                 emit_event(
                     "turn.initiation_failed",
@@ -198,15 +204,36 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
             ai_audio_url = None
             ai_audio_id = None
             try:
-                wav_bytes = _extract_qwen_audio(generation_response)
-                if wav_bytes:
-                    mp3_bytes = convert_wav_to_mp3(wav_bytes)
+                logger.info(f"[{session_id}] Extracting audio from Qwen response (initial turn)")
+                logger.info(f"[{session_id}] Full Qwen response keys: {generation_response.keys()}")
+                logger.info(f"[{session_id}] Response structure: {generation_response}")
+
+                audio_bytes = _extract_qwen_audio(generation_response)
+                if audio_bytes:
+                    logger.info(f"[{session_id}] Got {len(audio_bytes)} bytes of audio data")
+                    logger.info(f"[{session_id}] First 100 bytes (hex): {audio_bytes[:100].hex()}")
+                    logger.info(f"[{session_id}] First 4 bytes: {audio_bytes[:4]} (RIFF=WAV, otherwise=raw PCM)")
+
+                    # Detect format: WAV starts with "RIFF", raw PCM doesn't
+                    if audio_bytes[:4] == b'RIFF':
+                        logger.info(f"[{session_id}] Detected WAV format, converting to MP3")
+                        mp3_bytes = convert_wav_to_mp3(audio_bytes)
+                    else:
+                        logger.info(f"[{session_id}] Detected raw PCM format, converting to MP3")
+                        from app.services.audio import convert_raw_pcm_to_mp3
+                        mp3_bytes = convert_raw_pcm_to_mp3(audio_bytes, sample_rate=24000)
+
+                    logger.info(f"[{session_id}] Converted to {len(mp3_bytes)} bytes of MP3, uploading to LeanCloud")
                     upload_ai = await lc_client.upload_file(
                         f"turn-{ai_turn.id}.mp3", mp3_bytes, "audio/mpeg"
                     )
                     ai_audio_id = upload_ai.get("objectId") or upload_ai.get("name")
                     ai_audio_url = upload_ai.get("url")
+                    logger.info(f"[{session_id}] Audio uploaded successfully: id={ai_audio_id}, url={ai_audio_url}")
+                else:
+                    logger.warning(f"[{session_id}] No audio data extracted from Qwen response")
             except AudioConversionError as exc:
+                logger.error(f"[{session_id}] Audio conversion error: {exc}", exc_info=True)
                 emit_event(
                     "turn.audio_error",
                     session_id=session_id,

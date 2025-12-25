@@ -82,6 +82,7 @@ async def initiate_session(
     *,
     scenario: Any,
 ) -> None:
+    print(f"[{session_id}] ===== initiate_session called =====")  # DEBUG
     logger.info(f"[{session_id}] initiate_session called")
     now = datetime.now(timezone.utc).isoformat()
     session = await repo.update_session(
@@ -96,6 +97,8 @@ async def initiate_session(
         return
     from app.services.turn_pipeline import generate_initial_ai_turn
 
+    print(f"[{session_id}] About to call generate_initial_ai_turn")  # DEBUG
     logger.info(f"[{session_id}] About to call generate_initial_ai_turn")
     await generate_initial_ai_turn(session_id=session_id, scenario=scenario)
+    print(f"[{session_id}] generate_initial_ai_turn completed")  # DEBUG
     logger.info(f"[{session_id}] generate_initial_ai_turn completed")

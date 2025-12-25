@@ -121,7 +121,11 @@ class QwenClient(_BaseLLMClient):
             # Build response in the format expected by the rest of the codebase
             response_message: dict[str, Any] = {"content": "".join(text_parts)}
             if audio_parts:
-                response_message["audio"] = {"data": "".join(audio_parts)}
+                audio_data = "".join(audio_parts)
+                logger.info(f"Collected {len(audio_parts)} audio chunks, total base64 length: {len(audio_data)}")
+                response_message["audio"] = {"data": audio_data}
+            else:
+                logger.warning("No audio parts collected from Qwen response")
 
             return {"choices": [{"message": response_message}]}
 
