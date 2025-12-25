@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any
 
 import httpx
@@ -75,12 +76,69 @@ class _BaseLLMClient:
             )
         return response.json()
 
+    async def _request_stream(
+        self, method: str, path: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        async with self._client.stream(method, path, **kwargs) as response:
+            if response.status_code >= 400:
+                body = await response.aread()
+                raise LLMError(
+                    f"LLM error {response.status_code}: {body}",
+                    status_code=response.status_code,
+                    body=body.decode("utf-8", errors="ignore"),
+                )
+
+            text_parts: list[str] = []
+            audio_parts: list[str] = []
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[len("data:") :].strip()
+                if not data or data == "[DONE]":
+                    continue
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                choices = chunk.get("choices", [])
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {})
+                content = delta.get("content")
+                if content:
+                    text_parts.append(content)
+                audio = delta.get("audio")
+                if isinstance(audio, dict):
+                    audio_data = audio.get("data") or audio.get("content")
+                    if audio_data:
+                        audio_parts.append(audio_data)
+
+            message: dict[str, Any] = {"content": "".join(text_parts)}
+            if audio_parts:
+                message["audio"] = {"data": "".join(audio_parts)}
+            return {"choices": [{"message": message}]}
+
 
 class QwenClient(_BaseLLMClient):
     async def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
-        response = await self._request_json("POST", "/chat/completions", json=payload)
-        _require_field(response, "choices", "qwen generation")
-        return response
+        if payload.get("stream"):
+            last_error: Exception | None = None
+            for attempt in range(self._retries + 1):
+                try:
+                    response = await self._request_stream(
+                        "POST", "/chat/completions", json=payload
+                    )
+                    _require_field(response, "choices", "qwen generation")
+                    return response
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < self._retries:
+                        continue
+            raise LLMError("LLM request failed") from last_error
+        else:
+            response = await self._request_json("POST", "/chat/completions", json=payload)
+            _require_field(response, "choices", "qwen generation")
+            return response
 
     async def asr(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = await self._request_json("POST", "/audio/transcriptions", json=payload)

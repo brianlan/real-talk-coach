@@ -16,7 +16,7 @@ class Settings:
     lean_master_key: str
     lean_server_url: str
     dashscope_api_key: str
-    qwen_bearer: str | None
+    qwen_voice_id: str | None
     chatai_api_base: str
     chatai_api_key: str
     chatai_api_model: str
@@ -55,7 +55,7 @@ def load_settings() -> Settings:
         os.getenv("LEAN_SERVER_URL", "https://api.leancloud.cn").strip(),
     )
     dashscope_api_key = _require_env("DASHSCOPE_API_KEY")
-    qwen_bearer = _optional_env("QWEN_BEARER")
+    qwen_voice_id = _optional_env("QWEN_VOICE_ID")
     chatai_api_base = _require_url("CHATAI_API_BASE", _require_env("CHATAI_API_BASE"))
     chatai_api_key = _require_env("CHATAI_API_KEY")
     chatai_api_model = _require_env("CHATAI_API_MODEL")
@@ -74,7 +74,7 @@ def load_settings() -> Settings:
         lean_master_key=lean_master_key,
         lean_server_url=lean_server_url,
         dashscope_api_key=dashscope_api_key,
-        qwen_bearer=qwen_bearer,
+        qwen_voice_id=qwen_voice_id,
         chatai_api_base=chatai_api_base,
         chatai_api_key=chatai_api_key,
         chatai_api_model=chatai_api_model,

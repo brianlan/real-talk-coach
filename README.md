@@ -28,7 +28,7 @@ pnpm install
 Terminal 1 – backend API (serves REST/WebSockets and launches background tasks for ASR/evaluations):
 ```bash
 cd backend
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --env-file .env
 ```
 
 Terminal 2 – frontend:

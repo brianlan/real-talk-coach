@@ -68,6 +68,26 @@ def _turn_payload(turn) -> dict[str, Any]:
     }
 
 
+def _qwen_generation_payload(
+    *,
+    model: str,
+    messages: list[dict[str, str]],
+    voice_id: str | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    if voice_id:
+        payload["modalities"] = ["text", "audio"]
+        payload["audio"] = {"voice": voice_id, "format": "wav"}
+    else:
+        payload["modalities"] = ["text"]
+    return payload
+
+
 def _persona_block(persona: dict[str, Any] | None, label: str) -> str:
     if not persona:
         return f"{label}: (not provided)"
@@ -135,10 +155,18 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
         ):
             messages = _build_initiation_messages(scenario)
             try:
-                generation_response = await qwen_client.generate(
-                    {"model": QWEN_MODEL, "messages": messages}
+                payload = _qwen_generation_payload(
+                    model=QWEN_MODEL,
+                    messages=messages,
+                    voice_id=settings.qwen_voice_id,
                 )
-            except Exception:
+                generation_response = await qwen_client.generate(payload)
+            except Exception as exc:
+                emit_event(
+                    "turn.initiation_failed",
+                    session_id=session_id,
+                    attributes={"reason": "qwen_generation_failed", "error": str(exc)},
+                )
                 await _terminate_for_qwen_error(repo, session_id)
                 return
 
@@ -286,13 +314,14 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
             max_sequence = max((turn.sequence for turn in turns), default=-1)
 
             generation_task = qwen_client.generate(
-                {
-                    "model": QWEN_MODEL,
-                    "messages": [
+                _qwen_generation_payload(
+                    model=QWEN_MODEL,
+                    messages=[
                         {"role": "system", "content": "You are an AI coach."},
                         {"role": "user", "content": "Respond to the trainee."},
                     ],
-                }
+                    voice_id=settings.qwen_voice_id,
+                )
             )
             mp3_base64 = base64.b64encode(mp3_bytes).decode("utf-8")
             asr_task = qwen_client.asr({"model": QWEN_MODEL, "input": mp3_base64})
@@ -302,6 +331,12 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
             )
 
             if isinstance(generation_response, Exception):
+                emit_event(
+                    "turn.ai_generation_failed",
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    attributes={"error": str(generation_response)},
+                )
                 await _terminate_for_qwen_error(repo, session_id)
                 return
 
