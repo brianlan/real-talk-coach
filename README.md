@@ -21,6 +21,7 @@ uv sync  # or pip install -r requirements.txt
 # uv pip install "openai>=1.52.0" numpy soundfile pydub ffmpeg-python
 
 cd ../frontend
+corepack enable  # ensures pnpm is available
 pnpm install
 ```
 
