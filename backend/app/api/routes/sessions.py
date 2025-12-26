@@ -82,6 +82,42 @@ def _scenario_response(scenario) -> dict[str, Any]:
     }
 
 
+def _validate_scenario_for_practice(scenario) -> None:
+    missing: list[str] = []
+
+    ai_persona = getattr(scenario, "ai_persona", None)
+    trainee_persona = getattr(scenario, "trainee_persona", None)
+    objective = getattr(scenario, "objective", "") or ""
+    end_criteria = getattr(scenario, "end_criteria", None) or []
+
+    if not ai_persona:
+        missing.append("aiPersona")
+    else:
+        if not ai_persona.get("name"):
+            missing.append("aiPersona.name")
+        if not ai_persona.get("background"):
+            missing.append("aiPersona.background")
+
+    if not trainee_persona:
+        missing.append("traineePersona")
+    else:
+        if not trainee_persona.get("name"):
+            missing.append("traineePersona.name")
+        if not trainee_persona.get("background"):
+            missing.append("traineePersona.background")
+
+    if not objective:
+        missing.append("objective")
+    if not end_criteria:
+        missing.append("endCriteria")
+
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Scenario missing required fields: " + ", ".join(sorted(missing)),
+        )
+
+
 def _turn_response(turn) -> dict[str, Any]:
     return {
         "id": turn.id,
@@ -149,6 +185,7 @@ async def create_session(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Scenario is not available for practice.",
             )
+        _validate_scenario_for_practice(scenario)
         try:
             enforce_drift(payload.clientSessionStartedAt, datetime.now(timezone.utc))
         except ValueError as exc:
