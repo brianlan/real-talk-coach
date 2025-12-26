@@ -151,6 +151,18 @@ class QwenClient(_BaseLLMClient):
 
 
 class EvaluatorClient(_BaseLLMClient):
+    def _serialize_tool_call(self, tool_call: Any) -> dict[str, Any]:
+        if hasattr(tool_call, "model_dump"):
+            return tool_call.model_dump()
+        return {
+            "id": getattr(tool_call, "id", None),
+            "type": getattr(tool_call, "type", None),
+            "function": {
+                "name": getattr(getattr(tool_call, "function", None), "name", None),
+                "arguments": getattr(getattr(tool_call, "function", None), "arguments", None),
+            },
+        }
+
     async def evaluate(self, payload: dict[str, Any]) -> dict[str, Any]:
         """
         Call evaluator API for evaluation (non-streaming, text only).
@@ -163,11 +175,18 @@ class EvaluatorClient(_BaseLLMClient):
         """
         try:
             completion = await self._client.chat.completions.create(**payload)
+            message = completion.choices[0].message
+            response_message: dict[str, Any] = {"content": message.content}
+            if getattr(message, "tool_calls", None):
+                response_message["tool_calls"] = [
+                    self._serialize_tool_call(tool_call)
+                    for tool_call in message.tool_calls
+                ]
             _require_field(
-                {"choices": [{"message": {"content": completion.choices[0].message.content}}]},
+                {"choices": [{"message": response_message}]},
                 "choices",
                 "evaluator",
             )
-            return {"choices": [{"message": {"content": completion.choices[0].message.content}}]}
+            return {"choices": [{"message": response_message}]}
         except Exception as exc:
             raise LLMError(f"Evaluator failed: {str(exc)}") from exc

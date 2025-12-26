@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from app.clients.leancloud import LeanCloudClient
 from app.config import load_settings
@@ -134,6 +134,7 @@ async def list_sessions(
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
 async def create_session(
     payload: PracticeSessionCreate,
+    background_tasks: BackgroundTasks,
     repo: SessionRepository = Depends(_repo),
     scenario_repo: ScenarioRepository = Depends(_scenario_repo),
 ):
@@ -188,7 +189,7 @@ async def create_session(
             {"wsChannel": f"/ws/sessions/{record.id}"},
         ) or record
     emit_event("session.created", session_id=record.id)
-    await initiate_session(repo, record.id, scenario=scenario)
+    background_tasks.add_task(initiate_session, repo, record.id, scenario=scenario)
 
     return _session_response(record)
 

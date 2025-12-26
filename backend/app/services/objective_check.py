@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any
 
 from app.clients.llm import EvaluatorClient
@@ -16,14 +17,21 @@ class ObjectiveCheckResult:
 def _parse_objective_response(payload: dict[str, Any]) -> ObjectiveCheckResult:
     choices = payload.get("choices", [])
     if not choices:
-        return ObjectiveCheckResult(status="unknown", reason=None)
+        return ObjectiveCheckResult(status="continue", reason=None)
     message = choices[0].get("message", {})
-    content = (message.get("content") or "").lower()
-    if "succeed" in content or "met" in content:
-        return ObjectiveCheckResult(status="succeeded", reason=message.get("content"))
-    if "fail" in content:
-        return ObjectiveCheckResult(status="failed", reason=message.get("content"))
-    return ObjectiveCheckResult(status="unknown", reason=message.get("content"))
+    tool_calls = message.get("tool_calls") or []
+    if tool_calls:
+        arguments = tool_calls[0].get("function", {}).get("arguments")
+        if arguments:
+            try:
+                parsed = json.loads(arguments)
+            except json.JSONDecodeError:
+                return ObjectiveCheckResult(status="continue", reason=None)
+            status = parsed.get("status")
+            reason = parsed.get("reason")
+            if status in {"continue", "succeeded", "failed"}:
+                return ObjectiveCheckResult(status=status, reason=reason)
+    return ObjectiveCheckResult(status="continue", reason=message.get("content"))
 
 
 async def run_objective_check(
@@ -36,6 +44,7 @@ async def run_objective_check(
     client = EvaluatorClient(
         base_url=settings.objective_check_api_base,
         api_key=settings.objective_check_api_key,
+        timeout=4.0,
     )
     try:
         payload = {
@@ -43,7 +52,10 @@ async def run_objective_check(
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are an objective checker for coaching sessions.",
+                    "content": (
+                        "You assess whether the trainee achieved the objective. "
+                        "Return a tool call with status=continue|succeeded|failed."
+                    ),
                 },
                 {
                     "role": "user",
@@ -54,12 +66,43 @@ async def run_objective_check(
                         + ", ".join(end_criteria)
                         + "\nTranscript: "
                         + transcript
-                        + "\nReturn whether objectives succeeded or failed."
                     ),
                 },
             ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "objective_check_result",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["continue", "succeeded", "failed"],
+                                },
+                                "reason": {"type": "string"},
+                            },
+                            "required": ["status"],
+                        },
+                    },
+                }
+            ],
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "objective_check_result"},
+            },
         }
-        response = await client.evaluate(payload)
-        return _parse_objective_response(response)
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                response = await client.evaluate(payload)
+                return _parse_objective_response(response)
+            except Exception as exc:
+                last_error = exc
+                if attempt == 0:
+                    continue
+                return ObjectiveCheckResult(status="continue", reason=str(last_error))
+        return ObjectiveCheckResult(status="continue", reason=None)
     finally:
         await client.close()

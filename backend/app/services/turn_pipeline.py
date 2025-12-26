@@ -134,6 +134,82 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
     ]
 
 
+def _build_system_prompt(scenario: Any) -> str:
+    title = getattr(scenario, "title", "") or ""
+    description = getattr(scenario, "description", "") or ""
+    objective = getattr(scenario, "objective", "") or ""
+    end_criteria = getattr(scenario, "end_criteria", None) or getattr(
+        scenario, "endCriteria", []
+    )
+    ai_persona = getattr(scenario, "ai_persona", None) or getattr(
+        scenario, "aiPersona", None
+    )
+    trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
+        scenario, "traineePersona", None
+    )
+    criteria_text = ", ".join(end_criteria) if end_criteria else "Not provided"
+    system_lines = [
+        "You are the AI roleplayer for a practice conversation.",
+        _persona_block(ai_persona, "Your persona"),
+        _persona_block(trainee_persona, "Trainee persona"),
+    ]
+    if title:
+        system_lines.append(f"Scenario title: {title}")
+    if description:
+        system_lines.append(f"Scenario description: {description}")
+    if objective:
+        system_lines.append(f"Objective: {objective}")
+    system_lines.append(f"End criteria: {criteria_text}")
+    system_lines.append("Stay in character and respond naturally to the trainee.")
+    return "\n".join(system_lines)
+
+
+def _build_turn_messages(
+    *,
+    scenario: Any | None,
+    turns: list[Any],
+    current_turn_id: str,
+    audio_base64: str,
+) -> list[dict[str, Any]]:
+    if scenario:
+        messages: list[dict[str, Any]] = [{"role": "system", "content": _build_system_prompt(scenario)}]
+    else:
+        messages = [{"role": "system", "content": "You are an AI coach."}]
+
+    for turn in sorted(turns, key=lambda item: item.sequence):
+        if turn.speaker == "ai":
+            if turn.transcript:
+                messages.append({"role": "assistant", "content": turn.transcript})
+            continue
+
+        if turn.id == current_turn_id:
+            parts: list[dict[str, Any]] = []
+            if turn.context:
+                parts.append({"type": "text", "text": f"Context: {turn.context}"})
+            parts.append({"type": "text", "text": "Trainee reply (audio attached)."})
+            parts.append(
+                {
+                    "type": "input_audio",
+                    "input_audio": {"data": audio_base64, "format": "mp3"},
+                }
+            )
+            messages.append({"role": "user", "content": parts})
+            continue
+
+        if turn.transcript or turn.context:
+            content = ""
+            if turn.context:
+                content += f"Context: {turn.context}"
+            if turn.transcript:
+                if content:
+                    content += "\n"
+                content += turn.transcript
+            if content:
+                messages.append({"role": "user", "content": content})
+
+    return messages
+
+
 async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
     import logging
     logger = logging.getLogger(__name__)
@@ -344,32 +420,46 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                 },
             )
 
+            mp3_base64 = base64.b64encode(mp3_bytes).decode("utf-8")
+            asyncio.create_task(
+                _run_asr_update(
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    mp3_base64=mp3_base64,
+                )
+            )
+
             turns = await repo.list_turns(session_id)
             max_sequence = max((turn.sequence for turn in turns), default=-1)
 
+            session = await repo.get_session(session_id)
+            scenario = None
+            if session:
+                scenario_repo = ScenarioRepository(lc_client)
+                scenario = await scenario_repo.get(session.scenario_id)
+
+            messages = _build_turn_messages(
+                scenario=scenario,
+                turns=turns,
+                current_turn_id=turn_id,
+                audio_base64=mp3_base64,
+            )
             generation_task = qwen_client.generate(
                 _qwen_generation_payload(
                     model=QWEN_MODEL,
-                    messages=[
-                        {"role": "system", "content": "You are an AI coach."},
-                        {"role": "user", "content": "Respond to the trainee."},
-                    ],
+                    messages=messages,
                     voice_id=settings.qwen_voice_id,
                 )
             )
-            mp3_base64 = base64.b64encode(mp3_bytes).decode("utf-8")
-            asr_task = qwen_client.asr({"model": QWEN_MODEL, "input": mp3_base64})
 
-            generation_response, asr_response = await asyncio.gather(
-                generation_task, asr_task, return_exceptions=True
-            )
-
-            if isinstance(generation_response, Exception):
+            try:
+                generation_response = await generation_task
+            except Exception as exc:
                 emit_event(
                     "turn.ai_generation_failed",
                     session_id=session_id,
                     turn_id=turn_id,
-                    attributes={"error": str(generation_response)},
+                    attributes={"error": str(exc)},
                 )
                 await _terminate_for_qwen_error(repo, session_id)
                 return
@@ -394,9 +484,14 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
             ai_audio_url = None
             ai_audio_id = None
             try:
-                wav_bytes = _extract_qwen_audio(generation_response)
-                if wav_bytes:
-                    mp3_bytes = convert_wav_to_mp3(wav_bytes)
+                audio_bytes = _extract_qwen_audio(generation_response)
+                if audio_bytes:
+                    if audio_bytes[:4] == b"RIFF":
+                        mp3_bytes = convert_wav_to_mp3(audio_bytes)
+                    else:
+                        from app.services.audio import convert_raw_pcm_to_mp3
+
+                        mp3_bytes = convert_raw_pcm_to_mp3(audio_bytes, sample_rate=24000)
                     upload_ai = await lc_client.upload_file(
                         f"turn-{ai_turn.id}.mp3", mp3_bytes, "audio/mpeg"
                     )
@@ -434,39 +529,75 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                 turn_id=ai_turn.id,
             )
 
-            if isinstance(asr_response, Exception):
-                await repo.update_turn(turn_id, {"asrStatus": "failed"})
-            else:
-                await repo.update_turn(
-                    turn_id,
-                    {"asrStatus": "completed", "transcript": asr_response.get("text")},
-                )
-
-            if transcript and asr_response and not isinstance(asr_response, Exception):
-                scenario_repo = ScenarioRepository(lc_client)
-                scenario = await _fetch_scenario(repo, scenario_repo, session_id)
+            if transcript:
                 if scenario:
                     objective = await run_objective_check(
-                        scenario_objective=scenario.get("objective", ""),
+                        scenario_objective=scenario.objective,
                         transcript=transcript,
-                        end_criteria=scenario.get("endCriteria", []),
+                        end_criteria=scenario.end_criteria,
                     )
-                    if objective.status in {"succeeded", "failed"}:
-                        await repo.update_session(
-                            session_id,
-                            {
-                                "objectiveStatus": objective.status,
-                                "objectiveReason": objective.reason,
-                            },
+                else:
+                    scenario_repo = ScenarioRepository(lc_client)
+                    scenario_data = await _fetch_scenario(repo, scenario_repo, session_id)
+                    if scenario_data:
+                        objective = await run_objective_check(
+                            scenario_objective=scenario_data.get("objective", ""),
+                            transcript=transcript,
+                            end_criteria=scenario_data.get("endCriteria", []),
                         )
-                        await terminate_session(
-                            repo,
-                            session_id,
-                            "objective_met"
-                            if objective.status == "succeeded"
-                            else "objective_failed",
-                            _utc_now(),
-                        )
+                    else:
+                        objective = None
+                if objective and objective.status in {"succeeded", "failed"}:
+                    await repo.update_session(
+                        session_id,
+                        {
+                            "objectiveStatus": objective.status,
+                            "objectiveReason": objective.reason,
+                        },
+                    )
+                    await terminate_session(
+                        repo,
+                        session_id,
+                        "objective_met"
+                        if objective.status == "succeeded"
+                        else "objective_failed",
+                        _utc_now(),
+                    )
+    finally:
+        await qwen_client.close()
+        await lc_client.close()
+
+
+async def _run_asr_update(*, session_id: str, turn_id: str, mp3_base64: str) -> None:
+    settings = load_settings()
+    lc_client = LeanCloudClient(
+        app_id=settings.lean_app_id,
+        app_key=settings.lean_app_key,
+        master_key=settings.lean_master_key,
+        server_url=settings.lean_server_url,
+    )
+    qwen_client = QwenClient(
+        base_url=QWEN_BASE_URL,
+        api_key=settings.dashscope_api_key,
+    )
+    repo = SessionRepository(lc_client)
+    try:
+        try:
+            asr_response = await qwen_client.asr({"model": QWEN_MODEL, "input": mp3_base64})
+        except Exception as exc:
+            await repo.update_turn(turn_id, {"asrStatus": "failed"})
+            emit_event(
+                "turn.asr_failed",
+                session_id=session_id,
+                turn_id=turn_id,
+                attributes={"error": str(exc)},
+            )
+            return
+
+        await repo.update_turn(
+            turn_id,
+            {"asrStatus": "completed", "transcript": asr_response.get("text")},
+        )
     finally:
         await qwen_client.close()
         await lc_client.close()
