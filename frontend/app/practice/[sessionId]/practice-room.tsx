@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { submitTurn, connectSessionSocket, manualStopSession } from "@/services/api/sessions";
 import { useAudioRecorder } from "@/services/audio/useAudioRecorder";
@@ -13,6 +13,7 @@ type Turn = {
   sequence: number;
   speaker: string;
   transcript?: string | null;
+  audioUrl?: string | null;
 };
 
 type Termination = {
@@ -31,6 +32,9 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
   const [sequence, setSequence] = useState(0);
   const [resendToken, setResendToken] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [manualPlayback, setManualPlayback] = useState<Set<string>>(new Set());
+  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const lastAutoPlayId = useRef<string | null>(null);
   const wsUrl = useMemo(() => `${wsBase}/sessions/${sessionId}`, [sessionId]);
   const recorder = useAudioRecorder();
 
@@ -84,6 +88,33 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
     };
     return () => socket.close();
   }, [sessionId, wsUrl]);
+
+  useEffect(() => {
+    if (turns.length === 0) {
+      return;
+    }
+    const lastTurn = turns[turns.length - 1];
+    if (lastTurn.speaker !== "ai" || !lastTurn.audioUrl) {
+      return;
+    }
+    if (lastAutoPlayId.current === lastTurn.id) {
+      return;
+    }
+    lastAutoPlayId.current = lastTurn.id;
+    const audio = audioRefs.current.get(lastTurn.id);
+    if (!audio) {
+      return;
+    }
+    audio
+      .play()
+      .catch(() => {
+        setManualPlayback((prev) => {
+          const next = new Set(prev);
+          next.add(lastTurn.id);
+          return next;
+        });
+      });
+  }, [turns]);
 
   const manualStop = async () => {
     await manualStopSession(sessionId, "manual");
@@ -250,6 +281,38 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
                 <p style={{ margin: "6px 0 0" }}>
                   {turn.transcript ?? "(transcript pending)"}
                 </p>
+                {turn.speaker === "ai" && turn.audioUrl ? (
+                  <div style={{ marginTop: 10, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <audio
+                      ref={(node) => {
+                        if (node) {
+                          audioRefs.current.set(turn.id, node);
+                        } else {
+                          audioRefs.current.delete(turn.id);
+                        }
+                      }}
+                      controls
+                      src={turn.audioUrl}
+                      preload="none"
+                    />
+                    {manualPlayback.has(turn.id) ? (
+                      <button
+                        type="button"
+                        onClick={() => audioRefs.current.get(turn.id)?.play()}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 999,
+                          border: "1px solid #2f2a24",
+                          background: "transparent",
+                          color: "#2f2a24",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Play audio
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ))
           )}

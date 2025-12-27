@@ -92,6 +92,7 @@ external services, and keep them automated.
 - [X] T034 [P] [US1] Implement scenario detail view + session start CTA in `frontend/app/(dashboard)/scenarios/[scenarioId]/page.tsx` calling `/api/sessions`.
 - [X] T035 [US1] Create practice room UI with WebSocket turn stream, manual stop controls, and termination banners in `frontend/app/practice/[sessionId]/page.tsx`.
 - [X] T035a [US1] Surface explicit qwen outage states in `frontend/app/practice/[sessionId]/page.tsx`, including retry CTA and preserved transcript context.
+- [x] T035b [US1] Add AI audio playback controls in `frontend/app/practice/[sessionId]/page.tsx` (play per turn, handle autoplay restrictions).
 - [X] T036 [P] [US1] Implement reusable audio capture + MP3 encoding hook in `frontend/services/audio/useAudioRecorder.ts` enforcing 128 KB limit guidance.
 - [X] T036a [P] [US1] Enhance `frontend/services/audio/useAudioRecorder.ts` and `frontend/services/api/sessions.ts` so “resend audio” responses replay the failed turn without duplicating state.
 - [X] T037 [P] [US1] Add API/WebSocket clients for sessions/turns in `frontend/services/api/sessions.ts` with idle/timeout telemetry submission.

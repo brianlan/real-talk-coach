@@ -29,8 +29,8 @@ verify the conversation ends correctly with transcripts and audio captured.
 **Acceptance Scenarios**:
 
 1. **Given** a published scenario with category, objective, personas, and end criteria, **When** the
-   trainee starts the session, **Then** the AI initiates the conversation in the specified persona and
-   presents the scenario context.
+   trainee starts the session, **Then** the AI initiates the conversation in the specified persona,
+   presents the scenario context, and the browser plays the AI audio response.
 2. **Given** an active session, **When** the trainee is silent for more than the allowed idle window or
    total duration exceeds the threshold, **Then** the session ends with the termination reason recorded
    and all turns saved.
@@ -100,6 +100,8 @@ before implementation, with mocks/stubs specified for any external services.
 
 - **FR-001**: System MUST provide a catalog of practice scenarios capturing category, title, description, objective, participant backgrounds/personas, and explicit end criteria.
 - **FR-002**: Trainee MUST be able to start a practice session by selecting a scenario and reviewing its details before the AI initiates the first turn in the specified persona.
+- **FR-002a**: The practice room UI MUST play AI audio responses during live sessions, with a manual
+  playback control when autoplay is blocked by the browser.
 - **FR-003**: System MUST implement the Session Lifecycle Contract defined in Supporting Contracts (scenario validation, AI-first turn, timer handling, manual stops, per-turn objective checks, and server-authoritative termination/push events).
 - **FR-004**: System MUST capture every trainee/AI turn (transcript, speaker role, timestamps) and persist the associated LeanCloud audio reference exactly as described in the Audio & Media Contract, ensuring storage state always mirrors what was captured during the session.
 - **FR-005**: Manual termination controls MUST remain available throughout the session per the Session Lifecycle Contract, and the server MUST record the trainee-selected reason.
@@ -160,6 +162,8 @@ before implementation, with mocks/stubs specified for any external services.
 - LeanCloud limits each MP3 blob to 128 KB. Clients MUST enforce this limit before upload (UX surfaces a “turn too long” prompt encouraging shorter utterances or suggests breaking into multiple turns, and records at ≤24 kbps mono to stretch usable time). The backend revalidates size and returns HTTP 413 with an actionable error if the limit is exceeded; chunking remains out-of-scope for this release, and future iterations can revisit higher storage tiers if needed.
 - Qwen generation uses the OpenAI Python AsyncClient (≥1.52.0) against `https://dashscope.aliyuncs.com/compatible-mode/v1` with bearer auth (`DASHSCOPE_API_KEY`). Requests MUST set `stream=True`, specify `modalities=["text","audio"]`, and pass `audio={"voice": "<voiceId>", "format": "wav"}`. The AsyncClient automatically handles Server-Sent Events (SSE) streaming and accumulates text and audio chunks. **Implementation Note**: Qwen returns raw PCM audio data (16-bit signed integer, 24kHz, mono) without WAV headers, not WAV format as initially planned. The backend detects audio format by checking for "RIFF" header and converts raw PCM to MP3 using ffmpeg with `-f s16le -ar 24000 -ac 1` flags.
 - AI turns persist both the returned transcript and uploaded audio reference (LeanCloud file ID only). Trainee turns persist the ASR transcript once available plus the audio reference; missing/corrupted audio triggers a retry prompt without corrupting the session record. When clients fetch history, the API mints short-lived signed URLs per request instead of storing them on the Turn record, preventing stale links.
+- The practice room UI plays AI audio for each AI turn using the provided `audioUrl`. If the browser
+  blocks autoplay, the UI renders a "Play audio" control per turn.
 - The backend converts the returned audio to mono ≤24 kbps MP3 using ffmpeg before storing in LeanCloud, ensuring transport compatibility while the model contract remains satisfied. Audio format is automatically detected (WAV files have "RIFF" headers, raw PCM does not) and converted appropriately.
 - Raw base64 audio is never stored outside LeanCloud LFiles; session/turn records keep speaker role, timestamps, transcripts, and LFile identifiers only. Audio and transcripts remain until the trainee deletes the session, which must cascade to delete associated files.
 
