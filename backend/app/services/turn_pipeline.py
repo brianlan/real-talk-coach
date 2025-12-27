@@ -14,6 +14,7 @@ from app.repositories.session_repository import SessionRepository
 from app.services.audio import (
     AudioConversionError,
     convert_audio_to_mp3,
+    convert_mp3_to_wav,
     convert_wav_to_mp3,
     decode_audio_base64,
 )
@@ -569,6 +570,9 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
 
 
 async def _run_asr_update(*, session_id: str, turn_id: str, mp3_base64: str) -> None:
+    import logging
+    logger = logging.getLogger(__name__)
+
     settings = load_settings()
     lc_client = LeanCloudClient(
         app_id=settings.lean_app_id,
@@ -583,20 +587,53 @@ async def _run_asr_update(*, session_id: str, turn_id: str, mp3_base64: str) -> 
     repo = SessionRepository(lc_client)
     try:
         try:
-            asr_response = await qwen_client.asr({"model": QWEN_MODEL, "input": mp3_base64})
+            mp3_bytes = decode_audio_base64(mp3_base64)
+            wav_bytes = convert_mp3_to_wav(mp3_bytes)
+            wav_base64 = base64.b64encode(wav_bytes).decode("ascii")
+            logger.info(
+                "[%s] ASR start turn_id=%s mp3_base64_len=%s wav_base64_len=%s",
+                session_id,
+                turn_id,
+                len(mp3_base64),
+                len(wav_base64),
+            )
+            asr_response = await qwen_client.asr(
+                {
+                    "model": QWEN_MODEL,
+                    "input": wav_base64,
+                    "format": "wav",
+                }
+            )
         except Exception as exc:
             await repo.update_turn(turn_id, {"asrStatus": "failed"})
+            status_code = getattr(exc, "status_code", None)
+            body = getattr(exc, "body", None)
+            logger.error(
+                "[%s] ASR failed turn_id=%s status=%s error=%s body=%s",
+                session_id,
+                turn_id,
+                status_code,
+                exc,
+                body,
+                exc_info=True,
+            )
             emit_event(
                 "turn.asr_failed",
                 session_id=session_id,
                 turn_id=turn_id,
-                attributes={"error": str(exc)},
+                attributes={"error": str(exc), "status_code": status_code},
             )
             return
 
         await repo.update_turn(
             turn_id,
             {"asrStatus": "completed", "transcript": asr_response.get("text")},
+        )
+        logger.info(
+            "[%s] ASR completed turn_id=%s transcript_len=%s",
+            session_id,
+            turn_id,
+            len(asr_response.get("text") or ""),
         )
     finally:
         await qwen_client.close()

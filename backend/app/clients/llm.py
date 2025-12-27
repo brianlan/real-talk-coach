@@ -20,6 +20,9 @@ class LLMError(Exception):
     def __str__(self) -> str:
         return self.message
 
+    def __repr__(self) -> str:
+        return f"LLMError(message={self.message!r}, status_code={self.status_code!r})"
+
 
 def _require_field(payload: dict[str, Any], field: str, context: str) -> None:
     if field not in payload:
@@ -78,6 +81,8 @@ class QwenClient(_BaseLLMClient):
     def _should_retry(self, exc: Exception) -> bool:
         if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
             return True
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code >= 500
         status_code = getattr(exc, "status_code", None)
         if status_code and status_code >= 500:
             return True
@@ -184,6 +189,9 @@ class QwenClient(_BaseLLMClient):
                     continue
                 status_code = getattr(exc, "status_code", None)
                 body = getattr(exc, "body", None)
+                if isinstance(exc, httpx.HTTPStatusError):
+                    status_code = exc.response.status_code
+                    body = exc.response.text
                 raise LLMError(
                     f"Qwen generation failed: {str(exc)}",
                     status_code=status_code,
@@ -195,24 +203,74 @@ class QwenClient(_BaseLLMClient):
         Call Qwen API for Automatic Speech Recognition.
 
         Args:
-            payload: Dictionary containing model and input (audio data)
+            payload: Dictionary containing model, input (audio data), format, prompt, stream
 
         Returns:
             Dictionary with transcribed text
         """
+        model = payload.get("model")
+        audio_base64 = payload.get("input")
+        if not model or not audio_base64:
+            raise LLMError("Missing 'model' or 'input' for qwen asr")
+
+        audio_format = payload.get("format", "wav")
+        prompt = payload.get("prompt", "Transcribe the audio into text.")
+        stream = payload.get("stream", True)
+        stream_options = payload.get("stream_options")
+
+        audio_data_url = f"data:;base64,{audio_base64}"
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": audio_data_url, "format": audio_format},
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+
         for attempt in range(self._retries + 1):
             try:
-                response = await self._http_client.post("/audio/transcriptions", json=payload)
-                response.raise_for_status()
-                data = response.json() if response.text else {}
-                _require_field(data, "text", "qwen asr")
-                return {"text": data.get("text")}
+                client_params: dict[str, Any] = {
+                    "model": model,
+                    "messages": messages,
+                    "stream": stream,
+                    "modalities": ["text"],
+                }
+                if stream and stream_options:
+                    client_params["stream_options"] = stream_options
+
+                completion = await self._client.chat.completions.create(**client_params)
+
+                text_parts: list[str] = []
+                if stream:
+                    async for chunk in completion:
+                        if chunk.choices:
+                            delta = chunk.choices[0].delta
+                            if hasattr(delta, "content") and delta.content:
+                                text_parts.append(delta.content)
+                else:
+                    if completion.choices:
+                        message = completion.choices[0].message
+                        if hasattr(message, "content") and message.content:
+                            text_parts.append(message.content)
+
+                text = "".join(text_parts)
+                if not text:
+                    raise LLMError("Missing 'text' in qwen asr response")
+                return {"text": text}
             except Exception as exc:
                 if attempt < self._retries and self._should_retry(exc):
                     await asyncio.sleep(0.2 * (attempt + 1))
                     continue
                 status_code = getattr(exc, "status_code", None)
                 body = getattr(exc, "body", None)
+                if isinstance(exc, httpx.HTTPStatusError):
+                    status_code = exc.response.status_code
+                    body = exc.response.text
                 raise LLMError(
                     f"Qwen ASR failed: {str(exc)}",
                     status_code=status_code,

@@ -37,7 +37,7 @@ async def test_qwen_generate_retries_and_parses():
 @pytest.mark.asyncio
 async def test_qwen_asr_requires_text_field():
     async def handler(request):
-        return httpx.Response(200, json={"unexpected": True})
+        return httpx.Response(200, json={"choices": [{"message": {"content": ""}}]})
 
     client = QwenClient(
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -46,7 +46,7 @@ async def test_qwen_asr_requires_text_field():
     )
 
     with pytest.raises(LLMError) as exc:
-        await client.asr({"model": "qwen-asr"})
+        await client.asr({"model": "qwen-asr", "input": "ZGF0YQ==", "stream": False})
 
     assert "Missing 'text'" in str(exc.value)
 
