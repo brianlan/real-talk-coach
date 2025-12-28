@@ -66,7 +66,7 @@ class QwenClient(_BaseLLMClient):
         *,
         base_url: str,
         api_key: str,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
         retries: int = 2,
         transport: httpx.BaseTransport | None = None,
     ) -> None:

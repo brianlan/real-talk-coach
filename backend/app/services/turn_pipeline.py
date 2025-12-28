@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -25,6 +26,7 @@ from app.telemetry.tracing import emit_event, emit_metric
 
 QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 QWEN_MODEL = "qwen3-omni-flash"
+logger = logging.getLogger(__name__)
 
 
 def _utc_now() -> str:
@@ -191,7 +193,10 @@ def _build_turn_messages(
             parts.append(
                 {
                     "type": "input_audio",
-                    "input_audio": {"data": audio_base64, "format": "mp3"},
+                    "input_audio": {
+                        "data": f"data:audio/mp3;base64,{audio_base64}",
+                        "format": "mp3",
+                    },
                 }
             )
             messages.append({"role": "user", "content": parts})
@@ -456,6 +461,17 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
             try:
                 generation_response = await generation_task
             except Exception as exc:
+                status_code = getattr(exc, "status_code", None)
+                body = getattr(exc, "body", None)
+                logger.error(
+                    "[%s] AI generation failed turn_id=%s status=%s error=%s body=%s",
+                    session_id,
+                    turn_id,
+                    status_code,
+                    exc,
+                    body,
+                    exc_info=True,
+                )
                 emit_event(
                     "turn.ai_generation_failed",
                     session_id=session_id,
