@@ -1,0 +1,587 @@
+openapi: 3.0.3
+info:
+  title: Admin Data Management API
+  version: 1.0.0
+servers:
+  - url: /api/admin
+security:
+  - AdminToken: []
+paths:
+  /skills:
+    get:
+      summary: List skills
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  skills:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Skill"
+    post:
+      summary: Create skill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkillInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+  /skills/{skillId}:
+    get:
+      summary: Get skill
+      parameters:
+        - name: skillId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "404":
+          description: Not found
+    put:
+      summary: Update skill
+      parameters:
+        - name: skillId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkillInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+    delete:
+      summary: Delete skill
+      parameters:
+        - name: skillId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "409":
+          description: Conflict (skill in use)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+  /scenarios:
+    get:
+      summary: List scenarios
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenarios:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Scenario"
+    post:
+      summary: Create scenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScenarioInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+  /scenarios/{scenarioId}:
+    get:
+      summary: Get scenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "404":
+          description: Not found
+    put:
+      summary: Update scenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScenarioInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+    delete:
+      summary: Delete scenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "409":
+          description: Conflict (scenario has sessions)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+  /scenarios/{scenarioId}/publish:
+    post:
+      summary: Publish scenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+  /scenarios/{scenarioId}/unpublish:
+    post:
+      summary: Unpublish scenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+  /sessions:
+    get:
+      summary: List sessions
+      parameters:
+        - name: scenarioId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SessionSummary"
+  /sessions/{sessionId}:
+    get:
+      summary: Get session detail
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionDetail"
+        "404":
+          description: Not found
+    delete:
+      summary: Delete session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+components:
+  securitySchemes:
+    AdminToken:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+  schemas:
+    Skill:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        rubric:
+          type: string
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, category, rubric, createdAt, updatedAt]
+    SkillInput:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        rubric:
+          type: string
+        description:
+          type: string
+      required: [name, category, rubric]
+    Scenario:
+      type: object
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        objective:
+          type: string
+        aiPersona:
+          $ref: "#/components/schemas/Persona"
+        traineePersona:
+          $ref: "#/components/schemas/Persona"
+        endCriteria:
+          type: array
+          items:
+            type: string
+        prompt:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        idleLimitSeconds:
+          type: integer
+          nullable: true
+        durationLimitSeconds:
+          type: integer
+          nullable: true
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - category
+        - title
+        - description
+        - objective
+        - aiPersona
+        - traineePersona
+        - endCriteria
+        - prompt
+        - skills
+        - status
+        - createdAt
+        - updatedAt
+    ScenarioInput:
+      type: object
+      properties:
+        category:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        objective:
+          type: string
+        aiPersona:
+          $ref: "#/components/schemas/Persona"
+        traineePersona:
+          $ref: "#/components/schemas/Persona"
+        endCriteria:
+          type: array
+          items:
+            type: string
+        prompt:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        idleLimitSeconds:
+          type: integer
+        durationLimitSeconds:
+          type: integer
+        status:
+          type: string
+      required:
+        - category
+        - title
+        - description
+        - objective
+        - aiPersona
+        - traineePersona
+        - endCriteria
+        - prompt
+        - skills
+    Persona:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        background:
+          type: string
+      required: [name, role, background]
+    SessionSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        scenarioId:
+          type: string
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        terminationReason:
+          type: string
+          nullable: true
+        evaluationStatus:
+          type: string
+      required: [id, scenarioId, status, startedAt, evaluationStatus]
+    SessionDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        scenarioId:
+          type: string
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        terminationReason:
+          type: string
+          nullable: true
+        evaluationStatus:
+          type: string
+        transcript:
+          type: array
+          items:
+            $ref: "#/components/schemas/Turn"
+        evaluation:
+          $ref: "#/components/schemas/Evaluation"
+      required: [id, scenarioId, status, startedAt, evaluationStatus, transcript]
+    Turn:
+      type: object
+      properties:
+        sequence:
+          type: integer
+        speaker:
+          type: string
+        transcript:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [sequence, speaker, createdAt]
+    Evaluation:
+      type: object
+      properties:
+        status:
+          type: string
+        scores:
+          type: array
+          items:
+            $ref: "#/components/schemas/Score"
+        summary:
+          type: string
+          nullable: true
+      required: [status]
+    Score:
+      type: object
+      properties:
+        skillId:
+          type: string
+        rating:
+          type: integer
+        note:
+          type: string
+      required: [skillId, rating, note]
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+      required: [error]
+    ConflictError:
+      type: object
+      properties:
+        error:
+          type: string
+        impactedIds:
+          type: array
+          items:
+            type: string
+      required: [error, impactedIds]
