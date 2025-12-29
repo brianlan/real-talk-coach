@@ -1,0 +1,28 @@
+[
+  {
+    "externalId": "scenario_difficult_feedback",
+    "category": "Difficult Feedback",
+    "title": "Give constructive feedback to a peer",
+    "description": "You need to address missed deadlines with your teammate using empathetic yet direct language.",
+    "objective": "Clarify the impact of the delays and agree on a concrete next step.",
+    "aiPersona": {
+      "name": "Alex",
+      "role": "Product Manager",
+      "background": "Stressed about shipping a feature but receptive if approached respectfully."
+    },
+    "traineePersona": {
+      "name": "You",
+      "role": "Engineering Lead",
+      "background": "Responsible for deliverables and team coaching."
+    },
+    "endCriteria": [
+      "Trainee clearly states the issue and its impact",
+      "Both parties align on an action plan"
+    ],
+    "skills": ["skill_active_listening", "skill_clear_ask"],
+    "idleLimitSeconds": 8,
+    "durationLimitSeconds": 300,
+    "prompt": "You are Alex receiving feedback about missed timelines. Start the conversation after the trainee reviews the scenario.",
+    "status": "published"
+  }
+]

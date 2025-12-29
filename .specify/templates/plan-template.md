@@ -3,7 +3,8 @@
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
+**Note**: This template is filled in by the `/speckit.plan` command. Constitution gates below must
+be satisfied before moving forward.
 
 ## Summary
 
@@ -31,7 +32,16 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- Readability & Explicitness: Plan favors straightforward flows, clear naming, and explicit
+  dependencies—no hidden magic or unnecessary indirection.
+- TDD-First & Isolated: Identify the failing tests to write first and the mocks/stubs needed to
+  avoid external services while keeping feedback fast.
+- Automation Everywhere: List lint/format/test commands and how CI will gate merges; any manual step
+  includes a TODO to automate.
+- Simple, Disciplined Design: Justify architecture against KISS/DRY/SOLID/YAGNI; defer abstractions
+  until repeated needs are proven.
+- Purposeful Comments & Rationale: Capture why key decisions are made here so code comments can
+  explain reasoning instead of restating behavior.
 
 ## Project Structure
 

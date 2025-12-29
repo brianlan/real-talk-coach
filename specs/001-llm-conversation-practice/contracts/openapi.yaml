@@ -1,0 +1,570 @@
+openapi: 3.0.3
+info:
+  title: LLM Conversation Practice Coach API
+  version: 0.1.0
+servers:
+  - url: https://api.real-talk-coach.local
+paths:
+  /api/scenarios:
+    get:
+      summary: List published practice scenarios
+      tags: [Scenarios]
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: historyStepCount
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Number of UI navigation steps taken (SC-004 metric); HTTP 422 when missing
+        - in: query
+          name: search
+          schema:
+            type: string
+            description: case-insensitive substring search on title/objective
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Scenario catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Scenario'
+  /api/skills:
+    get:
+      summary: List shared/global skills
+      tags: [Skills]
+      responses:
+        '200':
+          description: Skill catalog used by scenarios/evaluations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Skill'
+  /api/scenarios/{scenarioId}:
+    get:
+      summary: Fetch a specific scenario
+      tags: [Scenarios]
+      parameters:
+        - in: path
+          name: scenarioId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Scenario payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+        '404':
+          description: Scenario not found or unpublished
+  /api/sessions:
+    get:
+      summary: List trainee history
+      tags: [Sessions]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+        - in: query
+          name: scenarioId
+          schema:
+            type: string
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [startedAtDesc, startedAtAsc]
+            default: startedAtDesc
+          description: server-side ordering; default newest-first (`startedAtDesc`)
+      responses:
+        '200':
+          description: Paginated session history (ordered newest-first unless specified)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionPage'
+    post:
+      summary: Start a practice session
+      tags: [Sessions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scenarioId, clientSessionStartedAt]
+              properties:
+                scenarioId:
+                  type: string
+                clientSessionStartedAt:
+                  type: string
+                  format: date-time
+                  description: client-side timestamp marking when the trainee initiated the session (used for drift checks)
+      responses:
+        '201':
+          description: Session created; AI initiates turn 0 asynchronously via WebSocket/poll events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PracticeSession'
+        '422':
+          description: Scenario failed validation
+  /api/sessions/{sessionId}:
+    get:
+      summary: Fetch session details with turns
+      tags: [Sessions]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: historyStepCount
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Number of UI navigation steps taken (SC-004 metric); HTTP 422 when missing
+      responses:
+        '200':
+          description: Session detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+        '404':
+          description: Session not found
+    delete:
+      summary: Delete session + cascade media/evaluation
+      tags: [Sessions]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted; subsequent GETs return 404 once cascade completes
+  /api/sessions/{sessionId}/turns:
+    post:
+      summary: Submit trainee turn audio/context
+      tags: [Turns]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sequence, audioBase64, startedAt, endedAt]
+              properties:
+                sequence:
+                  type: integer
+                  description: Sequential turn number to enforce ordering
+                audioBase64:
+                  type: string
+                  description: Base64 MP3 blob (<128 KB, mono ≤24 kbps)
+                context:
+                  type: string
+                  nullable: true
+                startedAt:
+                  type: string
+                  format: date-time
+                endedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '202':
+          description: Turn accepted, AI reply queued
+        '422':
+          description: Missing timestamps, oversized audio, or invalid sequence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TraineeTurnInput'
+      responses:
+        '202':
+          description: Turn accepted, AI reply queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TurnReceipt'
+  /api/sessions/{sessionId}/manual-stop:
+    post:
+      summary: Manually terminate a session
+      tags: [Sessions]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [manual, qa_error, media_error]
+      responses:
+        '202':
+          description: Termination acknowledged
+  /api/sessions/{sessionId}/evaluation:
+    get:
+      summary: Fetch evaluation status/results
+      tags: [Evaluation]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Evaluation state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evaluation'
+    post:
+      summary: Re-enqueue evaluation if failed
+      description: Only allowed when the current evaluation status is `failed`; transitions the record back to `pending`, increments attempts, and starts a single background task. Other states return HTTP 409 with the current status.
+      tags: [Evaluation]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Evaluation re-queued
+        '409':
+          description: Evaluation is not in `failed` state; includes current status payload
+components:
+  schemas:
+    Scenario:
+      type: object
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        objective:
+          type: string
+        aiPersona:
+          $ref: '#/components/schemas/Persona'
+        traineePersona:
+          $ref: '#/components/schemas/Persona'
+        endCriteria:
+          type: array
+          items:
+            type: string
+        skills:
+          type: array
+          items:
+            type: string
+        skillSummaries:
+          type: array
+          items:
+            type: object
+            properties:
+              skillId:
+                type: string
+              name:
+                type: string
+              rubric:
+                type: string
+          description: convenience join between scenario skills and skill library for rendering
+        idleLimitSeconds:
+          type: integer
+        durationLimitSeconds:
+          type: integer
+        prompt:
+          type: string
+    Skill:
+      type: object
+      properties:
+        id:
+          type: string
+        externalId:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        rubric:
+          type: string
+        description:
+          type: string
+    Persona:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        background:
+          type: string
+    PracticeSession:
+      type: object
+      properties:
+        id:
+          type: string
+        scenarioId:
+          type: string
+        stubUserId:
+          type: string
+          description: Fixed identifier for this single-tenant release
+        status:
+          type: string
+          enum: [pending, active, ended]
+        terminationReason:
+          type: string
+          nullable: true
+        clientSessionStartedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        totalDurationSeconds:
+          type: integer
+          nullable: true
+        idleLimitSeconds:
+          type: integer
+        durationLimitSeconds:
+          type: integer
+        wsChannel:
+          type: string
+          description: WebSocket channel identifier (clients connect to ws://.../ws/sessions/{id} to receive ai_turn/termination events)
+        objectiveStatus:
+          type: string
+          enum: [unknown, succeeded, failed]
+        objectiveReason:
+          type: string
+          nullable: true
+        evaluationId:
+          type: string
+          nullable: true
+    SessionPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PracticeSession'
+          description: ordered by `startedAt` using the request's `sort` parameter (default newest-first)
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    SessionDetail:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/PracticeSession'
+        scenario:
+          $ref: '#/components/schemas/Scenario'
+        turns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Turn'
+        evaluation:
+          allOf:
+            - $ref: '#/components/schemas/Evaluation'
+          nullable: true
+    Turn:
+      type: object
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        sequence:
+          type: integer
+        speaker:
+          type: string
+          enum: [ai, trainee]
+        transcript:
+          type: string
+          nullable: true
+          description: AI turns always include transcript; trainee turns may be null until ASR completes
+        audioFileId:
+          type: string
+        audioUrl:
+          type: string
+        asrStatus:
+          type: string
+          enum: [pending, completed, failed]
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        context:
+          type: string
+          nullable: true
+        latencyMs:
+          type: integer
+          nullable: true
+    TraineeTurnInput:
+      type: object
+      required: [sequence, audioBase64, startedAt, endedAt]
+      properties:
+        sequence:
+          type: integer
+          description: expected sequence number so server can enforce ordering
+        audioBase64:
+          type: string
+          description: base64 MP3 blob (<128 KB)
+        context:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+          description: client-side timestamp when the trainee began speaking
+        endedAt:
+          type: string
+          format: date-time
+          description: client-side timestamp when audio capture stopped; used for drift enforcement
+    TurnReceipt:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        turnId:
+          type: string
+        aiTurnId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [accepted, duplicate, closed]
+    Evaluation:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, failed, completed]
+        scores:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillScore'
+        summary:
+          type: string
+          nullable: true
+        evaluatorModel:
+          type: string
+        attempts:
+          type: integer
+        lastError:
+          type: string
+          nullable: true
+        queuedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+    SkillScore:
+      type: object
+      properties:
+        skillId:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        note:
+          type: string
+    SessionWebSocketMessage:
+      type: object
+      description: Message emitted over the session WebSocket connection
+      properties:
+        type:
+          type: string
+          enum: [ai_turn, termination, evaluation_ready]
+        turn:
+          $ref: '#/components/schemas/Turn'
+        termination:
+          type: object
+          properties:
+            reason:
+              type: string
+            terminatedAt:
+              type: string
+              format: date-time
+        evaluation:
+          $ref: '#/components/schemas/Evaluation'
