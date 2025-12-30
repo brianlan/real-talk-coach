@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Backend and frontend apps installed per `README.md`
-- Admin access token configured for internal use
+- Pre-shared admin token configured
 
 ## Environment
 

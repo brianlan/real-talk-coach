@@ -5,6 +5,16 @@
 **Status**: Draft  
 **Input**: User description: "I need to add management pages for admin to setup the data in the backend database, for example, create a new scenario, create skills or assign skills to a scenario something like that. In case I may miss something, you can supplment anything that you think is needed for a backend admin page to manage all the data."
 
+## Clarifications
+
+### Session 2025-12-29
+
+- Q: What admin access method should be used for the management pages? → A: Pre-shared admin token.
+- Q: How should concurrent admin edits be handled? → A: Reject updates if the record has changed (version check).
+- Q: When deleting a scenario, what happens if sessions already exist? → A: Block deletion if any sessions exist.
+- Q: Should skills and scenarios be soft-deleted or hard-deleted? → A: Soft delete with restore.
+- Q: What level of audit logging is required? → A: Audit log for create/update/delete actions only.
+
 ## User Scenarios & Testing *(mandatory)*
 
 Acceptance scenarios must be automatable and will drive TDD. Note any mocks/stubs required for
@@ -72,10 +82,10 @@ before implementation, with mocks/stubs specified for any external services.
 
 ### Functional Requirements
 
-- **FR-001**: System MUST restrict access to the admin management pages to authorized admins only.
-- **FR-002**: Admins MUST be able to create, view, edit, and delete skills with name, category, and rubric details.
+- **FR-001**: System MUST restrict access to the admin management pages to authorized admins only, using a pre-shared admin token.
+- **FR-002**: Admins MUST be able to create, view, edit, and delete skills with name, category, and rubric details. Skill deletion MUST be soft-delete with restore capability.
 - **FR-003**: System MUST prevent deletion of any skill that is referenced by a published scenario and list the impacted scenarios.
-- **FR-004**: Admins MUST be able to create, view, edit, and delete scenarios including category, title, description, objective, personas, end criteria, prompt, and limits.
+- **FR-004**: Admins MUST be able to create, view, edit, and delete scenarios including category, title, description, objective, personas, end criteria, prompt, and limits. Scenario deletion MUST be soft-delete with restore capability.
 - **FR-005**: Admins MUST be able to assign one or more skills to a scenario and define their display order.
 - **FR-006**: System MUST prevent publishing scenarios that are missing required fields or have no assigned skills, and MUST display validation errors per field.
 - **FR-007**: Admins MUST be able to set a scenario’s status to draft or published.
@@ -85,6 +95,9 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-011**: Admins MUST be able to delete a session only after explicit confirmation, and deletions MUST remove associated evaluations and media references.
 - **FR-012**: System MUST display created/updated timestamps for skills and scenarios.
 - **FR-013**: System MUST provide clear, user-friendly error messages for validation failures and blocked actions.
+- **FR-014**: System MUST detect stale edits and reject updates when the underlying record has changed since the admin loaded it.
+- **FR-015**: System MUST block scenario deletion when any sessions exist for that scenario and report the reason.
+- **FR-016**: System MUST record an audit log entry for each admin create, update, and delete action.
 
 ### Assumptions
 

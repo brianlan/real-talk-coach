@@ -82,6 +82,11 @@ paths:
           required: true
           schema:
             type: string
+        - name: ifMatch
+          in: header
+          schema:
+            type: string
+          required: true
       requestBody:
         required: true
         content:
@@ -95,6 +100,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Skill"
+        "409":
+          description: Conflict (stale update)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
         "422":
           description: Validation error
           content:
@@ -102,7 +113,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ValidationError"
     delete:
-      summary: Delete skill
+      summary: Soft delete skill
       parameters:
         - name: skillId
           in: path
@@ -118,6 +129,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConflictError"
+  /skills/{skillId}/restore:
+    post:
+      summary: Restore skill
+      parameters:
+        - name: skillId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
   /scenarios:
     get:
       summary: List scenarios
@@ -193,6 +220,11 @@ paths:
           required: true
           schema:
             type: string
+        - name: ifMatch
+          in: header
+          schema:
+            type: string
+          required: true
       requestBody:
         required: true
         content:
@@ -206,6 +238,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Scenario"
+        "409":
+          description: Conflict (stale update)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
         "422":
           description: Validation error
           content:
@@ -213,7 +251,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ValidationError"
     delete:
-      summary: Delete scenario
+      summary: Soft delete scenario
       parameters:
         - name: scenarioId
           in: path
@@ -229,6 +267,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConflictError"
+  /scenarios/{scenarioId}/restore:
+    post:
+      summary: Restore scenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
   /scenarios/{scenarioId}/publish:
     post:
       summary: Publish scenario
@@ -332,6 +386,40 @@ paths:
           description: Deleted
         "404":
           description: Not found
+  /audit-log:
+    get:
+      summary: List audit log entries
+      parameters:
+        - name: entityType
+          in: query
+          schema:
+            type: string
+        - name: adminId
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEntry"
 components:
   securitySchemes:
     AdminToken:
@@ -353,13 +441,15 @@ components:
         description:
           type: string
           nullable: true
+        status:
+          type: string
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
-      required: [id, name, category, rubric, createdAt, updatedAt]
+      required: [id, name, category, rubric, status, createdAt, updatedAt]
     SkillInput:
       type: object
       properties:
@@ -407,6 +497,8 @@ components:
           nullable: true
         status:
           type: string
+        recordStatus:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -425,6 +517,7 @@ components:
         - prompt
         - skills
         - status
+        - recordStatus
         - createdAt
         - updatedAt
     ScenarioInput:
@@ -565,6 +658,26 @@ components:
         note:
           type: string
       required: [skillId, rating, note]
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        adminId:
+          type: string
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        details:
+          type: string
+          nullable: true
+      required: [id, adminId, action, entityType, entityId, timestamp]
     ValidationError:
       type: object
       properties:

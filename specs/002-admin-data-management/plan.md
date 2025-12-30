@@ -1,6 +1,6 @@
 # Implementation Plan: Admin Data Management
 
-**Branch**: `002-admin-data-management` | **Date**: 2025-12-29 | **Spec**: `specs/002-admin-data-management/spec.md`
+**Branch**: `002-admin-data-management` | **Date**: 2025-12-30 | **Spec**: `specs/002-admin-data-management/spec.md`
 **Input**: Feature specification from `/specs/002-admin-data-management/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. Constitution gates below must
@@ -8,10 +8,10 @@ be satisfied before moving forward.
 
 ## Summary
 
-Deliver admin-only management pages and APIs that let internal operators create and maintain skills,
-scenarios, and session data (including safe deletes), with clear validation and search/filtering.
-The approach extends the existing FastAPI backend with admin-scoped CRUD endpoints and adds a
-Next.js admin UI for skills, scenarios, and sessions, while preserving current trainee flows.
+Deliver admin-only management pages and APIs to create and maintain skills, scenarios, and session
+records with validation, safe deletes, and audit logging. The plan extends the existing FastAPI API
+surface with admin-scoped CRUD endpoints and adds a Next.js admin UI for data setup and oversight,
+while preserving trainee flows and data integrity.
 
 ## Technical Context
 
@@ -22,22 +22,20 @@ Next.js admin UI for skills, scenarios, and sessions, while preserving current t
 **Target Platform**: Web app (admin UI) + Linux server (API)
 **Project Type**: Full-stack web (separate backend + frontend packages)
 **Performance Goals**: Admin list/search results visible within 2 seconds for typical datasets (<1k records)
-**Constraints**: Admin actions must be auditable in logs; destructive actions require confirmation
+**Constraints**: Admin actions require a pre-shared token; destructive actions require confirmation; audit log for CRUD actions
 **Scale/Scope**: Internal admin users; low concurrency; hundreds of skills/scenarios; thousands of sessions
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Readability & Explicitness: Endpoints and UI flows follow clear CRUD patterns with explicit
-  validation and error messages; no implicit side effects.
-- TDD-First & Isolated: Contract and integration tests will stub LeanCloud and verify admin-only
-  access, validation failures, and delete cascades before implementation.
+- Readability & Explicitness: CRUD flows and validation errors are explicit; no hidden side effects.
+- TDD-First & Isolated: Contract/integration tests stub LeanCloud and verify auth, validation,
+  concurrency checks, and delete rules before implementation.
 - Automation Everywhere: Reuse existing lint/test commands (ruff/pytest, pnpm lint/test/playwright)
-  and add admin flow coverage to CI scripts.
-- Simple, Disciplined Design: Extend existing repositories and routes; avoid new services unless
-  repeated needs prove it.
-- Purposeful Comments & Rationale: Document why admin auth and delete safeguards were chosen.
+  and add admin coverage to CI scripts.
+- Simple, Disciplined Design: Extend existing repositories/routes instead of new service layers.
+- Purposeful Comments & Rationale: Capture reasons for auth, soft deletes, and audit logging.
 
 ## Project Structure
 
@@ -78,8 +76,8 @@ frontend/
     └── e2e/
 ```
 
-**Structure Decision**: Reuse existing `backend/` and `frontend/` workspaces and add admin routes
-and pages within those directories to keep deployment and tooling consistent.
+**Structure Decision**: Reuse existing `backend/` and `frontend/` workspaces to keep deployment and
+Tooling consistent while adding admin routes and pages in place.
 
 ## Complexity Tracking
 
@@ -93,44 +91,48 @@ and pages within those directories to keep deployment and tooling consistent.
 
 **Inputs captured from Technical Context**
 - Dependencies: FastAPI, httpx, LeanCloud REST, Next.js/React.
-- Integrations: LeanCloud LObject/LFile, existing session cleanup and evaluation references.
+- Integrations: LeanCloud LObject/LFile, existing session deletion cascade, audit logging.
 
 **Research tasks dispatched**
-- Best practices for admin CRUD flows with destructive-action safeguards.
-- Patterns for admin-only access control in internal tools with low operational overhead.
-- Approaches to prevent breaking published scenario/skill references while allowing edits.
+- Best practices for admin CRUD flows with destructive-action confirmation and audit logs.
+- Patterns for pre-shared token admin access in internal tools with low ops overhead.
+- Approaches for optimistic concurrency checks in admin CRUD.
 
 **Output**: `specs/002-admin-data-management/research.md`
 
 ## Phase 1 – Design & Contracts
 
 **Artifacts produced**
-- `specs/002-admin-data-management/data-model.md`: Admin-facing entities, constraints, and state rules.
-- `specs/002-admin-data-management/contracts/openapi.yaml`: Admin CRUD endpoints, filters, validation errors.
-- `specs/002-admin-data-management/quickstart.md`: Admin setup, environment variables, and local run/test steps.
+- `specs/002-admin-data-management/data-model.md`: Entities and validation for skills, scenarios,
+  sessions, evaluations, and audit logs.
+- `specs/002-admin-data-management/contracts/openapi.yaml`: Admin CRUD endpoints, filters,
+  validation errors, and concurrency conflicts.
+- `specs/002-admin-data-management/quickstart.md`: Admin setup, environment vars, local run/test.
 - Agent context updated via `.specify/scripts/bash/update-agent-context.sh codex`.
 
 **Design highlights**
-- Admin endpoints are separated under an `/api/admin` prefix with explicit authorization and
-  validation errors aligned to the spec.
-- Skills and scenarios use safe-delete checks to prevent orphaned references; blocking responses list
-  affected records to guide admins.
-- Session delete actions reuse the existing cascade behavior to remove evaluations and media
-  references, with confirmation required at the UI layer.
+- Admin endpoints live under `/api/admin` with a pre-shared token header and explicit 401/403
+  behavior for missing or invalid tokens.
+- Skills/scenarios use soft-delete with restore; deletions are blocked when referenced by published
+  scenarios or when sessions exist for a scenario.
+- Updates enforce optimistic concurrency and return a conflict error when the record has changed.
+- Audit log entries are recorded for admin create/update/delete actions.
 
 ## Phase 2 – Implementation Plan (Preview)
 
 Will break into incremental stories during `/speckit.tasks`, roughly:
-1. **Admin auth + scaffolding**: secure admin routes, shared error handling, add admin navigation shell.
-2. **Skill management**: CRUD API + UI, reference checks, and tests.
-3. **Scenario management**: CRUD + publish/unpublish, skill assignment ordering, validation.
-4. **Session oversight**: list/detail/delete, evaluation status visibility, cleanup confirmation.
-5. **Testing/automation**: contract + integration + UI tests for core admin flows.
+1. **Admin auth + scaffolding**: admin routing, token checks, shared error handling, admin shell.
+2. **Skill management**: CRUD API + UI, soft delete/restore, reference checks, tests.
+3. **Scenario management**: CRUD + publish/unpublish, skill ordering, validation, soft delete.
+4. **Session oversight**: list/detail/delete, evaluation visibility, deletion block rules, tests.
+5. **Audit logging**: create/update/delete logging with filters for review.
+6. **Testing/automation**: contract + integration + UI tests for admin flows.
 
 ## Constitution Check (Post-Design)
 
-- Readability & Explicitness: Contracts and data model define explicit validation rules and error flows.
+- Readability & Explicitness: Contracts and data model define validation, conflicts, and delete
+  rules explicitly.
 - TDD-First & Isolated: Tests specify required mocks for LeanCloud and admin auth.
 - Automation Everywhere: Quickstart lists lint/test commands and admin e2e coverage.
 - Simple, Disciplined Design: Admin features extend existing patterns without new service layers.
-- Purposeful Comments & Rationale: Rationale for auth and delete constraints captured in docs.
+- Purposeful Comments & Rationale: Rationale for auth, soft deletes, and audit logging captured.

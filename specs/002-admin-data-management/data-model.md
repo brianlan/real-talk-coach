@@ -2,18 +2,30 @@
 
 ## Admin User
 - `id` — unique admin identifier.
-- `name` — display name for audit/history.
+- `name` — display name for audit entries.
 - `email` — contact identifier.
-- `status` — active or disabled.
+- `status` — `active` or `disabled`.
 
-Validation: only active admins may access management pages.
+Validation: only `active` admins may access management pages.
+
+## Audit Log
+- `id` — unique identifier.
+- `adminId` — admin reference.
+- `action` — `create`, `update`, `delete`.
+- `entityType` — `skill`, `scenario`, `session`.
+- `entityId` — entity reference.
+- `timestamp` — action time.
+- `details` — summary of changes (optional).
+
+Validation: audit log entries are created for all admin create/update/delete actions.
 
 ## Skill
 - `id` — unique identifier.
 - `name` — display label.
 - `category` — grouping label.
 - `rubric` — rating guidance text.
-- `description` — optional admin notes.
+- `description` — optional notes.
+- `status` — `active` or `deleted` (soft delete).
 - `createdAt/updatedAt` — timestamps.
 
 Validation:
@@ -21,8 +33,8 @@ Validation:
 - `name` unique within tenant.
 
 Rules:
-- Skill deletion is blocked if referenced by any published scenario; response includes the
-  referencing scenario list.
+- Soft delete only; restore allowed.
+- Deletion blocked if referenced by any published scenario; response includes impacted scenarios.
 
 ## Scenario
 - `id` — unique identifier.
@@ -38,6 +50,7 @@ Rules:
 - `idleLimitSeconds` — optional override.
 - `durationLimitSeconds` — optional override.
 - `status` — `draft` or `published`.
+- `recordStatus` — `active` or `deleted` (soft delete).
 - `createdAt/updatedAt` — timestamps.
 
 Validation:
@@ -45,8 +58,9 @@ Validation:
 - `skills` must contain at least one unique skill ID.
 
 Rules:
-- Publishing is blocked if required fields are missing or `skills` is empty.
-- Scenario deletion is blocked if any sessions exist (unless override is explicitly requested).
+- Publishing blocked if required fields are missing or `skills` is empty.
+- Scenario deletion is soft delete only.
+- Scenario deletion blocked if any sessions exist for the scenario.
 
 ## Practice Session (Admin View)
 - `id` — unique identifier.
@@ -80,6 +94,7 @@ Admin actions:
 
 ## State Transitions
 
-- Scenario: `draft` → `published`; `published` → `draft` (unpublish).
-- Session: `pending` → `active` → `ended` (admin cannot transition states, read-only).
+- Scenario: `draft` ↔ `published`.
+- Record status: `active` ↔ `deleted` (soft delete/restore).
+- Session: `pending` → `active` → `ended` (admin read-only).
 - Evaluation: `pending` → `running` → `completed`/`failed` (admin read-only).

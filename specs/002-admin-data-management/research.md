@@ -1,37 +1,42 @@
 # Research: Admin Data Management
 
-## Decision 1: Admin-only access model
+## Decision 1: Admin access control
 
-**Decision**: Use a lightweight, pre-shared admin access mechanism suitable for internal tools, with
-explicit authorization checks on every admin endpoint.
+**Decision**: Use a pre-shared admin token for all admin endpoints and pages.
 
-**Rationale**: The feature is for trusted internal users and requires minimal operational overhead
-while still preventing accidental exposure to trainees.
+**Rationale**: Keeps setup minimal for internal tools while still enforcing explicit authorization.
 
 **Alternatives considered**:
-- Full identity provider integration (rejected: adds scope and setup complexity for an internal-only MVP).
-- IP allowlist only (rejected: brittle for distributed teams and does not protect against leaked URLs).
+- Full identity provider integration (rejected: higher setup cost and scope).
+- IP allowlist only (rejected: insufficient for distributed access and URL leakage risk).
 
-## Decision 2: Skill/scenario reference safety
+## Decision 2: Concurrent edit handling
 
-**Decision**: Block deletion of skills that are referenced by published scenarios and block
-scenario deletion when it has associated sessions unless an explicit override action is taken.
+**Decision**: Use optimistic concurrency checks and reject stale updates.
 
-**Rationale**: Prevents breaking live content and protects session history integrity while still
-allowing controlled maintenance.
+**Rationale**: Prevents silent overwrites without adding heavy locking or complex coordination.
 
 **Alternatives considered**:
-- Silent cascading deletes (rejected: high risk of unintended data loss).
-- Automatic unpublish on delete (rejected: ambiguous behavior and potential surprise).
+- Last write wins (rejected: silent data loss).
+- Record locking (rejected: higher operational complexity for internal admin use).
 
-## Decision 3: Admin UX focus
+## Decision 3: Deletion and data safety
 
-**Decision**: Provide focused admin workflows for skills, scenarios, and sessions with clear
-validation and confirmation for destructive actions.
+**Decision**: Use soft-delete with restore for skills and scenarios; block scenario deletion when
+sessions exist; block skill deletion when referenced by published scenarios.
 
-**Rationale**: Keeps the admin experience narrow and reliable while meeting the core data
-management needs from the spec.
+**Rationale**: Protects production data and preserves auditability while allowing recovery.
 
 **Alternatives considered**:
-- Broad admin dashboard with analytics and reporting (rejected: out of scope for initial admin CRUD).
-- Bulk import/export tools (rejected: explicitly out of scope in assumptions).
+- Hard delete only (rejected: high risk of irreversible data loss).
+- Automatic cascade deletes (rejected: risks orphaning history and evaluations).
+
+## Decision 4: Audit logging
+
+**Decision**: Record audit log entries for admin create/update/delete actions.
+
+**Rationale**: Supports traceability and operational accountability without excessive logging.
+
+**Alternatives considered**:
+- No audit log (rejected: insufficient operational visibility).
+- Log all admin reads (rejected: over-collection without clear value).
