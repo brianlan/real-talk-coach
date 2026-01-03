@@ -33,8 +33,15 @@ export default function ScenariosPage() {
       await deleteScenario(id);
       updateScenarioInList(id, { recordStatus: "deleted" });
     } catch (err: any) {
-      if (err?.message === "in-use") setError("Scenario has sessions and cannot be deleted.");
-      else setError(err?.message ?? "Failed to delete scenario");
+      if (err?.code === "scenario-conflict") {
+        const impacted = Array.isArray(err?.impactedIds) ? err.impactedIds : [];
+        const detail = impacted.length
+          ? `Scenario has sessions (${impacted.join(", ")}) and cannot be deleted.`
+          : err?.message ?? "Scenario cannot be deleted while sessions exist.";
+        setError(detail);
+      } else {
+        setError(err?.message ?? "Failed to delete scenario");
+      }
     }
   };
 

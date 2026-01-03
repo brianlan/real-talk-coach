@@ -1,17 +1,10 @@
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
-const adminToken = process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? "";
+import { adminApiBase, adminHeaders } from "./client";
 
-function authHeaders(extra?: Record<string, string>) {
-  return {
-    "Content-Type": "application/json",
-    ...(adminToken ? { "X-Admin-Token": adminToken } : {}),
-    ...(extra ?? {}),
-  } as Record<string, string>;
-}
+const apiBase = adminApiBase();
 
 export async function listSessions() {
   const res = await fetch(`${apiBase}/api/admin/sessions`, {
-    headers: authHeaders(),
+    headers: adminHeaders(),
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Failed to load sessions");
@@ -21,7 +14,7 @@ export async function listSessions() {
 
 export async function getSession(id: string) {
   const res = await fetch(`${apiBase}/api/admin/sessions/${id}`, {
-    headers: authHeaders(),
+    headers: adminHeaders(),
     cache: "no-store",
   });
   if (res.status === 404) throw new Error("Not found");
@@ -32,7 +25,7 @@ export async function getSession(id: string) {
 export async function deleteSession(id: string) {
   const res = await fetch(`${apiBase}/api/admin/sessions/${id}`, {
     method: "DELETE",
-    headers: authHeaders(),
+    headers: adminHeaders(),
   });
   if (res.status !== 204 && res.status !== 200) {
     const detail = await res.text();

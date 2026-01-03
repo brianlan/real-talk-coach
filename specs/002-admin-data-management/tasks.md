@@ -115,14 +115,14 @@
 
 **Purpose**: Cross-story improvements and admin audit log visibility
 
-- [ ] T024 [P] Expose audit log list endpoint in `backend/app/api/routes/admin/audit_log.py` and wire into `backend/app/api/routes/admin/router.py`
-- [ ] T025 [P] Build audit log list page in `frontend/app/admin/audit-log/page.tsx`
-- [ ] T026 [P] Update admin usage notes in `README.md`
-- [ ] T036 Wire audit logging into skills/scenarios/sessions services for create/update/delete in `backend/app/services/admin/*.py`
-- [ ] T037 Add admin API clients to send `X-Admin-Token` and `If-Match` headers for protected routes in `frontend/services/api/admin/*.ts`
-- [ ] T038 Add conflict handling (stale edits, delete blocks) UI feedback in admin forms/pages in `frontend/app/admin/**`
-- [ ] T039 Add measurement checks for SC-001..SC-004 (publish time, success rate, search speed, data quality) and document in `docs/` or `README.md`
-- [ ] T040 Extend CI/scripts to run new admin contract/integration/e2e suites in `scripts/` and pipeline configs
+- [X] T024 [P] Expose audit log list endpoint in `backend/app/api/routes/admin/audit_log.py` and wire into `backend/app/api/routes/admin/router.py`
+- [X] T025 [P] Build audit log list page in `frontend/app/admin/audit-log/page.tsx`
+- [X] T026 [P] Update admin usage notes in `README.md`
+- [X] T036 Wire audit logging into skills/scenarios/sessions services for create/update/delete in `backend/app/services/admin/*.py`
+- [X] T037 Add admin API clients to send `X-Admin-Token` and `If-Match` headers for protected routes in `frontend/services/api/admin/*.ts`
+- [X] T038 Add conflict handling (stale edits, delete blocks) UI feedback in admin forms/pages in `frontend/app/admin/**`
+- [X] T039 Add measurement checks for SC-001..SC-004 (publish time, success rate, search speed, data quality) and document in `docs/` or `README.md`
+- [X] T040 Extend CI/scripts to run new admin contract/integration/e2e suites in `scripts/` and pipeline configs
 
 ---
 

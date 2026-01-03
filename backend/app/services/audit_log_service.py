@@ -29,7 +29,7 @@ def _now_iso() -> str:
 
 async def record_audit_entry(
     *,
-    admin_id: str,
+    admin_id: str | None,
     action: str,
     entity_type: str,
     entity_id: str,
@@ -38,8 +38,14 @@ async def record_audit_entry(
     repo: AuditLogRepository | None = None,
 ) -> AuditLogRecord:
     repository = repo or _repo()
+    settings = load_settings()
+    resolved_admin_id = (
+        admin_id
+        or settings.admin_audit_admin_id
+        or settings.admin_access_token
+    )
     payload = {
-        "adminId": admin_id,
+        "adminId": resolved_admin_id,
         "action": action,
         "entityType": entity_type,
         "entityId": entity_id,

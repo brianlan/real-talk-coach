@@ -29,7 +29,15 @@ export default function SkillsPage() {
       await deleteSkill(id);
       setSkills((prev) => prev.map((s) => (s.id === id ? { ...s, status: "deleted" } : s)));
     } catch (err: any) {
-      setError(err?.message ?? "Failed to delete skill");
+      if (err?.code === "skill-conflict") {
+        const impacted = Array.isArray(err?.impactedIds) ? err.impactedIds : [];
+        const detail = impacted.length
+          ? `Skill is referenced by: ${impacted.join(", ")}`
+          : err?.message ?? "Skill cannot be deleted while in use.";
+        setError(detail);
+      } else {
+        setError(err?.message ?? "Failed to delete skill");
+      }
     }
   };
 
