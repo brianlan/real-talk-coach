@@ -16,6 +16,7 @@ def _set_required_envs(monkeypatch):
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
+    monkeypatch.setenv("ADMIN_ACCESS_TOKEN", "admin-token")
 
 
 def test_missing_required_envs_raise_actionable_error(monkeypatch):
@@ -31,6 +32,7 @@ def test_missing_required_envs_raise_actionable_error(monkeypatch):
         "OBJECTIVE_CHECK_API_KEY",
         "OBJECTIVE_CHECK_MODEL",
         "STUB_USER_ID",
+        "ADMIN_ACCESS_TOKEN",
     ]:
         monkeypatch.delenv(name, raising=False)
 
