@@ -25,6 +25,8 @@ class Settings:
     objective_check_api_key: str
     objective_check_model: str
     stub_user_id: str
+    admin_access_token: str
+    admin_audit_admin_id: str | None
 
 
 def _require_env(name: str) -> str:
@@ -67,6 +69,8 @@ def load_settings() -> Settings:
     objective_check_api_key = _require_env("OBJECTIVE_CHECK_API_KEY")
     objective_check_model = _require_env("OBJECTIVE_CHECK_MODEL")
     stub_user_id = _require_env("STUB_USER_ID")
+    admin_access_token = _require_env("ADMIN_ACCESS_TOKEN")
+    admin_audit_admin_id = _optional_env("ADMIN_AUDIT_ADMIN_ID")
 
     return Settings(
         lean_app_id=lean_app_id,
@@ -83,4 +87,6 @@ def load_settings() -> Settings:
         objective_check_api_key=objective_check_api_key,
         objective_check_model=objective_check_model,
         stub_user_id=stub_user_id,
+        admin_access_token=admin_access_token,
+        admin_audit_admin_id=admin_audit_admin_id,
     )

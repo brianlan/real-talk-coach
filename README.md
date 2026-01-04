@@ -38,6 +38,13 @@ cd frontend
 pnpm dev --port 3000
 ```
 
+### Admin usage
+
+- Set `ADMIN_ACCESS_TOKEN` (backend) and `NEXT_PUBLIC_ADMIN_TOKEN` (frontend) with the same value.
+- Access `http://localhost:3000/admin` with the token header via browser extension or reverse proxy.
+- Use the navigation shell to reach Skills, Scenarios, Sessions, and the new Audit Log view.
+- Measurements for SC-001..SC-004 live in `docs/admin-metrics.md`.
+
 ## Testing & Linting
 ```bash
 cd backend

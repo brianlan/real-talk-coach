@@ -1,4 +1,4 @@
-model = "gpt-5.2-codex"
+model = "gpt-5.1-codex"
 model_reasoning_effort = "medium"
 [projects."/Users/rlan/projects/llm_data_toolkits"]
 trust_level = "trusted"
@@ -24,5 +24,3 @@ command = "npx"
 args = ["-y", "@playwright/mcp"]
 env = { PLAYWRIGHT_HEADLESS = "true" }
 
-[notice]
-"hide_gpt-5.1-codex-max_migration_prompt" = true

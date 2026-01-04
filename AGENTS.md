@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2025-12-11
 
 ## Active Technologies
+- Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15 + FastAPI, Uvicorn, httpx, LeanCloud REST APIs, Next.js/Reac (002-admin-data-management)
+- LeanCloud LObject/LFile for structured data + media references (002-admin-data-management)
 
 - Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15 + FastAPI, Uvicorn, httpx, WebSockets, LeanCloud REST APIs, qwen3-omni-flash, Next.js/React, Web Audio API (001-llm-conversation-practice)
 
@@ -23,6 +25,7 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15: Follow standard conventions
 
 ## Recent Changes
+- 002-admin-data-management: Added Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15 + FastAPI, Uvicorn, httpx, LeanCloud REST APIs, Next.js/Reac
 
 - 001-llm-conversation-practice: Added Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15 + FastAPI, Uvicorn, httpx, WebSockets, LeanCloud REST APIs, qwen3-omni-flash, Next.js/React, Web Audio API
 
