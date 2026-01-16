@@ -1,0 +1,39 @@
+# Common artifacts
+.git
+.gitignore
+.DS_Store
+Thumbs.db
+*.log*
+*.tmp
+*.swp
+logs/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node/Next.js
+node_modules/
+dist/
+build/
+.next/
+frontend/.next/
+frontend/node_modules/
+
+# Environment & secrets
+.env*
+backend/.env*
+frontend/.env*
+
+# Coverage & test outputs
+coverage/
+artifacts/
+
+# Docker context exclusions
+Dockerfile*

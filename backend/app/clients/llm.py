@@ -214,12 +214,16 @@ class QwenClient(_BaseLLMClient):
             raise LLMError("Missing 'model' or 'input' for qwen asr")
 
         audio_format = payload.get("format", "wav")
-        prompt = payload.get("prompt", "Transcribe the audio into text.")
+        prompt = payload.get("prompt", "Do not answer the speaker; output only the verbatim transcript in the original language.")
         stream = payload.get("stream", True)
         stream_options = payload.get("stream_options")
 
         audio_data_url = f"data:;base64,{audio_base64}"
         messages = [
+            {
+                "role": "system", 
+                "content": "You are a speech-to-text service. Respond only with the transcript."
+            },
             {
                 "role": "user",
                 "content": [
