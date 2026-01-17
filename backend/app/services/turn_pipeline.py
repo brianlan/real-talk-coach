@@ -252,7 +252,7 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
                 print(f"[{session_id}] Calling Qwen API with model: {QWEN_MODEL}, voice_id: {settings.qwen_voice_id}")  # DEBUG
                 logger.info(f"[{session_id}] Calling Qwen API with model: {QWEN_MODEL}, voice_id: {settings.qwen_voice_id}")
                 generation_response = await qwen_client.generate(payload)
-                print(f"[{session_id}] Qwen API call successful, response: {generation_response}")  # DEBUG
+                # print(f"[{session_id}] Qwen API call successful, response: {generation_response}")  # DEBUG
                 logger.info(f"[{session_id}] Qwen API call successful")
             except Exception as exc:
                 print(f"[{session_id}] Qwen generation failed: {exc}")  # DEBUG

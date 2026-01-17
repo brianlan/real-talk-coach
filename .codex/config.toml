@@ -1,4 +1,4 @@
-model = "gpt-5.1-codex"
+model = "gpt-5.2-codex"
 model_reasoning_effort = "medium"
 [projects."/Users/rlan/projects/llm_data_toolkits"]
 trust_level = "trusted"
@@ -26,4 +26,5 @@ env = { PLAYWRIGHT_HEADLESS = "true" }
 
 [notice.model_migrations]
 "gpt-5.1-codex" = "gpt-5.2-codex"
+"gpt-5.2" = "gpt-5.2-codex"
 

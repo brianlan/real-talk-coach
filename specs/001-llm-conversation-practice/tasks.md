@@ -109,20 +109,20 @@ external services, and keep them automated.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T038 [P] [US2] Write contract tests for `GET/POST /api/sessions/{id}/evaluation` in `backend/tests/contract/test_evaluations.py` validating status transitions.
-- [ ] T039 [P] [US2] Add integration test that simulates session completion and background evaluation retries in `backend/tests/integration/test_evaluation_flow.py`.
-- [ ] T040 [P] [US2] Add frontend component/unit test ensuring evaluation results render + requeue disabled states in `frontend/tests/unit/evaluation-panel.test.tsx`.
+- [X] T038 [P] [US2] Write contract tests for `GET/POST /api/sessions/{id}/evaluation` in `backend/tests/contract/test_evaluations.py` validating status transitions.
+- [X] T039 [P] [US2] Add integration test that simulates session completion and background evaluation retries in `backend/tests/integration/test_evaluation_flow.py`.
+- [X] T040 [P] [US2] Add frontend component/unit test ensuring evaluation results render + requeue disabled states in `frontend/tests/unit/evaluation-panel.test.tsx`.
 
 ### Implementation for User Story 2
 
-- [ ] T041 [P] [US2] Extend LeanCloud models + repositories for Evaluation records in `backend/app/models/evaluation.py` and `backend/app/repositories/evaluation_repository.py`.
-- [ ] T042 [US2] Implement FastAPI background task runner for evaluator calls with backoff + state updates in `backend/app/tasks/evaluation_runner.py`.
-- [ ] T043 [US2] Create evaluation API routes (status fetch + requeue) in `backend/app/api/routes/evaluations.py` reusing LeanCloud repository + concurrency guards.
-- [ ] T044 [US2] Wire GPT-5 mini prompt/response parsing + observability in `backend/app/services/evaluation_service.py`.
-- [ ] T045 [P] [US2] Build frontend evaluation panel component in `frontend/components/session/EvaluationPanel.tsx` showing per-skill ratings + notes.
-- [ ] T046 [US2] Implement polling/requeue hooks for evaluations in `frontend/services/api/evaluationClient.ts` and integrate with practice/history views.
-- [ ] T047 [US2] Instrument evaluation runner + API responses with structured logs and metrics for SC-003 (queue-to-complete latency) plus verification tests in `backend/app/tasks/evaluation_runner.py` and `backend/app/api/routes/evaluations.py`.
-- [ ] T048 [US2] Add OpenTelemetry spans around evaluation background tasks and LeanCloud writes in `backend/app/tasks/evaluation_runner.py` and `backend/app/services/evaluation_service.py`, with tests verifying span attributes (sessionId, status, latency).
+- [X] T041 [P] [US2] Extend LeanCloud models + repositories for Evaluation records in `backend/app/models/evaluation.py` and `backend/app/repositories/evaluation_repository.py`.
+- [X] T042 [US2] Implement FastAPI background task runner for evaluator calls with backoff + state updates in `backend/app/tasks/evaluation_runner.py`.
+- [X] T043 [US2] Create evaluation API routes (status fetch + requeue) in `backend/app/api/routes/evaluations.py` reusing LeanCloud repository + concurrency guards.
+- [X] T044 [US2] Wire GPT-5 mini prompt/response parsing + observability in `backend/app/services/evaluation_service.py`.
+- [X] T045 [P] [US2] Build frontend evaluation panel component in `frontend/components/session/EvaluationPanel.tsx` showing per-skill ratings + notes.
+- [X] T046 [US2] Implement polling/requeue hooks for evaluations in `frontend/services/api/evaluationClient.ts` and integrate with practice/history views.
+- [X] T047 [US2] Instrument evaluation runner + API responses with structured logs and metrics for SC-003 (queue-to-complete latency) plus verification tests in `backend/app/tasks/evaluation_runner.py` and `backend/app/api/routes/evaluations.py`.
+- [X] T048 [US2] Add OpenTelemetry spans around evaluation background tasks and LeanCloud writes in `backend/app/tasks/evaluation_runner.py` and `backend/app/services/evaluation_service.py`, with tests verifying span attributes (sessionId, status, latency).
 
 **Checkpoint**: Evaluations run asynchronously, expose progress, and display actionable feedback.
 
@@ -136,20 +136,20 @@ external services, and keep them automated.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T049 [P] [US3] Add contract tests for session history pagination/filtering, delete cascade, default `sort=startedAtDesc`, optional `sort=startedAtAsc`, page size 20, title/objective substring search, and the required `historyStepCount` query parameter in `backend/tests/contract/test_history.py`.
-- [ ] T050 [P] [US3] Implement integration test covering history detail fetch + practice-again handoff, ensuring `historyStepCount` hints propagate to metrics, in `backend/tests/integration/test_history_replay.py`.
-- [ ] T051 [P] [US3] Add Playwright test for browsing history and replaying a session in `frontend/tests/e2e/history.spec.ts`.
+- [X] T049 [P] [US3] Add contract tests for session history pagination/filtering, delete cascade, default `sort=startedAtDesc`, optional `sort=startedAtAsc`, page size 20, title/objective substring search, and the required `historyStepCount` query parameter in `backend/tests/contract/test_history.py`.
+- [X] T050 [P] [US3] Implement integration test covering history detail fetch + practice-again handoff, ensuring `historyStepCount` hints propagate to metrics, in `backend/tests/integration/test_history_replay.py`.
+- [X] T051 [P] [US3] Add Playwright test for browsing history and replaying a session in `frontend/tests/e2e/history.spec.ts`.
 
 ### Implementation for User Story 3
 
-- [ ] T052 [P] [US3] Implement history list query with filters/search/sort in `backend/app/api/routes/history.py`, requiring the `historyStepCount` query parameter (HTTP 422 if missing) and emitting SC-004 metrics (history access latency/two-step success) alongside the `SessionPage` responses.
-- [ ] T053 [P] [US3] Generate short-lived signed LeanCloud audio URLs (TTL 15 minutes) when serving history detail responses in `backend/app/api/routes/history.py`, documenting retry/error semantics and requiring the `historyStepCount` hint for SC-004 metrics.
-- [ ] T054 [P] [US3] Instrument history list/detail endpoints and practice-again flow with traces covering REST handlers and LeanCloud lookups in `backend/app/api/routes/history.py` and `backend/app/api/routes/sessions.py`, plus tests confirming span metadata (historyPage, sort/filter params).
-- [ ] T055 [US3] Create session deletion + LeanCloud cascade orchestrator in `backend/app/services/session_cleanup.py` for DELETE `/api/sessions/{id}`.
-- [ ] T056 [US3] Add "practice again" helper that clones scenario metadata and reuses POST `/api/sessions` to start new runs in `backend/app/api/routes/sessions.py`.
-- [ ] T057 [P] [US3] Build history list UI with filters/search in `frontend/app/(dashboard)/history/page.tsx`, sending the required `historyStepCount` query parameter with API calls.
-- [ ] T058 [US3] Implement session detail view (transcripts, audio playback via signed URLs, evaluation) in `frontend/app/(dashboard)/history/[sessionId]/page.tsx`, handling signed URL expiry/retry UX and transmitting `historyStepCount` hints.
-- [ ] T059 [US3] Add reusable "Practice Again" CTA component in `frontend/components/history/PracticeAgainButton.tsx` to invoke `/api/sessions` with prior scenario data.
+- [X] T052 [P] [US3] Implement history list query with filters/search/sort in `backend/app/api/routes/history.py`, requiring the `historyStepCount` query parameter (HTTP 422 if missing) and emitting SC-004 metrics (history access latency/two-step success) alongside the `SessionPage` responses.
+- [X] T053 [P] [US3] Generate short-lived signed LeanCloud audio URLs (TTL 15 minutes) when serving history detail responses in `backend/app/api/routes/history.py`, documenting retry/error semantics and requiring the `historyStepCount` hint for SC-004 metrics.
+- [X] T054 [P] [US3] Instrument history list/detail endpoints and practice-again flow with traces covering REST handlers and LeanCloud lookups in `backend/app/api/routes/history.py` and `backend/app/api/routes/sessions.py`, plus tests confirming span metadata (historyPage, sort/filter params).
+- [X] T055 [US3] Create session deletion + LeanCloud cascade orchestrator in `backend/app/services/session_cleanup.py` for DELETE `/api/sessions/{id}`.
+- [X] T056 [US3] Add "practice again" helper that clones scenario metadata and reuses POST `/api/sessions` to start new runs in `backend/app/api/routes/sessions.py`.
+- [X] T057 [P] [US3] Build history list UI with filters/search in `frontend/app/(dashboard)/history/page.tsx`, sending the required `historyStepCount` query parameter with API calls.
+- [X] T058 [US3] Implement session detail view (transcripts, audio playback via signed URLs, evaluation) in `frontend/app/(dashboard)/history/[sessionId]/page.tsx`, handling signed URL expiry/retry UX and transmitting `historyStepCount` hints.
+- [X] T059 [US3] Add reusable "Practice Again" CTA component in `frontend/components/history/PracticeAgainButton.tsx` to invoke `/api/sessions` with prior scenario data.
 
 **Checkpoint**: Trainees can review and replay sessions independently from evaluations.
 
@@ -159,9 +159,9 @@ external services, and keep them automated.
 
 **Purpose**: Final documentation, resiliency hardening, and regression coverage once core stories are complete.
 
-- [ ] T060 [P] Document architecture decisions, API surface, and background task flows in `docs/architecture/practice-coach.md`.
-- [ ] T061 [P] Add objective-check + timer drift unit/regression coverage in `backend/tests/unit/test_objective_check.py`.
-- [ ] T062 Run end-to-end quickstart validation script covering lint/test/playwright in `scripts/ci/validate-feature.sh` and update CI docs if needed.
+- [X] T060 [P] Document architecture decisions, API surface, and background task flows in `docs/architecture/practice-coach.md`.
+- [X] T061 [P] Add objective-check + timer drift unit/regression coverage in `backend/tests/unit/test_objective_check.py`.
+- [X] T062 Run end-to-end quickstart validation script covering lint/test/playwright in `scripts/ci/validate-feature.sh` and update CI docs if needed.
 
 ---
 
