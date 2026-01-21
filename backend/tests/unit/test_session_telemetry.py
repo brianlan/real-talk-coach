@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from fastapi import BackgroundTasks
+
 import pytest
 
 from app.api.routes import sessions as sessions_routes
@@ -83,6 +85,10 @@ async def test_session_created_emits_event(monkeypatch):
                 "Scenario",
                 (),
                 {
+                    "ai_persona": {"name": "AI", "background": "Background"},
+                    "trainee_persona": {"name": "Trainee", "background": "Background"},
+                    "objective": "Objective",
+                    "end_criteria": ["End"],
                     "prompt": "Hello",
                     "status": "published",
                     "idle_limit_seconds": 8,
@@ -118,6 +124,7 @@ async def test_session_created_emits_event(monkeypatch):
 
     await sessions_routes.create_session(
         payload,
+        background_tasks=BackgroundTasks(),
         repo=FakeRepo(),
         scenario_repo=FakeScenarioRepo(),
     )

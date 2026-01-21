@@ -136,8 +136,8 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
                     "title": "Scenario",
                     "description": "desc",
                     "objective": "Objective",
-                    "ai_persona": {},
-                    "trainee_persona": {},
+                    "ai_persona": {"name": "AI", "background": "Background"},
+                    "trainee_persona": {"name": "Trainee", "background": "Background"},
                     "end_criteria": ["done"],
                     "skills": [],
                     "skill_summaries": [],
@@ -156,9 +156,12 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
         async def create_signed_urls(self, urls, ttl_seconds=900):
             return {url: f"{url}?signed=1" for url in urls}
 
+    async def _noop_initial_turn(*args, **kwargs):
+        return None
+
     monkeypatch.setattr(
         "app.services.turn_pipeline.generate_initial_ai_turn",
-        lambda *args, **kwargs: None,
+        _noop_initial_turn,
     )
 
     app.dependency_overrides[history_routes._session_repo] = lambda: FakeSessionRepo()

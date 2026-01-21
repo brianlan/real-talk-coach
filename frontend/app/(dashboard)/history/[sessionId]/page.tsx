@@ -1,36 +1,63 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+
 import HistoryDetail from "./history-detail";
+import { fetchHistoryDetail } from "@/services/api/history";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+export default function HistoryDetailPage() {
+  const params = useParams<{ sessionId: string }>();
+  const sessionId = params?.sessionId;
+  const [detail, setDetail] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-async function fetchHistoryDetail(sessionId: string) {
-  const response = await fetch(
-    `${apiBase}/api/sessions/${sessionId}?historyStepCount=2`,
-    {
-      cache: "no-store",
-    }
-  );
-  if (!response.ok) {
-    return null;
-  }
-  return response.json();
-}
+  useEffect(() => {
+    let canceled = false;
+    const loadDetail = async () => {
+      if (!sessionId) {
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchHistoryDetail(sessionId, 2);
+        if (!canceled) {
+          setDetail(data);
+        }
+      } catch (err) {
+        if (!canceled) {
+          setDetail(null);
+          setError((err as Error).message);
+        }
+      } finally {
+        if (!canceled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadDetail();
+    return () => {
+      canceled = true;
+    };
+  }, [sessionId]);
 
-export default async function HistoryDetailPage({
-  params,
-}: {
-  params: Promise<{ sessionId: string }>;
-}) {
-  const resolvedParams = await params;
-  const detail = await fetchHistoryDetail(resolvedParams.sessionId);
-  if (!detail) {
+  if (loading) {
     return (
       <main style={{ padding: "48px 24px" }}>
-        <p>Session not found.</p>
+        <p>Loading session...</p>
       </main>
     );
   }
 
-  return (
-    <HistoryDetail sessionId={resolvedParams.sessionId} initialDetail={detail} />
-  );
+  if (!detail || !sessionId) {
+    return (
+      <main style={{ padding: "48px 24px" }}>
+        <p>{error ?? "Session not found."}</p>
+      </main>
+    );
+  }
+
+  return <HistoryDetail sessionId={sessionId} initialDetail={detail} />;
 }

@@ -52,7 +52,8 @@ def _session(session_id: str, started_at: str, scenario_id: str = "scenario-1"):
 @pytest.mark.asyncio
 async def test_history_requires_step_count(monkeypatch):
     class FakeRepo:
-        list_sessions = staticmethod(lambda stub_user_id=None: [])
+        async def list_sessions(self, stub_user_id=None):
+            return []
 
     app.dependency_overrides[history_routes._session_repo] = lambda: FakeRepo()
     transport = httpx.ASGITransport(app=app)
@@ -73,7 +74,8 @@ async def test_history_default_sort_and_page_size(monkeypatch):
     ]
 
     class FakeRepo:
-        list_sessions = staticmethod(lambda stub_user_id=None: sessions)
+        async def list_sessions(self, stub_user_id=None):
+            return sessions
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):
@@ -112,7 +114,8 @@ async def test_history_sort_ascending(monkeypatch):
     ]
 
     class FakeRepo:
-        list_sessions = staticmethod(lambda stub_user_id=None: sessions)
+        async def list_sessions(self, stub_user_id=None):
+            return sessions
 
     app.dependency_overrides[history_routes._session_repo] = lambda: FakeRepo()
     transport = httpx.ASGITransport(app=app)
@@ -136,7 +139,8 @@ async def test_history_filtering_by_category_and_search(monkeypatch):
     ]
 
     class FakeRepo:
-        list_sessions = staticmethod(lambda stub_user_id=None: sessions)
+        async def list_sessions(self, stub_user_id=None):
+            return sessions
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):

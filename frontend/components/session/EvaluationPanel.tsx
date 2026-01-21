@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+
 type EvaluationScore = {
   skillId: string;
   rating: number;

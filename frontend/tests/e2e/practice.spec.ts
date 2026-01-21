@@ -174,6 +174,10 @@ test("practice flow with mocked websocket events", async ({ page }) => {
   await page.getByText("Give constructive feedback to a peer").click();
 
   await page.getByRole("button", { name: /start practice/i }).click();
+  await page.waitForURL(/\/practice\/session-1/);
+  await page.waitForFunction(
+    () => (window as any).__lastWebSocket?.onmessage
+  );
 
   await page.evaluate(() =>
     (window as any).__emitWsMessage({
@@ -206,5 +210,5 @@ test("practice flow with mocked websocket events", async ({ page }) => {
     })
   );
 
-  await expect(page.getByText(/session ended/i)).toBeVisible();
+  await expect(page.locator("strong", { hasText: /session ended/i })).toBeVisible();
 });

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import struct
 import subprocess
 import tempfile
 from pathlib import Path

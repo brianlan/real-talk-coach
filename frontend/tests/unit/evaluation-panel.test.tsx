@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import EvaluationPanel from "../../components/session/EvaluationPanel";

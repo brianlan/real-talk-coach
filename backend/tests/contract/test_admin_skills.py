@@ -5,7 +5,6 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 
-from app.api.router import api_router
 from app.main import app
 from app.config import load_settings
 

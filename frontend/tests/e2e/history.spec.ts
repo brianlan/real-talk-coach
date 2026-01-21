@@ -136,5 +136,5 @@ test("browse history and practice again", async ({ page }) => {
   await expect(page.getByText("Nice work")).toBeVisible();
 
   await page.getByRole("button", { name: /practice again/i }).click();
-  await expect(page).toHaveURL(/\\/practice\\/session-2/);
+  await expect(page).toHaveURL(/\/practice\/session-2/);
 });

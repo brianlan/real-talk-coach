@@ -1,10 +1,21 @@
-import Link from "next/link";
+"use client";
 
-import { fetchHistoryList } from "@/services/api/history";
+import Link from "next/link";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+import { fetchHistoryList, SessionPage } from "@/services/api/history";
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
-async function fetchScenario(scenarioId: string) {
+type Scenario = {
+  id: string;
+  category?: string;
+  title?: string;
+  objective?: string;
+};
+
+async function fetchScenario(scenarioId: string): Promise<Scenario | null> {
   const response = await fetch(`${apiBase}/api/scenarios/${scenarioId}`, {
     cache: "no-store",
   });
@@ -14,44 +25,97 @@ async function fetchScenario(scenarioId: string) {
   return response.json();
 }
 
-export default async function HistoryPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{
-    search?: string;
-    category?: string;
-    sort?: "startedAtDesc" | "startedAtAsc";
-  }>;
-}) {
-  const resolvedSearchParams = searchParams ? await searchParams : {};
-  const history = await fetchHistoryList({
-    historyStepCount: 1,
-    page: 1,
-    pageSize: 20,
-    search: resolvedSearchParams.search,
-    category: resolvedSearchParams.category,
-    sort: resolvedSearchParams.sort,
-  });
+export default function HistoryPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [history, setHistory] = useState<SessionPage | null>(null);
+  const [scenarioMap, setScenarioMap] = useState<Map<string, Scenario>>(new Map());
+  const [categories, setCategories] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const scenarioIds = Array.from(
-    new Set(history.items.map((item) => item.scenarioId))
+  const search = searchParams.get("search") ?? "";
+  const category = searchParams.get("category") ?? "";
+  const sort = (searchParams.get("sort") as "startedAtDesc" | "startedAtAsc" | null) ??
+    "startedAtDesc";
+
+  useEffect(() => {
+    let canceled = false;
+    const loadHistory = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const next = await fetchHistoryList({
+          historyStepCount: 1,
+          page: 1,
+          pageSize: 20,
+          search: search || undefined,
+          category: category || undefined,
+          sort: sort || undefined,
+        });
+        if (canceled) {
+          return;
+        }
+        setHistory(next);
+        const scenarioIds = Array.from(
+          new Set(next.items.map((item) => item.scenarioId))
+        );
+        const scenarios = await Promise.all(
+          scenarioIds.map((scenarioId) => fetchScenario(scenarioId))
+        );
+        if (canceled) {
+          return;
+        }
+        const map = new Map(
+          scenarios
+            .filter(Boolean)
+            .map((scenario) => [scenario!.id, scenario as Scenario])
+        );
+        setScenarioMap(map);
+        setCategories(
+          Array.from(
+            new Set(
+              scenarios
+                .filter(Boolean)
+                .map((scenario) => scenario!.category)
+                .filter(Boolean) as string[]
+            )
+          )
+        );
+      } catch (err) {
+        if (!canceled) {
+          setError((err as Error).message);
+        }
+      } finally {
+        if (!canceled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadHistory();
+    return () => {
+      canceled = true;
+    };
+  }, [search, category, sort]);
+
+  const formKey = useMemo(
+    () => `${search}|${category}|${sort}`,
+    [search, category, sort]
   );
-  const scenarios = await Promise.all(
-    scenarioIds.map((scenarioId) => fetchScenario(scenarioId))
-  );
-  const scenarioMap = new Map(
-    scenarios
-      .filter(Boolean)
-      .map((scenario) => [scenario.id as string, scenario])
-  );
-  const categories = Array.from(
-    new Set(
-      scenarios
-        .filter(Boolean)
-        .map((scenario) => scenario.category as string)
-        .filter(Boolean)
-    )
-  );
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const nextQuery = new URLSearchParams();
+    for (const [key, value] of formData.entries()) {
+      if (value) {
+        nextQuery.set(key, String(value));
+      }
+    }
+    const queryString = nextQuery.toString();
+    router.push(queryString ? `/history?${queryString}` : "/history");
+  };
 
   return (
     <main style={{ padding: "48px 24px" }}>
@@ -67,6 +131,8 @@ export default async function HistoryPage({
         </header>
 
         <form
+          key={formKey}
+          onSubmit={handleSubmit}
           style={{
             display: "flex",
             flexWrap: "wrap",
@@ -77,7 +143,7 @@ export default async function HistoryPage({
           <input
             type="search"
             name="search"
-            defaultValue={resolvedSearchParams.search ?? ""}
+            defaultValue={search}
             placeholder="Search by scenario title or objective"
             style={{
               flex: "1 1 240px",
@@ -89,7 +155,7 @@ export default async function HistoryPage({
           />
           <select
             name="category"
-            defaultValue={resolvedSearchParams.category ?? ""}
+            defaultValue={category}
             style={{
               minWidth: 180,
               padding: "10px 12px",
@@ -99,15 +165,15 @@ export default async function HistoryPage({
             }}
           >
             <option value="">All categories</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
+            {categories.map((item) => (
+              <option key={item} value={item}>
+                {item}
               </option>
             ))}
           </select>
           <select
             name="sort"
-            defaultValue={resolvedSearchParams.sort ?? "startedAtDesc"}
+            defaultValue={sort}
             style={{
               minWidth: 180,
               padding: "10px 12px",
@@ -134,6 +200,8 @@ export default async function HistoryPage({
           </button>
         </form>
 
+        {error ? <p style={{ color: "#b24332" }}>{error}</p> : null}
+
         <div
           style={{
             display: "grid",
@@ -141,7 +209,18 @@ export default async function HistoryPage({
             gap: 24,
           }}
         >
-          {history.items.length === 0 ? (
+          {loading ? (
+            <div
+              style={{
+                border: "1px solid #e0d7cb",
+                borderRadius: 16,
+                padding: 24,
+                background: "rgba(255,255,255,0.7)",
+              }}
+            >
+              <p>Loading history...</p>
+            </div>
+          ) : history?.items.length === 0 ? (
             <div
               style={{
                 border: "1px solid #e0d7cb",
@@ -153,7 +232,7 @@ export default async function HistoryPage({
               <p>No sessions yet. Start a practice session to see history.</p>
             </div>
           ) : (
-            history.items.map((item) => {
+            history?.items.map((item) => {
               const scenario = scenarioMap.get(item.scenarioId);
               return (
                 <Link
