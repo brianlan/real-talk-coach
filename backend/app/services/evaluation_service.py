@@ -15,6 +15,7 @@ class EvaluationContext:
     session_id: str
     scenario_title: str
     objective: str
+    end_criteria: list[str]
     skill_summaries: list[dict[str, Any]]
     turns: list[dict[str, Any]]
 
@@ -35,6 +36,12 @@ def _format_skill_rubric(skill_summaries: list[dict[str, Any]]) -> str:
             f"{skill.get('skillId')}: {skill.get('name')} — {skill.get('rubric')}"
         )
     return "\n".join(lines)
+
+
+def _format_end_criteria(end_criteria: list[str]) -> str:
+    if not end_criteria:
+        return "Not provided"
+    return "\n".join(f"- {item}" for item in end_criteria)
 
 
 def _parse_tool_call(payload: dict[str, Any]) -> EvaluationResult:
@@ -90,6 +97,7 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
     )
     transcript = _format_transcript(context.turns)
     skill_rubric = _format_skill_rubric(context.skill_summaries)
+    end_criteria = _format_end_criteria(context.end_criteria)
     payload = {
         "model": settings.evaluator_model or settings.chatai_api_model,
         "messages": [
@@ -105,6 +113,7 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
                 "content": (
                     f"Scenario: {context.scenario_title}\n"
                     f"Objective: {context.objective}\n"
+                    f"End criteria:\n{end_criteria}\n"
                     f"Skills:\n{skill_rubric}\n"
                     f"Transcript:\n{transcript}"
                 ),

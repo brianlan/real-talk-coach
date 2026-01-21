@@ -103,10 +103,6 @@ def _persona_block(persona: dict[str, Any] | None, label: str) -> str:
 def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
     title = getattr(scenario, "title", "") or ""
     description = getattr(scenario, "description", "") or ""
-    objective = getattr(scenario, "objective", "") or ""
-    end_criteria = getattr(scenario, "end_criteria", None) or getattr(
-        scenario, "endCriteria", []
-    )
     prompt = getattr(scenario, "prompt", "") or ""
     ai_persona = getattr(scenario, "ai_persona", None) or getattr(
         scenario, "aiPersona", None
@@ -114,7 +110,6 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
     trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
         scenario, "traineePersona", None
     )
-    criteria_text = ", ".join(end_criteria) if end_criteria else "Not provided"
 
     system_lines = [
         "You are the AI roleplayer for a practice conversation.",
@@ -125,9 +120,6 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
         system_lines.append(f"Scenario title: {title}")
     if description:
         system_lines.append(f"Scenario description: {description}")
-    if objective:
-        system_lines.append(f"Objective: {objective}")
-    system_lines.append(f"End criteria: {criteria_text}")
     system_lines.append("You must start the conversation as the AI.")
 
     user_prompt = prompt or "Begin the conversation in character."
@@ -140,17 +132,12 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
 def _build_system_prompt(scenario: Any) -> str:
     title = getattr(scenario, "title", "") or ""
     description = getattr(scenario, "description", "") or ""
-    objective = getattr(scenario, "objective", "") or ""
-    end_criteria = getattr(scenario, "end_criteria", None) or getattr(
-        scenario, "endCriteria", []
-    )
     ai_persona = getattr(scenario, "ai_persona", None) or getattr(
         scenario, "aiPersona", None
     )
     trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
         scenario, "traineePersona", None
     )
-    criteria_text = ", ".join(end_criteria) if end_criteria else "Not provided"
     system_lines = [
         "You are the AI roleplayer for a practice conversation.",
         _persona_block(ai_persona, "Your persona"),
@@ -160,9 +147,6 @@ def _build_system_prompt(scenario: Any) -> str:
         system_lines.append(f"Scenario title: {title}")
     if description:
         system_lines.append(f"Scenario description: {description}")
-    if objective:
-        system_lines.append(f"Objective: {objective}")
-    system_lines.append(f"End criteria: {criteria_text}")
     system_lines.append("Stay in character and respond naturally to the trainee.")
     return "\n".join(system_lines)
 

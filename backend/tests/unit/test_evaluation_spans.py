@@ -216,6 +216,7 @@ async def test_evaluation_service_spans_include_session_id(monkeypatch):
         session_id="session-1",
         scenario_title="Scenario",
         objective="Objective",
+        end_criteria=["End the session after agreement."],
         skill_summaries=[{"skillId": "skill-1", "name": "Skill", "rubric": "Rubric"}],
         turns=[{"speaker": "ai", "transcript": "Hi"}],
     )

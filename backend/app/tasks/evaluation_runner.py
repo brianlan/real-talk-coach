@@ -230,6 +230,7 @@ async def _evaluate_once(session_id: str, repos: _Repos):
         session_id=session_id,
         scenario_title=scenario.title,
         objective=scenario.objective,
+        end_criteria=scenario.end_criteria,
         skill_summaries=scenario.skill_summaries,
         turns=[
             {"speaker": turn.speaker, "transcript": turn.transcript}
