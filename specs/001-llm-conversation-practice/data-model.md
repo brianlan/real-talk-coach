@@ -16,7 +16,7 @@ FastAPI + frontend clients can rely on contracts.
 - `skillSummaries` (virtual, array[object]) — `{skillId, name, rubric}` returned via API for convenience; derived by joining `skills` with the library at read time.
 - `idleLimitSeconds` (int, optional, default 8) — overrides contract default if set.
 - `durationLimitSeconds` (int, optional, default 300) — overrides contract default if set.
-- `prompt` (string, required) — system/prompt text for AI initiation turn.
+- `prompt` (string, optional) — admin-supplied opener for the AI initiation turn; if empty, the backend auto-generates an opening prompt from personas, title, and description.
 - `status` (enum: `draft` | `published`) — only `published` scenarios appear in catalog.
 - `createdAt/updatedAt` — LeanCloud timestamps.
 

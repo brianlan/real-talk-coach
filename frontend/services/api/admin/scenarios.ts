@@ -11,7 +11,7 @@ export type ScenarioInput = {
   traineePersona: { name: string; role: string; background: string };
   endCriteria: string[];
   skills: string[];
-  prompt: string;
+  prompt?: string;
   idleLimitSeconds?: number;
   durationLimitSeconds?: number;
   status?: string;

@@ -76,6 +76,8 @@ external services, and keep them automated.
 - [X] T023a [US1] Extend `backend/app/services/turn_pipeline.py` to detect qwen generation/ASR failures, persist termination reasons, emit guidance over WebSocket, and notify observability sinks.
 - [X] T023b [US1] Add missing/corrupt audio recovery in `backend/app/services/turn_pipeline.py`, preserving turn order, prompting clients to resend, and ensuring retries don’t corrupt session state.
 - [X] T023c [US1] Exclude objectives/endCriteria from roleplay prompts and include endCriteria in evaluator context in `backend/app/services/turn_pipeline.py` and `backend/app/services/evaluation_service.py`.
+- [X] T023d [US1] Auto-generate the initial roleplay prompt from personas/title/description when the admin prompt is empty in `backend/app/services/turn_pipeline.py`, with unit coverage in `backend/tests/unit/test_turn_pipeline_prompt.py`.
+- [X] T023e [US1] Allow empty admin prompt values and update validation/UI expectations in `backend/app/services/admin/scenarios_service.py` and `frontend/components/admin/ScenarioForm.tsx`.
 - [X] T024 [US1] Integrate Configurable Objective Check Model client and termination enforcement in `backend/app/services/objective_check.py`.
 - [X] T024a [US1] Invoke `backend/app/tasks/evaluation_runner.enqueue()` whenever a session transitions to a terminal state in `backend/app/services/session_service.py`, ensuring idempotency and log coverage.
 - [X] T025 [US1] Persist manual stop reasons + timer breaches via service hooks in `backend/app/services/session_service.py` to satisfy FR-003/FR-005/FR-007.

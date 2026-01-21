@@ -124,6 +124,14 @@ async def test_create_scenario_succeeds(client):
 
 
 @pytest.mark.asyncio
+async def test_create_scenario_allows_empty_prompt(client):
+    payload = _sample_payload()
+    payload["prompt"] = ""
+    res = await client.post("/api/admin/scenarios", json=payload, headers=_admin_headers())
+    assert res.status_code in {status.HTTP_200_OK, status.HTTP_201_CREATED}
+
+
+@pytest.mark.asyncio
 async def test_publish_requires_complete_fields(client):
     payload = _sample_payload()
     payload["skills"] = []

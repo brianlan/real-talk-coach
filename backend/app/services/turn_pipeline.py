@@ -100,6 +100,32 @@ def _persona_block(persona: dict[str, Any] | None, label: str) -> str:
     return f"{label}: {name} ({role}). Background: {background}"
 
 
+def _build_auto_prompt(scenario: Any) -> str:
+    title = getattr(scenario, "title", "") or ""
+    description = getattr(scenario, "description", "") or ""
+    ai_persona = getattr(scenario, "ai_persona", None) or getattr(
+        scenario, "aiPersona", None
+    )
+    trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
+        scenario, "traineePersona", None
+    )
+    ai_name = (ai_persona or {}).get("name") or "the AI roleplayer"
+    ai_role = (ai_persona or {}).get("role") or "role"
+    trainee_name = (trainee_persona or {}).get("name") or "the trainee"
+    trainee_role = (trainee_persona or {}).get("role") or "role"
+
+    parts: list[str] = [
+        f"Start as {ai_name} ({ai_role}) speaking with {trainee_name} ({trainee_role})."
+    ]
+    context_bits = " ".join(bit for bit in [title, description] if bit)
+    if context_bits:
+        parts.append(f"Context: {context_bits}")
+    parts.append(
+        "Open with a natural first line that fits the context and invites a response."
+    )
+    return " ".join(parts)
+
+
 def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
     title = getattr(scenario, "title", "") or ""
     description = getattr(scenario, "description", "") or ""
@@ -122,7 +148,7 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
         system_lines.append(f"Scenario description: {description}")
     system_lines.append("You must start the conversation as the AI.")
 
-    user_prompt = prompt or "Begin the conversation in character."
+    user_prompt = prompt or _build_auto_prompt(scenario)
     return [
         {"role": "system", "content": "\n".join(system_lines)},
         {"role": "user", "content": user_prompt},
