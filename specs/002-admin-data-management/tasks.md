@@ -3,7 +3,7 @@
 **Input**: Design documents from `/specs/002-admin-data-management/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: Tests were not explicitly requested in the feature specification; add them later if needed.
+**Tests**: Latest run (2026-01-24) — backend `pytest` passed; frontend `pnpm test` passed; frontend `pnpm playwright` passed.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -106,6 +106,7 @@
 - [X] T021 [P] [US3] Add admin sessions API client in `frontend/services/api/admin/sessions.ts`
 - [X] T022 [US3] Build sessions list page in `frontend/app/admin/sessions/page.tsx`
 - [X] T023 [US3] Build session detail page with delete confirmation in `frontend/app/admin/sessions/[sessionId]/page.tsx`
+- [X] T041 [US3] Show scenario title and formatted datetime in admin session list/detail via `backend/app/services/admin/sessions_service.py`, `frontend/app/admin/sessions/page.tsx`, and `frontend/app/admin/sessions/[sessionId]/page.tsx`
 
 **Checkpoint**: All user stories should now be independently functional
 

@@ -7,6 +7,19 @@ description: Generates communication training scenarios for Real Talk Coach. Use
 
 Creates complete communication training scenarios for the Real Talk Coach application. Takes a short scenario description and outputs a structured JSON with all required attributes for the scenario catalog.
 
+## Workflow (Must Follow)
+
+1) **Discuss first**: Before generating JSON, run a short discussion with the user to clarify ambiguities and propose improvements. Ask targeted questions until the scenario is well-defined.
+2) **Language confirmation**: Confirm the preferred language for scenario content (JSON values). Do not assume; ask explicitly if unclear.
+3) **Generate JSON**: Produce the scenario JSON with English keys and values in the confirmed language.
+4) **Save to `./scenario.json`**:
+   - If `./scenario.json` already exists, warn the user and ask for overwrite confirmation.
+   - Only write the file after the user explicitly confirms overwrite (or if the file does not exist).
+5) **Insert into DB**:
+   - Call `backend/scripts/insert_scenario.py` using `PYTHONPATH` and loading `.env`.
+   - Example invocation: `set -a; source backend/.env; set +a; PYTHONPATH=backend python backend/scripts/insert_scenario.py --file ./scenario.json`
+   - Report success with `objectId` and timestamps if returned.
+
 ## Input Format
 
 A brief description of the scenario to create, e.g.:
@@ -29,7 +42,27 @@ Returns a JSON object with:
 | endCriteria | array[string] | 2-3 measurable stop conditions |
 | requiredCommunicationSkills | array[string] | Skill IDs |
 
-**Language:** Generate scenario content (all JSON values) in the language the user uses. Keep JSON keys in English.
+**Language:** Confirm with the user which language to use for scenario content (all JSON values). Keep JSON keys in English.
+
+## Discussion Example
+
+**User:** “我要一个关于管理中信任受损的场景。”
+
+**Assistant:** “明白。为避免模糊，我先确认几件事并给出可选优化建议。”
+
+**Questions:**
+1) 你希望分类到 **Leadership** 还是 **Difficult Conversation**？
+2) 对话发生在什么背景压力下？（比如关键客户、合规、事故、裁员后资源紧张）
+3) 具体哪些行为导致对方感到不被信任？（选 1–2 个）
+4) 对方的具体角色与层级？
+5) 成功标准里是否需要“达成后续协作方式/检查频率”的条款？
+
+**Suggestions:**
+- 建议将压力来源具体化（比如关键客户上线节点），这样“收紧控制”更合理。
+- 可加入 1–2 个“可观察行为”，让评价更客观（如每日同步、逐行 review）。
+
+**Language Confirmation:**
+- “你希望场景内容用中文还是英文？（JSON key 仍为英文）”
 
 ## Category Taxonomy
 

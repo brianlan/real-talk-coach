@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockScenarioApi } from "./utils/scenario-mocks";
 
 test("practice flow with mocked websocket events", async ({ page }) => {
   await page.addInitScript(() => {
@@ -57,31 +58,23 @@ test("practice flow with mocked websocket events", async ({ page }) => {
     };
   });
 
-  await page.route("**/api/scenarios**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        items: [
-          {
-            id: "scenario-1",
-            category: "Difficult Feedback",
-            title: "Give constructive feedback to a peer",
-            description: "Scenario description",
-            objective: "Objective",
-            aiPersona: { name: "Alex", role: "PM", background: "Test" },
-            traineePersona: { name: "You", role: "Lead", background: "Test" },
-            endCriteria: ["End"],
-            skills: [],
-            skillSummaries: [],
-            idleLimitSeconds: 8,
-            durationLimitSeconds: 300,
-            prompt: "Prompt",
-          },
-        ],
-      }),
-    });
-  });
+  await mockScenarioApi(page, [
+    {
+      id: "scenario-1",
+      category: "Difficult Feedback",
+      title: "Give constructive feedback to a peer",
+      description: "Scenario description",
+      objective: "Objective",
+      aiPersona: { name: "Alex", role: "PM", background: "Test" },
+      traineePersona: { name: "You", role: "Lead", background: "Test" },
+      endCriteria: ["End"],
+      skills: [],
+      skillSummaries: [],
+      idleLimitSeconds: 8,
+      durationLimitSeconds: 300,
+      prompt: "Prompt",
+    },
+  ]);
 
   await page.route("**/api/skills", async (route) => {
     await route.fulfill({
@@ -169,9 +162,8 @@ test("practice flow with mocked websocket events", async ({ page }) => {
     });
   });
 
-  await page.goto("/scenarios");
+  await page.goto("/scenarios/scenario-1");
   await expect(page.getByText("Give constructive feedback to a peer")).toBeVisible();
-  await page.getByText("Give constructive feedback to a peer").click();
 
   await page.getByRole("button", { name: /start practice/i }).click();
   await page.waitForURL(/\/practice\/session-1/);

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockScenarioApi } from "./utils/scenario-mocks";
 
 test("browse history and practice again", async ({ page }) => {
   await page.route("**/api/sessions?**", async (route) => {
@@ -26,27 +27,23 @@ test("browse history and practice again", async ({ page }) => {
     });
   });
 
-  await page.route("**/api/scenarios/scenario-1", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        id: "scenario-1",
-        category: "Feedback",
-        title: "Give feedback",
-        description: "Scenario description",
-        objective: "Practice feedback",
-        aiPersona: { name: "Alex", role: "PM", background: "Test" },
-        traineePersona: { name: "You", role: "Lead", background: "Test" },
-        endCriteria: ["End"],
-        skills: [],
-        skillSummaries: [],
-        idleLimitSeconds: 8,
-        durationLimitSeconds: 300,
-        prompt: "Prompt",
-      }),
-    });
-  });
+  await mockScenarioApi(page, [
+    {
+      id: "scenario-1",
+      category: "Feedback",
+      title: "Give feedback",
+      description: "Scenario description",
+      objective: "Practice feedback",
+      aiPersona: { name: "Alex", role: "PM", background: "Test" },
+      traineePersona: { name: "You", role: "Lead", background: "Test" },
+      endCriteria: ["End"],
+      skills: [],
+      skillSummaries: [],
+      idleLimitSeconds: 8,
+      durationLimitSeconds: 300,
+      prompt: "Prompt",
+    },
+  ]);
 
   await page.route("**/api/sessions/session-1?**", async (route) => {
     await route.fulfill({

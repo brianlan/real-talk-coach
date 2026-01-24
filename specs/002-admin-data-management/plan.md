@@ -18,7 +18,7 @@ while preserving trainee flows and data integrity.
 **Language/Version**: Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15
 **Primary Dependencies**: FastAPI, Uvicorn, httpx, LeanCloud REST APIs, Next.js/React
 **Storage**: LeanCloud LObject/LFile for structured data + media references
-**Testing**: Pytest + httpx AsyncClient; Vitest + Testing Library + Playwright
+**Testing**: Pytest + httpx AsyncClient; Vitest + Testing Library + Playwright. Latest run (2026-01-24): `pytest`, `pnpm test`, `pnpm playwright` passed.
 **Target Platform**: Web app (admin UI) + Linux server (API)
 **Project Type**: Full-stack web (separate backend + frontend packages)
 **Performance Goals**: Admin list/search results visible within 2 seconds for typical datasets (<1k records)
