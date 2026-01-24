@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockScenarioApi } from "./utils/scenario-mocks";
 
 test("practice flow with mocked websocket events", async ({ page }) => {
   await page.addInitScript(() => {
@@ -57,31 +58,23 @@ test("practice flow with mocked websocket events", async ({ page }) => {
     };
   });
 
-  await page.route("**/api/scenarios**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        items: [
-          {
-            id: "scenario-1",
-            category: "Difficult Feedback",
-            title: "Give constructive feedback to a peer",
-            description: "Scenario description",
-            objective: "Objective",
-            aiPersona: { name: "Alex", role: "PM", background: "Test" },
-            traineePersona: { name: "You", role: "Lead", background: "Test" },
-            endCriteria: ["End"],
-            skills: [],
-            skillSummaries: [],
-            idleLimitSeconds: 8,
-            durationLimitSeconds: 300,
-            prompt: "Prompt",
-          },
-        ],
-      }),
-    });
-  });
+  await mockScenarioApi(page, [
+    {
+      id: "scenario-1",
+      category: "Difficult Feedback",
+      title: "Give constructive feedback to a peer",
+      description: "Scenario description",
+      objective: "Objective",
+      aiPersona: { name: "Alex", role: "PM", background: "Test" },
+      traineePersona: { name: "You", role: "Lead", background: "Test" },
+      endCriteria: ["End"],
+      skills: [],
+      skillSummaries: [],
+      idleLimitSeconds: 8,
+      durationLimitSeconds: 300,
+      prompt: "Prompt",
+    },
+  ]);
 
   await page.route("**/api/skills", async (route) => {
     await route.fulfill({
@@ -118,11 +111,65 @@ test("practice flow with mocked websocket events", async ({ page }) => {
     });
   });
 
-  await page.goto("/scenarios");
+  await page.route("**/api/sessions/session-1?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        session: {
+          id: "session-1",
+          scenarioId: "scenario-1",
+          stubUserId: "pilot-user",
+          status: "active",
+          terminationReason: null,
+          clientSessionStartedAt: "2025-01-01T00:00:00Z",
+          startedAt: "2025-01-01T00:00:00Z",
+          endedAt: null,
+          totalDurationSeconds: null,
+          idleLimitSeconds: 8,
+          durationLimitSeconds: 300,
+          wsChannel: "/ws/sessions/session-1",
+          objectiveStatus: "unknown",
+          objectiveReason: null,
+          evaluationId: null,
+        },
+        scenario: {
+          id: "scenario-1",
+          category: "Difficult Feedback",
+          title: "Give constructive feedback to a peer",
+          description: "Scenario description",
+          objective: "Objective",
+          aiPersona: { name: "Alex", role: "PM", background: "Test" },
+          traineePersona: { name: "You", role: "Lead", background: "Test" },
+          endCriteria: ["End"],
+          skills: [],
+          skillSummaries: [],
+          idleLimitSeconds: 8,
+          durationLimitSeconds: 300,
+          prompt: "Prompt",
+        },
+        turns: [],
+        evaluation: null,
+      }),
+    });
+  });
+
+  await page.route("**/api/sessions/session-1/evaluation", async (route) => {
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "not found" }),
+    });
+  });
+
+  await page.goto("/scenarios/scenario-1");
   await expect(page.getByText("Give constructive feedback to a peer")).toBeVisible();
-  await page.getByText("Give constructive feedback to a peer").click();
 
   await page.getByRole("button", { name: /start practice/i }).click();
+  await page.waitForURL(/\/practice\/session-1/);
+  await page.waitForFunction(
+    () => (window as any).__lastWebSocket?.onmessage
+  );
 
   await page.evaluate(() =>
     (window as any).__emitWsMessage({
@@ -155,5 +202,5 @@ test("practice flow with mocked websocket events", async ({ page }) => {
     })
   );
 
-  await expect(page.getByText(/session ended/i)).toBeVisible();
+  await expect(page.locator("strong", { hasText: /session ended/i })).toBeVisible();
 });

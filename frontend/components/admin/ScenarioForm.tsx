@@ -162,8 +162,13 @@ export function ScenarioForm({
       </div>
 
       <label style={{ display: "grid", gap: 6 }}>
-        <span>Prompt</span>
-        <textarea required value={values.prompt} onChange={handleChange("prompt")} style={{ padding: 10, borderRadius: 8, border: "1px solid #d9d3cb", minHeight: 80 }} />
+        <span>Prompt (optional)</span>
+        <textarea
+          value={values.prompt}
+          onChange={handleChange("prompt")}
+          placeholder="Leave blank to auto-generate the opening prompt."
+          style={{ padding: 10, borderRadius: 8, border: "1px solid #d9d3cb", minHeight: 80 }}
+        />
       </label>
 
       {error ? <p style={{ color: "#b24332" }}>{error}</p> : null}

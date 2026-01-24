@@ -5,6 +5,23 @@ from app.clients.leancloud import LeanCloudClient
 from app.clients.llm import EvaluatorClient, QwenClient
 
 
+@pytest.fixture(autouse=True)
+def _set_default_env(monkeypatch):
+    monkeypatch.setenv("LEAN_APP_ID", "app")
+    monkeypatch.setenv("LEAN_APP_KEY", "key")
+    monkeypatch.setenv("LEAN_MASTER_KEY", "master")
+    monkeypatch.setenv("LEAN_SERVER_URL", "https://api.leancloud.cn")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
+    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("CHATAI_API_KEY", "secret")
+    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
+    monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("STUB_USER_ID", "pilot-user")
+    monkeypatch.setenv("ADMIN_ACCESS_TOKEN", "admin-token")
+
+
 @pytest.fixture
 async def leancloud_client():
     async def handler(request):

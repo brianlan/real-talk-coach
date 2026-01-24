@@ -6,7 +6,7 @@
 **Input**: User description: "This is an app that contains both backend API and frontend UI that leverages the power of LLM (both text and speech) to help people to practice communication skills in everyday scenarios. 
 - Build a FastAPI/uvicorn/OpenAI AsyncClient backend plus frontend UI that lets trainees practice high-stakes conversations with an AI roleplayer powered by qwen3-omni-flash (speech + text).
 - Scenarios are predefined by admins and include category, title, description, objectives, personas/backgrounds for both parties, and explicit end criteria.
-- Practice flow: trainee selects a scenario, reviews context, AI initiates, turns alternate until objective met, timeout reached, or trainee stops; AI voices are generated via qwen3-omni-flash.
+- Practice flow: trainee selects a scenario, reviews context, AI initiates (using the admin-provided prompt or an auto-generated opener derived from scenario context/personas), turns alternate until objective met, timeout reached, or trainee stops; AI voices are generated via qwen3-omni-flash.
 - After each practice, transcripts/audio feed a text-only LLM for skill ratings (1–5) plus qualitative feedback; trainees can replay scenarios from history.
 - All session data, including LeanCloud LFiles that hold audio, is persisted via LeanCloud REST APIs; no additional auth scope beyond the single-tenant stub user in this release."
 
@@ -128,7 +128,7 @@ before implementation, with mocks/stubs specified for any external services.
 ### Key Entities *(include if feature involves data)*
 
 - **Scenario**: Category, title, description, objective, participant personas/backgrounds, end
-  criteria, prompts for AI initiation, and skill references.
+  criteria, optional prompt for AI initiation (auto-generated if empty), and skill references.
 - **PracticeSession**: Scenario reference, start/end timestamps, duration, termination reason, status,
   stub user ID, objective status + reason, cached limits, evaluation pointer, and WebSocket channel metadata.
 - **Turn**: PracticeSession reference, speaker (trainee or AI), transcript text, audio LeanCloud file

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.clients.leancloud import LeanCloudClient
 from app.config import load_settings
@@ -16,6 +16,7 @@ from app.services.session_service import (
     initiate_session,
     terminate_session,
 )
+from app.services.session_cleanup import cleanup_session
 from app.telemetry.tracing import emit_event
 from app.telemetry.otel import start_span
 
@@ -44,6 +45,8 @@ def _scenario_repo() -> ScenarioRepository:
     return ScenarioRepository(client)
 
 
+
+
 def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
     return {
         "id": session.id,
@@ -64,22 +67,6 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
     }
 
 
-def _scenario_response(scenario) -> dict[str, Any]:
-    return {
-        "id": scenario.id,
-        "category": scenario.category,
-        "title": scenario.title,
-        "description": scenario.description,
-        "objective": scenario.objective,
-        "aiPersona": scenario.ai_persona,
-        "traineePersona": scenario.trainee_persona,
-        "endCriteria": scenario.end_criteria,
-        "skills": scenario.skills,
-        "skillSummaries": scenario.skill_summaries,
-        "idleLimitSeconds": scenario.idle_limit_seconds,
-        "durationLimitSeconds": scenario.duration_limit_seconds,
-        "prompt": scenario.prompt,
-    }
 
 
 def _validate_scenario_for_practice(scenario) -> None:
@@ -116,55 +103,6 @@ def _validate_scenario_for_practice(scenario) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Scenario missing required fields: " + ", ".join(sorted(missing)),
         )
-
-
-def _turn_response(turn) -> dict[str, Any]:
-    return {
-        "id": turn.id,
-        "sessionId": turn.session_id,
-        "sequence": turn.sequence,
-        "speaker": turn.speaker,
-        "transcript": turn.transcript,
-        "audioFileId": turn.audio_file_id,
-        "audioUrl": turn.audio_url,
-        "asrStatus": turn.asr_status,
-        "createdAt": turn.created_at,
-        "startedAt": turn.started_at,
-        "endedAt": turn.ended_at,
-        "context": turn.context,
-        "latencyMs": turn.latency_ms,
-    }
-
-
-@router.get("/sessions")
-async def list_sessions(
-    page: int = Query(1, ge=1),
-    pageSize: int = Query(20, le=50),
-    scenarioId: str | None = None,
-    category: str | None = None,
-    search: str | None = None,
-    sort: str = Query("startedAtDesc"),
-    repo: SessionRepository = Depends(_repo),
-):
-    sessions = await repo.list_sessions(load_settings().stub_user_id)
-    items = [
-        session
-        for session in sessions
-        if (not scenarioId or session.scenario_id == scenarioId)
-    ]
-    if sort == "startedAtAsc":
-        items.sort(key=lambda item: item.started_at or "")
-    else:
-        items.sort(key=lambda item: item.started_at or "", reverse=True)
-    start = (page - 1) * pageSize
-    end = start + pageSize
-    paged = items[start:end]
-    return {
-        "items": [_session_response(item) for item in paged],
-        "page": page,
-        "pageSize": pageSize,
-        "total": len(items),
-    }
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
@@ -231,27 +169,34 @@ async def create_session(
     return _session_response(record)
 
 
-@router.get("/sessions/{session_id}")
-async def get_session(
+@router.post("/sessions/{session_id}/practice-again", status_code=status.HTTP_201_CREATED)
+async def practice_again(
     session_id: str,
-    historyStepCount: int = Query(..., ge=1),
+    payload: dict[str, Any],
+    background_tasks: BackgroundTasks,
     repo: SessionRepository = Depends(_repo),
     scenario_repo: ScenarioRepository = Depends(_scenario_repo),
 ):
-    session = await repo.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    settings = load_settings()
-    if session.stub_user_id != settings.stub_user_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    turns = await repo.list_turns(session_id)
-    scenario = await scenario_repo.get(session.scenario_id)
-    return {
-        "session": _session_response(session),
-        "scenario": _scenario_response(scenario) if scenario else None,
-        "turns": [_turn_response(turn) for turn in turns],
-        "evaluation": None,
-    }
+    with start_span("sessions.practice_again", {"sessionId": session_id}):
+        session = await repo.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        settings = load_settings()
+        if session.stub_user_id != settings.stub_user_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        client_started = payload.get("clientSessionStartedAt")
+        if not client_started:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        new_payload = PracticeSessionCreate(
+            scenarioId=session.scenario_id,
+            clientSessionStartedAt=client_started,
+        )
+        return await create_session(
+            new_payload,
+            background_tasks=background_tasks,
+            repo=repo,
+            scenario_repo=scenario_repo,
+        )
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -259,7 +204,7 @@ async def delete_session(session_id: str, repo: SessionRepository = Depends(_rep
     session = await repo.get_session(session_id)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    await repo.delete_session(session_id)
+    await cleanup_session(session_id)
     return None
 
 

@@ -5,6 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 
 import { getSession, deleteSession } from "@/services/api/admin/sessions";
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+};
+
 export default function SessionDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -48,13 +55,22 @@ export default function SessionDetailPage() {
       {notice ? <p style={{ color: "#1f7a3d" }}>{notice}</p> : null}
       {session && !loading && !error ? (
         <div style={{ display: "grid", gap: 8 }}>
+          {(() => {
+            const scenarioLabel = session.scenarioTitle
+              ? `${session.scenarioTitle} (${session.scenarioId})`
+              : session.scenarioId;
+            return (
+              <>
           <p><strong>ID:</strong> {session.id}</p>
-          <p><strong>Scenario:</strong> {session.scenarioId}</p>
+          <p><strong>Scenario:</strong> {scenarioLabel}</p>
           <p><strong>Status:</strong> {session.status}</p>
-          <p><strong>Started:</strong> {session.startedAt ?? ""}</p>
-          <p><strong>Ended:</strong> {session.endedAt ?? ""}</p>
+          <p><strong>Started:</strong> {formatDateTime(session.startedAt)}</p>
+          <p><strong>Ended:</strong> {formatDateTime(session.endedAt)}</p>
           <p><strong>Termination Reason:</strong> {session.terminationReason ?? ""}</p>
           <p><strong>Evaluation Status:</strong> {session.evaluationStatus ?? ""}</p>
+              </>
+            );
+          })()}
           <button
             type="button"
             onClick={() => setConfirming(true)}

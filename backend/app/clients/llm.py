@@ -38,12 +38,14 @@ class _BaseLLMClient:
         timeout: float = 60.0,
         retries: int = 0,
         transport: httpx.BaseTransport | None = None,
+        trust_env: bool = True,
     ) -> None:
         self._retries = retries
         self._http_client = httpx.AsyncClient(
             base_url=base_url,
             timeout=timeout,
             transport=transport,
+            trust_env=trust_env,
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -214,12 +216,16 @@ class QwenClient(_BaseLLMClient):
             raise LLMError("Missing 'model' or 'input' for qwen asr")
 
         audio_format = payload.get("format", "wav")
-        prompt = payload.get("prompt", "Transcribe the audio into text.")
+        prompt = payload.get("prompt", "Do not answer the speaker; output only the verbatim transcript in the original language.")
         stream = payload.get("stream", True)
         stream_options = payload.get("stream_options")
 
         audio_data_url = f"data:;base64,{audio_base64}"
         messages = [
+            {
+                "role": "system", 
+                "content": "You are a speech-to-text service. Respond only with the transcript."
+            },
             {
                 "role": "user",
                 "content": [
@@ -279,6 +285,24 @@ class QwenClient(_BaseLLMClient):
 
 
 class EvaluatorClient(_BaseLLMClient):
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        timeout: float = 60.0,
+        retries: int = 0,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        super().__init__(
+            base_url=base_url,
+            api_key=api_key,
+            timeout=timeout,
+            retries=retries,
+            transport=transport,
+            trust_env=False,
+        )
+
     def _should_retry(self, exc: Exception) -> bool:
         if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
             return True
@@ -335,6 +359,9 @@ class EvaluatorClient(_BaseLLMClient):
                     continue
                 status_code = getattr(exc, "status_code", None)
                 body = getattr(exc, "body", None)
+                if isinstance(exc, httpx.HTTPStatusError):
+                    status_code = exc.response.status_code
+                    body = exc.response.text
                 raise LLMError(
                     f"Evaluator failed: {str(exc)}",
                     status_code=status_code,

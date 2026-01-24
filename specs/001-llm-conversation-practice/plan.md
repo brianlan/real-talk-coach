@@ -157,6 +157,10 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   status so UI can show pending transcripts.
 - Client-provided timing data is formalized: `/api/sessions` accepts `clientSessionStartedAt`, and
   every trainee turn includes `startedAt/endedAt` so the backend can compute drift and idle/total duration.
+- Roleplay prompts include personas and scenario context only; objectives/end criteria stay server-side
+  for objective-check + evaluation to avoid steering the roleplay.
+- If the admin prompt is empty, the backend auto-generates a short opener using personas, title, and
+  description to start the roleplay naturally.
 - Turn handling module wraps the OpenAI Python AsyncClient for qwen (`stream=True`, `modalities=["text","audio"]`, `audio={"voice": …, "format": "wav"}`). The AsyncClient automatically handles Server-Sent Events (SSE) streaming format and accumulates text and audio chunks. **Implementation Note**: Qwen returns raw PCM audio data (16-bit signed integer, 24kHz, mono) without WAV headers. The backend detects audio format by checking for "RIFF" header bytes and converts raw PCM to MP3 using ffmpeg with appropriate flags (`-f s16le -ar 24000 -ac 1` for PCM, standard WAV handling for files with RIFF headers). The converted MP3 is uploaded to LeanCloud with references persisted alongside transcripts. The browser records low-bitrate WebM/Opus, and the backend transcodes it to MP3 before LeanCloud upload to satisfy the 128 KB LFile constraint. The practice room UI plays AI audio per turn and falls back to a manual play control when autoplay is blocked.
 - Evaluation API exposes cached results plus a safe requeue endpoint; FastAPI background tasks pick
   up pending evaluations/ASR work, handle retries while the process stays alive, and update LeanCloud.

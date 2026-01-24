@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 
 import { listSessions, deleteSession } from "@/services/api/admin/sessions";
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+};
+
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,33 +46,41 @@ export default function SessionsPage() {
       {error ? <p style={{ color: "#b24332" }}>{error}</p> : null}
       {!loading && sessions.length === 0 ? <p>No sessions found.</p> : null}
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}>
-        {sessions.map((session) => (
-          <li
-            key={session.id}
-            style={{
-              border: "1px solid #e4ddd4",
-              borderRadius: 12,
-              padding: 12,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <h3 style={{ margin: "0 0 4px" }}>{session.id}</h3>
-                <p style={{ margin: 0, color: "#4a433b" }}>Scenario: {session.scenarioId}</p>
-                <p style={{ margin: 0, color: "#4a433b" }}>Status: {session.status}</p>
+        {sessions.map((session) => {
+          const scenarioLabel = session.scenarioTitle
+            ? `${session.scenarioTitle} (${session.scenarioId})`
+            : session.scenarioId;
+          return (
+            <li
+              key={session.id}
+              style={{
+                border: "1px solid #e4ddd4",
+                borderRadius: 12,
+                padding: 12,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ margin: "0 0 4px" }}>{session.id}</h3>
+                  <p style={{ margin: 0, color: "#4a433b" }}>Scenario: {scenarioLabel}</p>
+                  <p style={{ margin: 0, color: "#4a433b" }}>
+                    Started: {formatDateTime(session.startedAt)}
+                  </p>
+                  <p style={{ margin: 0, color: "#4a433b" }}>Status: {session.status}</p>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(session.id)}
+                    style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d9d3cb" }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(session.id)}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d9d3cb" }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

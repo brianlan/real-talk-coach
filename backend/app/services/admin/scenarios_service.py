@@ -48,7 +48,6 @@ def _validate_required(data: dict[str, Any]) -> None:
         "traineePersona",
         "endCriteria",
         "skills",
-        "prompt",
     ]
     missing = [field for field in required if not data.get(field)]
     if missing:

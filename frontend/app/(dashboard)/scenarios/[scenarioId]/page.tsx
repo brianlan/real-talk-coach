@@ -1,55 +1,111 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
-async function fetchScenario(scenarioId: string) {
-  const response = await fetch(
-    `${apiBase}/api/scenarios/${scenarioId}?historyStepCount=1`,
-    { cache: "no-store" }
-  );
-  if (!response.ok) {
-    return null;
-  }
-  return response.json();
-}
+type Scenario = {
+  id: string;
+  category?: string;
+  title?: string;
+  description?: string;
+  objective?: string;
+  aiPersona?: { name?: string; background?: string };
+  traineePersona?: { name?: string; background?: string };
+  endCriteria?: string[];
+};
 
-async function createSession(scenarioId: string) {
-  const response = await fetch(`${apiBase}/api/sessions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      scenarioId,
-      clientSessionStartedAt: new Date().toISOString(),
-    }),
-  });
-  if (!response.ok) {
-    return null;
-  }
-  return response.json();
-}
+export default function ScenarioDetailPage() {
+  const params = useParams<{ scenarioId: string }>();
+  const router = useRouter();
+  const scenarioId = params?.scenarioId;
+  const [scenario, setScenario] = useState<Scenario | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
-export default async function ScenarioDetailPage({
-  params,
-}: {
-  params: Promise<{ scenarioId: string }>;
-}) {
-  const resolvedParams = await params;
-  const scenario = await fetchScenario(resolvedParams.scenarioId);
-  if (!scenario) {
+  useEffect(() => {
+    let canceled = false;
+    const loadScenario = async () => {
+      if (!scenarioId) {
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(
+          `${apiBase}/api/scenarios/${scenarioId}?historyStepCount=1`,
+          { cache: "no-store" }
+        );
+        if (!response.ok) {
+          throw new Error("Scenario not found.");
+        }
+        const data = (await response.json()) as Scenario;
+        if (!canceled) {
+          setScenario(data);
+        }
+      } catch (err) {
+        if (!canceled) {
+          setScenario(null);
+          setError((err as Error).message);
+        }
+      } finally {
+        if (!canceled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadScenario();
+    return () => {
+      canceled = true;
+    };
+  }, [scenarioId]);
+
+  const startPractice = async () => {
+    if (!scenarioId || starting) {
+      return;
+    }
+    setStarting(true);
+    setError(null);
+    try {
+      const response = await fetch(`${apiBase}/api/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenarioId,
+          clientSessionStartedAt: new Date().toISOString(),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to start practice session.");
+      }
+      const session = await response.json();
+      if (!session?.id) {
+        throw new Error("Failed to start practice session.");
+      }
+      router.push(`/practice/${session.id}`);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  if (loading) {
     return (
       <main style={{ padding: "48px 24px" }}>
-        <p>Scenario not found.</p>
+        <p>Loading scenario...</p>
       </main>
     );
   }
 
-  async function startPractice() {
-    "use server";
-    const session = await createSession(resolvedParams.scenarioId);
-    if (!session?.id) {
-      redirect("/scenarios");
-    }
-    redirect(`/practice/${session.id}`);
+  if (!scenario) {
+    return (
+      <main style={{ padding: "48px 24px" }}>
+        <p>{error ?? "Scenario not found."}</p>
+      </main>
+    );
   }
 
   return (
@@ -76,7 +132,7 @@ export default async function ScenarioDetailPage({
           <p>{scenario.objective}</p>
           <h3>End criteria</h3>
           <ul>
-            {(scenario.endCriteria ?? []).map((item: string) => (
+            {(scenario.endCriteria ?? []).map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
@@ -109,9 +165,11 @@ export default async function ScenarioDetailPage({
           </div>
         </div>
 
-        <form action={startPractice} style={{ marginTop: 32 }}>
+        <div style={{ marginTop: 32, display: "flex", gap: 16, flexWrap: "wrap" }}>
           <button
-            type="submit"
+            type="button"
+            onClick={startPractice}
+            disabled={starting}
             style={{
               padding: "14px 28px",
               borderRadius: 999,
@@ -119,12 +177,13 @@ export default async function ScenarioDetailPage({
               background: "#2f2a24",
               color: "#f7f0e6",
               fontSize: 16,
-              cursor: "pointer",
+              cursor: starting ? "not-allowed" : "pointer",
             }}
           >
-            Start practice
+            {starting ? "Starting..." : "Start practice"}
           </button>
-        </form>
+          {error ? <p style={{ margin: 0, color: "#b24332" }}>{error}</p> : null}
+        </div>
       </section>
     </main>
   );

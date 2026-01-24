@@ -71,6 +71,10 @@ async def test_capacity_limit_returns_429(monkeypatch):
                 "Scenario",
                 (),
                 {
+                    "ai_persona": {"name": "AI", "background": "Background"},
+                    "trainee_persona": {"name": "Trainee", "background": "Background"},
+                    "objective": "Objective",
+                    "end_criteria": ["End"],
                     "prompt": "Hello",
                     "status": "published",
                     "idle_limit_seconds": 8,
@@ -115,6 +119,10 @@ async def test_pending_limit_returns_429(monkeypatch):
                 "Scenario",
                 (),
                 {
+                    "ai_persona": {"name": "AI", "background": "Background"},
+                    "trainee_persona": {"name": "Trainee", "background": "Background"},
+                    "objective": "Objective",
+                    "end_criteria": ["End"],
                     "prompt": "Hello",
                     "status": "published",
                     "idle_limit_seconds": 8,

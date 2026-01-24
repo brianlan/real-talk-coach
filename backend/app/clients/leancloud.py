@@ -107,9 +107,18 @@ class LeanCloudClient:
     async def create_signed_urls(
         self, urls: list[str], ttl_seconds: int = 900
     ) -> dict[str, str]:
-        payload = {"urls": urls, "ttl": ttl_seconds}
-        response = await self.post_json("/1.1/fileTokens", payload)
-        signed_urls = response.get("signedUrls")
-        if not isinstance(signed_urls, dict):
-            raise LeanCloudError("LeanCloud signed URL response missing 'signedUrls'")
-        return signed_urls
+        clean_urls = [url for url in urls if url]
+        if not clean_urls:
+            return {}
+        payload = {"urls": clean_urls, "ttl": ttl_seconds}
+        try:
+            response = await self.post_json("/1.1/fileTokens", payload)
+            signed_urls = response.get("signedUrls")
+            if isinstance(signed_urls, dict):
+                return signed_urls
+        except LeanCloudError as exc:
+            # Fallback to raw URLs if signing is unsupported by the backend.
+            if exc.status_code:
+                return {url: url for url in clean_urls}
+            raise
+        raise LeanCloudError("LeanCloud signed URL response missing 'signedUrls'")

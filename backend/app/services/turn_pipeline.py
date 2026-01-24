@@ -100,13 +100,35 @@ def _persona_block(persona: dict[str, Any] | None, label: str) -> str:
     return f"{label}: {name} ({role}). Background: {background}"
 
 
+def _build_auto_prompt(scenario: Any) -> str:
+    title = getattr(scenario, "title", "") or ""
+    description = getattr(scenario, "description", "") or ""
+    ai_persona = getattr(scenario, "ai_persona", None) or getattr(
+        scenario, "aiPersona", None
+    )
+    trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
+        scenario, "traineePersona", None
+    )
+    ai_name = (ai_persona or {}).get("name") or "the AI roleplayer"
+    ai_role = (ai_persona or {}).get("role") or "role"
+    trainee_name = (trainee_persona or {}).get("name") or "the trainee"
+    trainee_role = (trainee_persona or {}).get("role") or "role"
+
+    parts: list[str] = [
+        f"Start as {ai_name} ({ai_role}) speaking with {trainee_name} ({trainee_role})."
+    ]
+    context_bits = " ".join(bit for bit in [title, description] if bit)
+    if context_bits:
+        parts.append(f"Context: {context_bits}")
+    parts.append(
+        "Open with a natural first line that fits the context and invites a response."
+    )
+    return " ".join(parts)
+
+
 def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
     title = getattr(scenario, "title", "") or ""
     description = getattr(scenario, "description", "") or ""
-    objective = getattr(scenario, "objective", "") or ""
-    end_criteria = getattr(scenario, "end_criteria", None) or getattr(
-        scenario, "endCriteria", []
-    )
     prompt = getattr(scenario, "prompt", "") or ""
     ai_persona = getattr(scenario, "ai_persona", None) or getattr(
         scenario, "aiPersona", None
@@ -114,7 +136,6 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
     trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
         scenario, "traineePersona", None
     )
-    criteria_text = ", ".join(end_criteria) if end_criteria else "Not provided"
 
     system_lines = [
         "You are the AI roleplayer for a practice conversation.",
@@ -125,12 +146,9 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
         system_lines.append(f"Scenario title: {title}")
     if description:
         system_lines.append(f"Scenario description: {description}")
-    if objective:
-        system_lines.append(f"Objective: {objective}")
-    system_lines.append(f"End criteria: {criteria_text}")
     system_lines.append("You must start the conversation as the AI.")
 
-    user_prompt = prompt or "Begin the conversation in character."
+    user_prompt = prompt or _build_auto_prompt(scenario)
     return [
         {"role": "system", "content": "\n".join(system_lines)},
         {"role": "user", "content": user_prompt},
@@ -140,17 +158,12 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
 def _build_system_prompt(scenario: Any) -> str:
     title = getattr(scenario, "title", "") or ""
     description = getattr(scenario, "description", "") or ""
-    objective = getattr(scenario, "objective", "") or ""
-    end_criteria = getattr(scenario, "end_criteria", None) or getattr(
-        scenario, "endCriteria", []
-    )
     ai_persona = getattr(scenario, "ai_persona", None) or getattr(
         scenario, "aiPersona", None
     )
     trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
         scenario, "traineePersona", None
     )
-    criteria_text = ", ".join(end_criteria) if end_criteria else "Not provided"
     system_lines = [
         "You are the AI roleplayer for a practice conversation.",
         _persona_block(ai_persona, "Your persona"),
@@ -160,9 +173,6 @@ def _build_system_prompt(scenario: Any) -> str:
         system_lines.append(f"Scenario title: {title}")
     if description:
         system_lines.append(f"Scenario description: {description}")
-    if objective:
-        system_lines.append(f"Objective: {objective}")
-    system_lines.append(f"End criteria: {criteria_text}")
     system_lines.append("Stay in character and respond naturally to the trainee.")
     return "\n".join(system_lines)
 
@@ -252,7 +262,7 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
                 print(f"[{session_id}] Calling Qwen API with model: {QWEN_MODEL}, voice_id: {settings.qwen_voice_id}")  # DEBUG
                 logger.info(f"[{session_id}] Calling Qwen API with model: {QWEN_MODEL}, voice_id: {settings.qwen_voice_id}")
                 generation_response = await qwen_client.generate(payload)
-                print(f"[{session_id}] Qwen API call successful, response: {generation_response}")  # DEBUG
+                # print(f"[{session_id}] Qwen API call successful, response: {generation_response}")  # DEBUG
                 logger.info(f"[{session_id}] Qwen API call successful")
             except Exception as exc:
                 print(f"[{session_id}] Qwen generation failed: {exc}")  # DEBUG
