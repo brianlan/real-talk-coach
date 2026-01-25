@@ -143,3 +143,4 @@ LAN dev started.
 - Backend (HTTPS API): https://$LAN_IP:8443
 Logs: $LOG_DIR
 Stop: scripts/dev-lan.sh --stop
+EOF
