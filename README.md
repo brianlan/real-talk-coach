@@ -92,6 +92,12 @@ Recommended options:
 2) **Self-signed** (current): works for LAN dev but requires manual browser trust and
    `NODE_TLS_REJECT_UNAUTHORIZED=0` for server-side fetches.
 
+## Practice session language & opening prompt
+- The scenario detail page includes a **language selector** (中文 / English) before starting practice.
+- The selected language is sent when creating a session (`language: "zh" | "en"`).
+- The backend generates an **LLM-based opening prompt** using `CHATAI_API_*`, stores it on the
+  session as `openingPrompt`, and uses it to seed the first AI turn.
+
 ### Admin usage
 
 - Set `ADMIN_ACCESS_TOKEN` (backend) and `NEXT_PUBLIC_ADMIN_TOKEN` (frontend) with the same value.
