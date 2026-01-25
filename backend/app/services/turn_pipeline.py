@@ -253,6 +253,10 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
         ):
             logger.info(f"[{session_id}] Starting AI turn initiation")
             messages = _build_initiation_messages(scenario)
+            prompt_dump = "\n\n".join(
+                f"{message.get('role')}: {message.get('content')}" for message in messages
+            )
+            logger.info(f"[{session_id}] INIT_PROMPT\n{prompt_dump}")
             try:
                 payload = _qwen_generation_payload(
                     model=QWEN_MODEL,
