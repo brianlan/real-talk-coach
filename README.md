@@ -38,6 +38,60 @@ cd frontend
 pnpm dev --port 3000
 ```
 
+## Remote/LAN dev (access from another machine)
+Recording audio requires a secure context (HTTPS). For LAN access, use the HTTPS proxy
+and run backend with TLS.
+
+Quick start:
+```bash
+scripts/dev-lan.sh --mkcert
+```
+
+1) Backend HTTPS (bind to all interfaces):
+```bash
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8443 \
+  --ssl-keyfile ../frontend/.certs/key.pem \
+  --ssl-certfile ../frontend/.certs/cert.pem \
+  --env-file .env
+```
+
+2) Frontend HTTP (bind to all interfaces):
+```bash
+cd frontend
+pnpm dev --hostname 0.0.0.0 --port 3000
+```
+
+3) HTTPS proxy for the browser:
+```bash
+cd frontend
+node https-dev-server.cjs
+```
+
+4) Frontend env for LAN:
+```
+NEXT_PUBLIC_API_BASE=https://<LAN_IP>:8443
+NEXT_PUBLIC_WS_BASE=wss://<LAN_IP>:8443/ws
+NODE_TLS_REJECT_UNAUTHORIZED=0
+```
+Then open `https://<LAN_IP>:3443` in the remote browser and accept the self-signed
+certificate warning.
+
+Notes:
+- `NODE_TLS_REJECT_UNAUTHORIZED=0` is **dev-only** to allow Next.js server-side fetches
+  against the self-signed backend cert.
+- If you don’t want to disable TLS verification, use a trusted certificate instead (see below).
+
+## Certificates (dev)
+The HTTPS proxy and backend TLS use `frontend/.certs/cert.pem` and `frontend/.certs/key.pem`.
+Do **not** commit private keys. Keep certs local and regenerate on each machine.
+
+Recommended options:
+1) **Local CA (mkcert)**: create a trusted dev cert on each machine, install the CA,
+   and place the generated `cert.pem`/`key.pem` in `frontend/.certs/`.
+2) **Self-signed** (current): works for LAN dev but requires manual browser trust and
+   `NODE_TLS_REJECT_UNAUTHORIZED=0` for server-side fetches.
+
 ### Admin usage
 
 - Set `ADMIN_ACCESS_TOKEN` (backend) and `NEXT_PUBLIC_ADMIN_TOKEN` (frontend) with the same value.

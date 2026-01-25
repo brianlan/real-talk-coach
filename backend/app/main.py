@@ -10,7 +10,17 @@ from app.api.routes.session_socket import router as session_socket_router
 
 CORS_ORIGINS = [
     "http://localhost:3000",
+    "https://localhost:3443",
     "http://127.0.0.1:3000",
+    "https://127.0.0.1:3443",
+    "http://192.168.71.57:3000",
+    "https://192.168.71.57:3443",
+    "http://95.181.189.112:3000",
+    "https://95.181.189.112:3443",
+    "http://10.243.80.19:3000",
+    "https://10.243.80.19:3443",
+    "http://116.237.174.249:3000",
+    "https://116.237.174.249:3443",
 ]
 
 
