@@ -14,6 +14,8 @@ class PracticeSessionRecord:
     id: str
     scenario_id: str
     stub_user_id: str
+    language: str | None
+    opening_prompt: str | None
     status: str
     client_session_started_at: str
     started_at: str | None
@@ -56,6 +58,14 @@ def _normalize_termination_reason(raw: Any) -> str | None:
 def _normalize_evaluation_id(raw: Any) -> str | None:
     if isinstance(raw, dict):
         return raw.get("id") or raw.get("objectId")
+    if isinstance(raw, str):
+        return raw
+    return None
+
+
+def _normalize_opening_prompt(raw: Any) -> str | None:
+    if isinstance(raw, dict):
+        return raw.get("text") or raw.get("prompt")
     if isinstance(raw, str):
         return raw
     return None
@@ -119,6 +129,8 @@ def _session_from_lc(payload: dict[str, Any]) -> PracticeSessionRecord:
         id=payload["objectId"],
         scenario_id=payload.get("scenarioId", ""),
         stub_user_id=payload.get("stubUserId", ""),
+        language=payload.get("language"),
+        opening_prompt=_normalize_opening_prompt(payload.get("openingPrompt")),
         status=payload.get("status", "pending"),
         client_session_started_at=_normalize_date(payload.get("clientSessionStartedAt"))
         or "",
@@ -159,7 +171,11 @@ class SessionRepository:
 
     async def create_session(self, payload: dict[str, Any]) -> PracticeSessionRecord:
         normalized = dict(payload)
-        date_fields = ["clientSessionStartedAt", "startedAt", "endedAt"]
+        date_fields = [
+            "clientSessionStartedAt",
+            "startedAt",
+            "endedAt",
+        ]
         try:
             response = await self._client.post_json(
                 "/1.1/classes/PracticeSession", normalized

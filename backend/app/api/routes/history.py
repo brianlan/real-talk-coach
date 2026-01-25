@@ -63,6 +63,8 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
         "id": session.id,
         "scenarioId": session.scenario_id,
         "stubUserId": session.stub_user_id,
+        "language": session.language,
+        "openingPrompt": session.opening_prompt,
         "status": session.status,
         "terminationReason": session.termination_reason,
         "clientSessionStartedAt": session.client_session_started_at,

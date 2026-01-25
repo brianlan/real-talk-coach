@@ -19,16 +19,18 @@ LOG_PROXY="$LOG_DIR/frontend-https-proxy.log"
 
 LAN_IP=""
 DO_STOP=0
+DO_FORCE=0
 DO_MKCERT=0
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/dev-lan.sh [--lan-ip <ip>] [--mkcert] [--stop]
+Usage: scripts/dev-lan.sh [--lan-ip <ip>] [--mkcert] [--stop] [--force]
 
 Options:
   --lan-ip <ip>  LAN IP to use in printed URLs and env (default: auto-detect)
   --mkcert       Generate/refresh certs using mkcert
   --stop         Stop LAN dev processes started by this script
+  --force        On --stop, also kill any process listening on 3000/3443/8443
 USAGE
 }
 
@@ -44,6 +46,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --stop)
       DO_STOP=1
+      shift
+      ;;
+    --force)
+      DO_FORCE=1
       shift
       ;;
     -h|--help)
@@ -90,6 +96,35 @@ if [[ "$DO_STOP" -eq 1 ]]; then
   stop_pid "frontend https proxy" "$PID_PROXY"
   stop_pid "frontend dev" "$PID_FRONTEND"
   stop_pid "backend" "$PID_BACKEND"
+  if [[ "$DO_FORCE" -eq 1 ]]; then
+    for port in 3000 3443 8443; do
+      if command -v ss >/dev/null 2>&1; then
+        if command -v rg >/dev/null 2>&1; then
+          pids=$(ss -ltnp 2>/dev/null | rg ":$port" | sed -n 's/.*pid=\\([0-9]\\+\\).*/\\1/p')
+        else
+          pids=$(ss -ltnp 2>/dev/null | grep ":$port" | sed -n 's/.*pid=\\([0-9]\\+\\).*/\\1/p')
+        fi
+      elif command -v lsof >/dev/null 2>&1; then
+        pids=$(lsof -nP -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+      else
+        pids=""
+      fi
+      if [[ -n "$pids" ]]; then
+        echo "Force-stopping processes on port $port: $pids"
+        kill $pids 2>/dev/null || true
+        sleep 1
+        kill -9 $pids 2>/dev/null || true
+      fi
+      if [[ -z "$pids" ]]; then
+        if command -v fuser >/dev/null 2>&1; then
+          fuser -k "${port}/tcp" 2>/dev/null || true
+        fi
+        # Fallback: kill known dev server processes
+        pkill -f "next-server" 2>/dev/null || true
+        pkill -f "next dev" 2>/dev/null || true
+      fi
+    done
+  fi
   exit 0
 fi
 

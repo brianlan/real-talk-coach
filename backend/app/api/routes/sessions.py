@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -52,6 +53,8 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
         "id": session.id,
         "scenarioId": session.scenario_id,
         "stubUserId": session.stub_user_id,
+        "language": session.language,
+        "openingPrompt": session.opening_prompt,
         "status": session.status,
         "terminationReason": session.termination_reason,
         "clientSessionStartedAt": session.client_session_started_at,
@@ -105,6 +108,18 @@ def _validate_scenario_for_practice(scenario) -> None:
         )
 
 
+def _detect_language(scenario) -> str:
+    text_bits = [
+        getattr(scenario, "title", "") or "",
+        getattr(scenario, "description", "") or "",
+        getattr(scenario, "objective", "") or "",
+    ]
+    text = " ".join(bit for bit in text_bits if bit)
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "zh"
+    return "en"
+
+
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
 async def create_session(
     payload: PracticeSessionCreate,
@@ -124,6 +139,7 @@ async def create_session(
                 detail="Scenario is not available for practice.",
             )
         _validate_scenario_for_practice(scenario)
+        language = payload.language or _detect_language(scenario)
         try:
             enforce_drift(payload.clientSessionStartedAt, datetime.now(timezone.utc))
         except ValueError as exc:
@@ -143,6 +159,8 @@ async def create_session(
             {
                 "scenarioId": payload.scenarioId,
                 "stubUserId": settings.stub_user_id,
+                "language": language,
+                "openingPrompt": None,
                 "status": "pending",
                 "clientSessionStartedAt": payload.clientSessionStartedAt.isoformat(),
                 "startedAt": now,
@@ -164,7 +182,9 @@ async def create_session(
             {"wsChannel": f"/ws/sessions/{record.id}"},
         ) or record
     emit_event("session.created", session_id=record.id)
-    background_tasks.add_task(initiate_session, repo, record.id, scenario=scenario)
+    background_tasks.add_task(
+        initiate_session, repo, record.id, scenario=scenario, language=language
+    )
 
     return _session_response(record)
 
@@ -190,6 +210,7 @@ async def practice_again(
         new_payload = PracticeSessionCreate(
             scenarioId=session.scenario_id,
             clientSessionStartedAt=client_started,
+            language=session.language,
         )
         return await create_session(
             new_payload,

@@ -126,7 +126,13 @@ def _build_auto_prompt(scenario: Any) -> str:
     return " ".join(parts)
 
 
-def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
+def _language_label(language: str) -> str:
+    return "Simplified Chinese" if language == "zh" else "English"
+
+
+def _build_initiation_messages(
+    scenario: Any, *, opening_prompt: str | None = None, language: str | None = None
+) -> list[dict[str, str]]:
     title = getattr(scenario, "title", "") or ""
     description = getattr(scenario, "description", "") or ""
     prompt = getattr(scenario, "prompt", "") or ""
@@ -147,8 +153,10 @@ def _build_initiation_messages(scenario: Any) -> list[dict[str, str]]:
     if description:
         system_lines.append(f"Scenario description: {description}")
     system_lines.append("You must start the conversation as the AI.")
+    if language:
+        system_lines.append(f"Use {_language_label(language)} for all responses.")
 
-    user_prompt = prompt or _build_auto_prompt(scenario)
+    user_prompt = opening_prompt or prompt or _build_auto_prompt(scenario)
     return [
         {"role": "system", "content": "\n".join(system_lines)},
         {"role": "user", "content": user_prompt},
@@ -226,7 +234,9 @@ def _build_turn_messages(
     return messages
 
 
-async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
+async def generate_initial_ai_turn(
+    *, session_id: str, scenario: Any, opening_prompt: str | None = None, language: str | None = None
+) -> None:
     import logging
     logger = logging.getLogger(__name__)
 
@@ -252,11 +262,14 @@ async def generate_initial_ai_turn(*, session_id: str, scenario: Any) -> None:
             {"sessionId": session_id},
         ):
             logger.info(f"[{session_id}] Starting AI turn initiation")
-            messages = _build_initiation_messages(scenario)
+            messages = _build_initiation_messages(
+                scenario, opening_prompt=opening_prompt, language=language
+            )
             prompt_dump = "\n\n".join(
                 f"{message.get('role')}: {message.get('content')}" for message in messages
             )
             logger.info(f"[{session_id}] INIT_PROMPT\n{prompt_dump}")
+            print(f"[{session_id}] INIT_PROMPT\n{prompt_dump}", flush=True)
             try:
                 payload = _qwen_generation_payload(
                     model=QWEN_MODEL,

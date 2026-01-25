@@ -81,6 +81,7 @@ async def initiate_session(
     session_id: str,
     *,
     scenario: Any,
+    language: str,
 ) -> None:
     print(f"[{session_id}] ===== initiate_session called =====")  # DEBUG
     logger.info(f"[{session_id}] initiate_session called")
@@ -95,10 +96,45 @@ async def initiate_session(
     if not session:
         logger.error(f"[{session_id}] Failed to update session status")
         return
+    opening_prompt = None
+    opening_prompt_model = None
+    opening_prompt_provider = None
+    opening_prompt_created_at = None
+    try:
+        from app.services.opening_prompt_service import generate_opening_prompt
+
+        opening_prompt, opening_prompt_model, opening_prompt_provider, opening_prompt_created_at = (
+            await generate_opening_prompt(scenario=scenario, language=language)
+        )
+    except Exception as exc:
+        logger.warning(
+            "[%s] Opening prompt generation failed; falling back to default. Error: %s",
+            session_id,
+            exc,
+        )
+
+    if opening_prompt:
+        await repo.update_session(
+            session_id,
+            {
+                "openingPrompt": {
+                    "text": opening_prompt,
+                    "language": language,
+                    "model": opening_prompt_model,
+                    "provider": opening_prompt_provider,
+                    "createdAt": opening_prompt_created_at,
+                },
+            },
+        )
     from app.services.turn_pipeline import generate_initial_ai_turn
 
     print(f"[{session_id}] About to call generate_initial_ai_turn")  # DEBUG
     logger.info(f"[{session_id}] About to call generate_initial_ai_turn")
-    await generate_initial_ai_turn(session_id=session_id, scenario=scenario)
+    await generate_initial_ai_turn(
+        session_id=session_id,
+        scenario=scenario,
+        opening_prompt=opening_prompt,
+        language=language,
+    )
     print(f"[{session_id}] generate_initial_ai_turn completed")  # DEBUG
     logger.info(f"[{session_id}] generate_initial_ai_turn completed")

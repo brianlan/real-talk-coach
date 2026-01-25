@@ -16,6 +16,16 @@ type Scenario = {
   endCriteria?: string[];
 };
 
+type PracticeLanguage = "en" | "zh";
+
+const detectScenarioLanguage = (scenario: Scenario | null): PracticeLanguage => {
+  if (!scenario) {
+    return "en";
+  }
+  const text = `${scenario.title ?? ""} ${scenario.description ?? ""} ${scenario.objective ?? ""}`;
+  return /[\\u4e00-\\u9fff]/.test(text) ? "zh" : "en";
+};
+
 export default function ScenarioDetailPage() {
   const params = useParams<{ scenarioId: string }>();
   const router = useRouter();
@@ -24,6 +34,7 @@ export default function ScenarioDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [language, setLanguage] = useState<PracticeLanguage | null>(null);
 
   useEffect(() => {
     let canceled = false;
@@ -44,6 +55,7 @@ export default function ScenarioDetailPage() {
         const data = (await response.json()) as Scenario;
         if (!canceled) {
           setScenario(data);
+          setLanguage((prev) => prev ?? detectScenarioLanguage(data));
         }
       } catch (err) {
         if (!canceled) {
@@ -69,12 +81,14 @@ export default function ScenarioDetailPage() {
     setStarting(true);
     setError(null);
     try {
+      const resolvedLanguage = language ?? detectScenarioLanguage(scenario);
       const response = await fetch(`${apiBase}/api/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scenarioId,
           clientSessionStartedAt: new Date().toISOString(),
+          language: resolvedLanguage,
         }),
       });
       if (!response.ok) {
@@ -166,6 +180,39 @@ export default function ScenarioDetailPage() {
         </div>
 
         <div style={{ marginTop: 32, display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "8px 12px",
+              borderRadius: 999,
+              border: "1px solid #e0d7cb",
+              background: "#fffaf2",
+            }}
+          >
+            <span style={{ fontSize: 13, letterSpacing: 0.5 }}>Practice language</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="radio"
+                name="practice-language"
+                value="zh"
+                checked={(language ?? detectScenarioLanguage(scenario)) === "zh"}
+                onChange={() => setLanguage("zh")}
+              />
+              中文
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="radio"
+                name="practice-language"
+                value="en"
+                checked={(language ?? detectScenarioLanguage(scenario)) === "en"}
+                onChange={() => setLanguage("en")}
+              />
+              English
+            </label>
+          </div>
           <button
             type="button"
             onClick={startPractice}

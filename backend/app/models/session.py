@@ -23,12 +23,15 @@ def enforce_drift(
 class PracticeSessionCreate(BaseModel):
     scenarioId: str = Field(..., min_length=1)
     clientSessionStartedAt: datetime
+    language: str | None = None
     personas: dict[str, str] | None = None
     objectives: list[str] | None = None
     endCriteria: list[str] | None = None
 
     @model_validator(mode="after")
     def validate_optional_fields(self) -> "PracticeSessionCreate":
+        if self.language is not None and self.language not in {"en", "zh"}:
+            raise ValueError("language must be 'en' or 'zh' when provided")
         if self.personas is not None and not self.personas:
             raise ValueError("personas must not be empty when provided")
         if self.objectives is not None and not self.objectives:
