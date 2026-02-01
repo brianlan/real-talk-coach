@@ -27,6 +27,7 @@ class Settings:
     stub_user_id: str
     admin_access_token: str
     admin_audit_admin_id: str | None
+    admin_auth_disabled: bool
 
 
 def _require_env(name: str) -> str:
@@ -39,6 +40,18 @@ def _require_env(name: str) -> str:
 def _optional_env(name: str) -> str | None:
     value = os.getenv(name, "").strip()
     return value or None
+
+
+def _optional_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off", ""}:
+        return False
+    raise SettingsError(f"Invalid boolean for {name}: {value}")
 
 
 def _require_url(name: str, value: str) -> str:
@@ -71,6 +84,7 @@ def load_settings() -> Settings:
     stub_user_id = _require_env("STUB_USER_ID")
     admin_access_token = _require_env("ADMIN_ACCESS_TOKEN")
     admin_audit_admin_id = _optional_env("ADMIN_AUDIT_ADMIN_ID")
+    admin_auth_disabled = _optional_bool("ADMIN_AUTH_DISABLED", default=False)
 
     return Settings(
         lean_app_id=lean_app_id,
@@ -89,4 +103,5 @@ def load_settings() -> Settings:
         stub_user_id=stub_user_id,
         admin_access_token=admin_access_token,
         admin_audit_admin_id=admin_audit_admin_id,
+        admin_auth_disabled=admin_auth_disabled,
     )

@@ -1,6 +1,7 @@
 # Admin Usage Notes
 
 1. Set matching tokens in `backend/.env` (`ADMIN_ACCESS_TOKEN`) and `frontend/.env.local` (`NEXT_PUBLIC_ADMIN_TOKEN`).
+   - To temporarily disable backend admin auth for local testing, set `ADMIN_AUTH_DISABLED=true` in `backend/.env`.
 2. Run backend (`uvicorn app.main:app --reload --env-file .env`) and frontend (`pnpm dev`).
 3. Visit `http://localhost:3000/admin`.
 4. Navigate via the Admin shell to manage Skills, Scenarios, Sessions, and Audit Log.
