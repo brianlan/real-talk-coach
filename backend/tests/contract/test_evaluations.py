@@ -47,6 +47,8 @@ def _override_repos(monkeypatch):
             id=session_id,
             scenario_id="scenario-1",
             stub_user_id="pilot-user",
+            language="en",
+            opening_prompt="Hello",
             status="ended",
             client_session_started_at="2025-01-01T00:00:00Z",
             started_at="2025-01-01T00:00:00Z",
