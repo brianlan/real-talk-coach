@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { getApiBase } from "@/services/api/base";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const apiBase = getApiBase();
 
 type Scenario = {
   id: string;

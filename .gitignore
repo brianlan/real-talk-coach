@@ -25,3 +25,4 @@ frontend/.next/
 scenario.json
 .certs/
 frontend/.certs/
+.sisyphus/

@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file: ./backend/.env
+    expose:
+      - "8000"
+    volumes:
+      - ./logs/backend:/var/log/app
+    command: 'sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 2>&1 | tee -a /var/log/app/backend.log"'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/healthz').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
+        NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE:-}
+        NEXT_PUBLIC_ADMIN_TOKEN: ${NEXT_PUBLIC_ADMIN_TOKEN:-}
+    environment:
+      API_BASE_INTERNAL: http://backend:8000
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const https=require('https');const http=require('http');const url='http://localhost:3000/';const req=http.get||https.get;req(url,(res)=>{process.exit(res.statusCode===200||res.statusCode===404||res.statusCode===301||res.statusCode===302||res.statusCode===307||res.statusCode===308?0:1)}).on('error',()=>{process.exit(1)})"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/nginx-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

@@ -5,6 +5,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
+import { getWsBase } from "@/services/api/base";
 
 export type WebSocketContextValue = {
   baseUrl: string;
@@ -19,8 +20,7 @@ type AppProvidersProps = {
 
 export function AppProviders({ children }: AppProvidersProps) {
   const [queryClient] = useState(() => new QueryClient());
-  const baseUrl =
-    process.env.NEXT_PUBLIC_WS_BASE ?? "ws://localhost:8000/ws";
+  const baseUrl = getWsBase();
 
   const wsContext = useMemo<WebSocketContextValue>(
     () => ({

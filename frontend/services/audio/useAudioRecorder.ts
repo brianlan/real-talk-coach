@@ -41,11 +41,11 @@ export function useAudioRecorder(): UseAudioRecorder {
   }, []);
 
   const stop = useCallback(async () => {
-    if (!mediaRecorderRef.current) {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) {
       return null;
     }
     return new Promise<Blob | null>((resolve) => {
-      const recorder = mediaRecorderRef.current;
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
         if (blob.size > MAX_BYTES) {

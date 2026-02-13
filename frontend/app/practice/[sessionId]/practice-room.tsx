@@ -10,9 +10,10 @@ import {
   requeueEvaluation,
 } from "@/services/api/evaluationClient";
 import { useAudioRecorder } from "@/services/audio/useAudioRecorder";
+import { getApiBase, getWsBase } from "@/services/api/base";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
-const wsBase = process.env.NEXT_PUBLIC_WS_BASE ?? "ws://localhost:8000/ws";
+const apiBase = getApiBase();
+const wsBase = getWsBase();
 
 type Turn = {
   id: string;

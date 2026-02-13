@@ -35,5 +35,15 @@ frontend/.env*
 coverage/
 artifacts/
 
-# Docker context exclusions
-Dockerfile*
+# Top-level directories (exclude from root build context)
+backend/
+frontend/
+specs/
+docs/
+scripts/
+
+# Keep Dockerfiles and compose files in root context
+!docker-compose.yml
+!backend/Dockerfile
+!frontend/Dockerfile
+!nginx/

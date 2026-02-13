@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { getApiBase } from "@/services/api/base";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const apiBase = getApiBase();
 
 async function fetchScenarios(params: {
   search?: string;
@@ -47,7 +48,7 @@ export default async function ScenariosPage({
   ]);
 
   const skillMap = new Map(skills.map((skill: any) => [skill.id, skill]));
-  const categories = Array.from(
+  const categories: string[] = Array.from(
     new Set(scenarios.map((scenario: any) => scenario.category))
   );
 
@@ -162,7 +163,7 @@ export default async function ScenariosPage({
                 <p style={{ margin: 0, lineHeight: 1.5 }}>{scenario.objective}</p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {(scenario.skills ?? []).map((skillId: string) => {
-                    const skill = skillMap.get(skillId);
+                    const skill = skillMap.get(skillId) as any;
                     return (
                       <span
                         key={skillId}

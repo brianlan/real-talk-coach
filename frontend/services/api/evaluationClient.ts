@@ -1,4 +1,6 @@
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+import { getApiBase } from "./base";
+
+const apiBase = getApiBase();
 
 export type EvaluationScore = {
   skillId: string;
