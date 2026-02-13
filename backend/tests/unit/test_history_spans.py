@@ -30,6 +30,8 @@ async def test_history_list_span_attributes(monkeypatch):
                 id="session-1",
                 scenario_id="scenario-1",
                 stub_user_id="pilot-user",
+                language="en",
+                opening_prompt="Hello",
                 status="ended",
                 client_session_started_at="2025-01-01T00:00:00Z",
                 started_at="2025-01-01T00:00:00Z",

@@ -42,6 +42,8 @@ def _stub_repositories(monkeypatch):
             "id": record.id,
             "scenario_id": record.scenario_id,
             "stub_user_id": record.stub_user_id,
+            "language": record.language,
+            "opening_prompt": record.opening_prompt,
             "status": record.status,
             "client_session_started_at": record.client_session_started_at,
             "started_at": record.started_at,
@@ -58,6 +60,8 @@ def _stub_repositories(monkeypatch):
         mapping = {
             "scenarioId": "scenario_id",
             "stubUserId": "stub_user_id",
+            "language": "language",
+            "openingPrompt": "opening_prompt",
             "clientSessionStartedAt": "client_session_started_at",
             "startedAt": "started_at",
             "endedAt": "ended_at",
@@ -139,6 +143,8 @@ def _stub_repositories(monkeypatch):
             id=session_id,
             scenario_id=payload.get("scenarioId", ""),
             stub_user_id=payload.get("stubUserId", ""),
+            language=payload.get("language", "en"),
+            opening_prompt=payload.get("openingPrompt", "Hello"),
             status=payload.get("status", "pending"),
             client_session_started_at=payload.get("clientSessionStartedAt", ""),
             started_at=payload.get("startedAt"),
@@ -262,7 +268,7 @@ def _stub_pipeline(monkeypatch):
 
     monkeypatch.setattr(turns_routes, "enqueue_turn_pipeline", _noop_pipeline)
 
-    async def _noop_initial_turn(*, session_id: str, scenario):
+    async def _noop_initial_turn(*, session_id: str, scenario, opening_prompt=None, language=None):
         repo = SessionRepository(object())
         await repo.add_turn(
             {
@@ -460,7 +466,7 @@ async def test_ai_turn_zero_emitted_on_session_create(monkeypatch):
         "app.api.routes.session_socket.hub.broadcast",
         fake_broadcast,
     )
-    async def fake_initial_turn(*, session_id: str, scenario):
+    async def fake_initial_turn(*, session_id: str, scenario, opening_prompt=None, language=None):
         await hub.broadcast(
             session_id,
             {
