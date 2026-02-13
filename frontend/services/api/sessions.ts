@@ -1,5 +1,7 @@
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
-const wsBase = process.env.NEXT_PUBLIC_WS_BASE ?? "ws://localhost:8000/ws";
+import { getApiBase, getWsBase } from "./base";
+
+const apiBase = getApiBase();
+const wsBase = getWsBase();
 
 type TurnSubmitInput = {
   sessionId: string;

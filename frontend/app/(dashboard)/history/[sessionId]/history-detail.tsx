@@ -25,12 +25,12 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
 
   const skillMap = useMemo(() => {
     const summaries = detail?.scenario?.skillSummaries ?? [];
-    return summaries.reduce<Record<string, { name: string; rubric?: string }>>(
+    return summaries.reduce(
       (acc: Record<string, { name: string; rubric?: string }>, skill: any) => {
         acc[skill.skillId] = { name: skill.name, rubric: skill.rubric };
         return acc;
       },
-      {}
+      {} as Record<string, { name: string; rubric?: string }>
     );
   }, [detail]);
 

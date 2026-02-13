@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { fetchHistoryList, SessionPage } from "@/services/api/history";
+import { getApiBase } from "@/services/api/base";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const apiBase = getApiBase();
 
 type Scenario = {
   id: string;
@@ -25,7 +26,7 @@ async function fetchScenario(scenarioId: string): Promise<Scenario | null> {
   return response.json();
 }
 
-export default function HistoryPage() {
+function HistoryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [history, setHistory] = useState<SessionPage | null>(null);
@@ -271,5 +272,21 @@ export default function HistoryPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function HistoryPage() {
+  return (
+    <Suspense fallback={
+      <main style={{ padding: "48px 24px" }}>
+        <section style={{ maxWidth: 960, margin: "0 auto" }}>
+          <p style={{ border: "1px solid #e0d7cb", borderRadius: 16, padding: 24, background: "rgba(255,255,255,0.7)" }}>
+            Loading history...
+          </p>
+        </section>
+      </main>
+    }>
+      <HistoryPageInner />
+    </Suspense>
   );
 }
