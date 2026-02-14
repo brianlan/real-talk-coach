@@ -11,10 +11,13 @@ class SettingsError(ValueError):
 
 @dataclass(frozen=True)
 class Settings:
-    lean_app_id: str
-    lean_app_key: str
-    lean_master_key: str
-    lean_server_url: str
+    mongo_host: str
+    mongo_port: int
+    mongo_db: str
+    minio_endpoint: str
+    minio_access_key: str
+    minio_secret_key: str
+    minio_bucket: str
     dashscope_api_key: str
     qwen_voice_id: str | None
     chatai_api_base: str
@@ -61,14 +64,24 @@ def _require_url(name: str, value: str) -> str:
     return value
 
 
+def _optional_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value.strip())
+    except ValueError:
+        raise SettingsError(f"Invalid integer for {name}: {value}")
+
+
 def load_settings() -> Settings:
-    lean_app_id = _require_env("LEAN_APP_ID")
-    lean_app_key = _require_env("LEAN_APP_KEY")
-    lean_master_key = _require_env("LEAN_MASTER_KEY")
-    lean_server_url = _require_url(
-        "LEAN_SERVER_URL",
-        os.getenv("LEAN_SERVER_URL", "https://api.leancloud.cn").strip(),
-    )
+    mongo_host = os.getenv("MONGO_HOST", "localhost").strip()
+    mongo_port = _optional_int("MONGO_PORT", 27017)
+    mongo_db = os.getenv("MONGO_DB", "real-talk-coach").strip()
+    minio_endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000").strip()
+    minio_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin").strip()
+    minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin").strip()
+    minio_bucket = os.getenv("MINIO_BUCKET", "audio").strip()
     dashscope_api_key = _require_env("DASHSCOPE_API_KEY")
     qwen_voice_id = _optional_env("QWEN_VOICE_ID")
     chatai_api_base = _require_url("CHATAI_API_BASE", _require_env("CHATAI_API_BASE"))
@@ -87,10 +100,13 @@ def load_settings() -> Settings:
     admin_auth_disabled = _optional_bool("ADMIN_AUTH_DISABLED", default=False)
 
     return Settings(
-        lean_app_id=lean_app_id,
-        lean_app_key=lean_app_key,
-        lean_master_key=lean_master_key,
-        lean_server_url=lean_server_url,
+        mongo_host=mongo_host,
+        mongo_port=mongo_port,
+        mongo_db=mongo_db,
+        minio_endpoint=minio_endpoint,
+        minio_access_key=minio_access_key,
+        minio_secret_key=minio_secret_key,
+        minio_bucket=minio_bucket,
         dashscope_api_key=dashscope_api_key,
         qwen_voice_id=qwen_voice_id,
         chatai_api_base=chatai_api_base,

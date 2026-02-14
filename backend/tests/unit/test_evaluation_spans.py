@@ -16,7 +16,7 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    monkeypatch.setenv("LEAN_SERVER_URL", "https://api.leancloud.cn")
+    # LeanCloud removed - using MongoDB
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("CHATAI_API_KEY", "secret")
@@ -145,7 +145,7 @@ async def test_evaluation_runner_store_spans_include_session_id(monkeypatch):
         session_repo: FakeSessionRepo
         scenario_repo: FakeScenarioRepo
         evaluation_repo: FakeEvaluationRepo
-        leancloud_client: object
+        mongodb_client: object
 
     async def _broadcast(*_args, **_kwargs):
         return None
@@ -166,7 +166,7 @@ async def test_evaluation_runner_store_spans_include_session_id(monkeypatch):
             session_repo=FakeSessionRepo(),
             scenario_repo=FakeScenarioRepo(),
             evaluation_repo=FakeEvaluationRepo(),
-            leancloud_client=object(),
+            mongodb_client=object(),
         ),
         evaluation,
     )

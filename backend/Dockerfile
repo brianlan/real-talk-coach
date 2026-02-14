@@ -20,7 +20,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     numpy \
     soundfile \
     pydub \
-    ffmpeg-python
+    ffmpeg-python \
+    pymongo \
+    minio \
+    mongomock
 
 
 # Runtime stage

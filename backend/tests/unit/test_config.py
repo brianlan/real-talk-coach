@@ -4,10 +4,13 @@ from app.config import SettingsError, load_settings
 
 
 def _set_required_envs(monkeypatch):
-    monkeypatch.setenv("LEAN_APP_ID", "app")
-    monkeypatch.setenv("LEAN_APP_KEY", "key")
-    monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    monkeypatch.setenv("LEAN_SERVER_URL", "https://api.leancloud.cn")
+    monkeypatch.setenv("MONGO_HOST", "localhost")
+    monkeypatch.setenv("MONGO_PORT", "27017")
+    monkeypatch.setenv("MONGO_DB", "real-talk-coach")
+    monkeypatch.setenv("MINIO_ENDPOINT", "localhost:9000")
+    monkeypatch.setenv("MINIO_ACCESS_KEY", "minioadmin")
+    monkeypatch.setenv("MINIO_SECRET_KEY", "minioadmin")
+    monkeypatch.setenv("MINIO_BUCKET", "audio")
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("CHATAI_API_KEY", "secret")
@@ -21,9 +24,9 @@ def _set_required_envs(monkeypatch):
 
 def test_missing_required_envs_raise_actionable_error(monkeypatch):
     for name in [
-        "LEAN_APP_ID",
-        "LEAN_APP_KEY",
-        "LEAN_MASTER_KEY",
+        "MONGO_HOST",
+        "MONGO_PORT",
+        "MONGO_DB",
         "DASHSCOPE_API_KEY",
         "CHATAI_API_BASE",
         "CHATAI_API_KEY",
@@ -41,17 +44,17 @@ def test_missing_required_envs_raise_actionable_error(monkeypatch):
 
     message = str(exc.value)
     assert "Missing required environment variable" in message
-    assert "LEAN_APP_ID" in message
+    assert "DASHSCOPE_API_KEY" in message
 
 
 def test_invalid_urls_are_rejected(monkeypatch):
     _set_required_envs(monkeypatch)
-    monkeypatch.setenv("LEAN_SERVER_URL", "not-a-url")
+    monkeypatch.setenv("CHATAI_API_BASE", "not-a-url")
 
     with pytest.raises(SettingsError) as exc:
         load_settings()
 
-    assert "Invalid URL for LEAN_SERVER_URL" in str(exc.value)
+    assert "Invalid URL for CHATAI_API_BASE" in str(exc.value)
 
 
 def test_objective_check_base_defaults_to_evaluator_base(monkeypatch):

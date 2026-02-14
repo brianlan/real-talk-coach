@@ -15,7 +15,7 @@ async def test_evaluation_retries_until_success(monkeypatch):
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    monkeypatch.setenv("LEAN_SERVER_URL", "https://api.leancloud.cn")
+    # LeanCloud removed - using MongoDB
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("CHATAI_API_KEY", "secret")
@@ -83,7 +83,7 @@ async def test_evaluation_retries_until_success(monkeypatch):
         session_repo: object
         scenario_repo: object
         evaluation_repo: object
-        leancloud_client: object
+        mongodb_client: object
 
     class FakeSessionRepo:
         async def get_session(self, session_id: str):
@@ -178,13 +178,17 @@ async def test_evaluation_retries_until_success(monkeypatch):
     class FakeClient:
         async def close(self):
             return None
+        async def db(self):
+            return {}
+        async def collection(self, name):
+            return {}
 
     async def _build_repositories():
         return RepoBundle(
             session_repo=FakeSessionRepo(),
             scenario_repo=FakeScenarioRepo(),
             evaluation_repo=FakeEvaluationRepo(),
-            leancloud_client=FakeClient(),
+            mongodb_client=FakeClient(),
         )
 
     calls = {"count": 0}

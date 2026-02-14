@@ -1,26 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import json
 from typing import Any
 
-from app.clients.leancloud import LeanCloudClient
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
 from app.repositories.audit_log_repository import AuditLogRecord, AuditLogRepository
-
-
-def _client() -> LeanCloudClient:
-    settings = load_settings()
-    return LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
-
-
-def _repo() -> AuditLogRepository:
-    return AuditLogRepository(_client())
 
 
 def _now_iso() -> str:
@@ -37,7 +22,6 @@ async def record_audit_entry(
     timestamp: str | None = None,
     repo: AuditLogRepository | None = None,
 ) -> AuditLogRecord:
-    repository = repo or _repo()
     settings = load_settings()
     resolved_admin_id = (
         admin_id
@@ -52,7 +36,15 @@ async def record_audit_entry(
         "timestamp": timestamp or _now_iso(),
         "details": details,
     }
-    return await repository.create_entry(payload)
+    if repo is not None:
+        return await repo.create_entry(payload)
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    client = MongoDBClient(connection_string=mongo_connection_string, database=settings.mongo_db)
+    try:
+        repository = AuditLogRepository(client)
+        return await repository.create_entry(payload)
+    finally:
+        await client.close()
 
 
 async def list_audit_entries(
@@ -63,18 +55,29 @@ async def list_audit_entries(
     end_date: str | None = None,
     repo: AuditLogRepository | None = None,
 ) -> list[AuditLogRecord]:
-    repository = repo or _repo()
+    # Build query filter
     where: dict[str, Any] = {}
     if entity_type:
         where["entityType"] = entity_type
     if admin_id:
         where["adminId"] = admin_id
     if start_date or end_date:
-        created_at_filter: dict[str, Any] = {}
+        date_filter: dict[str, Any] = {}
         if start_date:
-            created_at_filter["$gte"] = {"__type": "Date", "iso": start_date}
+            date_filter["$gte"] = start_date
         if end_date:
-            created_at_filter["$lte"] = {"__type": "Date", "iso": end_date}
-        where["timestamp"] = created_at_filter
-    params = {"where": json.dumps(where)} if where else None
-    return await repository.list_entries(params=params)
+            date_filter["$lte"] = end_date
+        where["timestamp"] = date_filter
+
+    if repo is not None:
+        return await repo.list_entries(params=where if where else None)
+
+    # Create temporary MongoDB client
+    settings = load_settings()
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    client = MongoDBClient(connection_string=mongo_connection_string, database=settings.mongo_db)
+    try:
+        repository = AuditLogRepository(client)
+        return await repository.list_entries(params=where if where else None)
+    finally:
+        await client.close()

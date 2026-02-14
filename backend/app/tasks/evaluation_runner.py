@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.api.routes.session_socket import hub
-from app.clients.leancloud import LeanCloudClient
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
 from app.repositories.evaluation_repository import EvaluationRecord, EvaluationRepository
 from app.repositories.scenario_repository import ScenarioRepository
@@ -27,7 +27,7 @@ class _Repos:
     session_repo: SessionRepository
     scenario_repo: ScenarioRepository
     evaluation_repo: EvaluationRepository
-    leancloud_client: LeanCloudClient
+    mongodb_client: MongoDBClient
 
 
 def _utc_now() -> str:
@@ -36,17 +36,16 @@ def _utc_now() -> str:
 
 async def _build_repositories() -> _Repos:
     settings = load_settings()
-    client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    client = MongoDBClient(
+        connection_string=mongo_connection_string,
+        database=settings.mongo_db,
     )
     return _Repos(
         session_repo=SessionRepository(client),
         scenario_repo=ScenarioRepository(client),
         evaluation_repo=EvaluationRepository(client),
-        leancloud_client=client,
+        mongodb_client=client,
     )
 
 
@@ -69,7 +68,7 @@ async def _run_evaluation(session_id: str) -> None:
         try:
             await _evaluate_with_retries(session_id, repos)
         finally:
-            await repos.leancloud_client.close()
+            await repos.mongodb_client.close()
     finally:
         async with _LOCK:
             _IN_FLIGHT.discard(session_id)
@@ -198,24 +197,24 @@ async def _run_attempts(
                 if attempt_index < len(backoff_seconds):
                     await asyncio.sleep(backoff_seconds[attempt_index])
                     continue
-                with start_span(
-                    "evaluation.store",
-                    {
-                        "sessionId": session_id,
-                        "operation": "status_update",
-                        "status": "failed",
-                    },
-                ):
-                    await repos.evaluation_repo.update_evaluation(
-                        evaluation.id,
-                        {
-                            "status": "failed",
-                            "completedAt": _utc_now(),
-                            "lastError": message,
-                            "attempts": attempt_number,
-                        },
-                    )
-                return
+        with start_span(
+            "evaluation.store",
+            {
+                "sessionId": session_id,
+                "operation": "status_update",
+                "status": "failed",
+            },
+        ):
+            await repos.evaluation_repo.update_evaluation(
+                evaluation.id,
+                {
+                    "status": "failed",
+                    "completedAt": _utc_now(),
+                    "lastError": message,
+                    "attempts": attempt_number,
+                },
+            )
+        return
 
 
 async def _evaluate_once(session_id: str, repos: _Repos):
