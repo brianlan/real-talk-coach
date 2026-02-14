@@ -4,19 +4,18 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from app.clients.leancloud import LeanCloudClient, LeanCloudError
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
 from app.repositories.skill_repository import AdminSkillRepository, ConflictError, SkillRecord
 from app.services.audit_log_service import record_audit_entry
 
 
-def _client() -> LeanCloudClient:
+def _client() -> MongoDBClient:
     settings = load_settings()
-    return LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    return MongoDBClient(
+        connection_string=mongo_connection_string,
+        database=settings.mongo_db,
     )
 
 
@@ -53,7 +52,7 @@ class AdminSkillsService:
                 details=f"Created skill {record.name}",
             )
             return record
-        except LeanCloudError as exc:
+        except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     async def update_skill(
@@ -76,10 +75,8 @@ class AdminSkillsService:
             return record
         except ConflictError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-        except LeanCloudError as exc:
-            if exc.status_code == 404:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill not found") from exc
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill not found") from exc
 
     async def soft_delete_skill(self, skill_id: str, *, admin_token: str | None) -> None:
         try:
@@ -91,10 +88,8 @@ class AdminSkillsService:
                 entity_id=skill_id,
                 details=f"Soft deleted skill {skill_id}",
             )
-        except LeanCloudError as exc:
-            if exc.status_code == 404:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill not found") from exc
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill not found") from exc
 
     async def restore_skill(self, skill_id: str, *, admin_token: str | None) -> SkillRecord:
         record = await self.repo.restore_skill(skill_id)

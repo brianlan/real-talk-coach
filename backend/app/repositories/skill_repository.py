@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
 
-from app.clients.leancloud import LeanCloudClient, LeanCloudError
+from bson import ObjectId
+
+from app.clients.mongodb import MongoDBClient
 
 
 class ConflictError(Exception):
+    pass
+
+
+class NotFoundError(Exception):
     pass
 
 
@@ -22,45 +27,47 @@ class SkillRecord:
     version: str | None
 
 
-def _from_lc(payload: dict[str, Any]) -> SkillRecord:
+def _from_doc(doc: dict[str, Any]) -> SkillRecord:
     return SkillRecord(
-        id=payload.get("objectId", ""),
-        name=payload.get("name", ""),
-        category=payload.get("category", ""),
-        rubric=payload.get("rubric", ""),
-        description=payload.get("description"),
-        status=payload.get("status", "active"),
-        version=payload.get("updatedAt"),
+        id=str(doc.get("_id", "")),
+        name=doc.get("name", ""),
+        category=doc.get("category", ""),
+        rubric=doc.get("rubric", ""),
+        description=doc.get("description"),
+        status=doc.get("status", "active"),
+        version=doc.get("updatedAt"),
     )
 
 
 class AdminSkillRepository:
-    def __init__(self, client: LeanCloudClient) -> None:
+    def __init__(self, client: MongoDBClient) -> None:
         self._client = client
 
     async def list_skills(self, *, include_deleted: bool = False) -> list[SkillRecord]:
-        where: dict[str, Any] = {}
+        collection = await self._client.collection("Skill")
+        query: dict[str, Any] = {}
         if not include_deleted:
-            where["status"] = {"$ne": "deleted"}
-        response = await self._client.get_json(
-            "/1.1/classes/Skill",
-            params={"where": json.dumps(where)},
-        )
-        results = response.get("results", [])
-        return [_from_lc(item) for item in results]
+            query["status"] = {"$ne": "deleted"}
+        cursor = collection.find(query)
+        results = await cursor.to_list(length=None)
+        return [_from_doc(item) for item in results]
 
     async def get_skill(self, skill_id: str) -> SkillRecord | None:
+        collection = await self._client.collection("Skill")
         try:
-            payload = await self._client.get_json(f"/1.1/classes/Skill/{skill_id}")
-        except LeanCloudError:
+            doc = await collection.find_one({"_id": ObjectId(skill_id)})
+        except Exception:
             return None
-        return _from_lc(payload)
+        if doc is None:
+            return None
+        return _from_doc(doc)
 
     async def create_skill(self, payload: dict[str, Any]) -> SkillRecord:
+        collection = await self._client.collection("Skill")
         data = {"status": "active", **payload}
-        response = await self._client.post_json("/1.1/classes/Skill", data)
-        record = data | response
-        return _from_lc(record)
+        result = await collection.insert_one(data)
+        doc = {**data, "_id": result.inserted_id}
+        return _from_doc(doc)
 
     async def update_skill(
         self,
@@ -71,26 +78,33 @@ class AdminSkillRepository:
     ) -> SkillRecord:
         current = await self.get_skill(skill_id)
         if not current:
-            raise LeanCloudError("Skill not found", status_code=404)
+            raise NotFoundError("Skill not found")
         if expected_version and current.version and expected_version != current.version:
             raise ConflictError("Skill has changed; refresh and retry")
-        response = await self._client.put_json(
-            f"/1.1/classes/Skill/{skill_id}", payload
+        collection = await self._client.collection("Skill")
+        await collection.update_one(
+            {"_id": ObjectId(skill_id)},
+            {"$set": payload},
         )
-        record = {"objectId": skill_id, **payload, **response}
         updated = await self.get_skill(skill_id)
-        return updated or _from_lc(record)
+        if updated is None:
+            raise NotFoundError("Skill not found after update")
+        return updated
 
     async def soft_delete_skill(self, skill_id: str) -> None:
-        await self._client.put_json(
-            f"/1.1/classes/Skill/{skill_id}", {"status": "deleted"}
+        collection = await self._client.collection("Skill")
+        await collection.update_one(
+            {"_id": ObjectId(skill_id)},
+            {"$set": {"status": "deleted"}},
         )
 
     async def restore_skill(self, skill_id: str) -> SkillRecord | None:
+        collection = await self._client.collection("Skill")
         try:
-            await self._client.put_json(
-                f"/1.1/classes/Skill/{skill_id}", {"status": "active"}
+            await collection.update_one(
+                {"_id": ObjectId(skill_id)},
+                {"$set": {"status": "active"}},
             )
-        except LeanCloudError:
+        except Exception:
             return None
         return await self.get_skill(skill_id)

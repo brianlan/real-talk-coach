@@ -4,8 +4,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from app.clients.leancloud import LeanCloudClient, LeanCloudError
-import httpx
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
 from app.repositories.admin_scenario_repository import (
     AdminScenarioRecord,
@@ -16,13 +15,12 @@ from app.repositories.session_repository import SessionRepository
 from app.services.audit_log_service import record_audit_entry
 
 
-def _client() -> LeanCloudClient:
+def _client() -> MongoDBClient:
     settings = load_settings()
-    return LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    return MongoDBClient(
+        connection_string=mongo_connection_string,
+        database=settings.mongo_db,
     )
 
 
@@ -107,7 +105,7 @@ class AdminScenariosService:
                 details=f"Created scenario {record.title}",
             )
             return record
-        except LeanCloudError as exc:
+        except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     async def update_scenario(
@@ -131,10 +129,8 @@ class AdminScenariosService:
             return record
         except ConflictError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-        except LeanCloudError as exc:
-            if exc.status_code == 404:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found") from exc
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found") from exc
 
     async def publish(self, scenario_id: str, *, admin_token: str | None) -> AdminScenarioRecord:
         scenario = await self.get_scenario(scenario_id)
@@ -175,12 +171,8 @@ class AdminScenariosService:
                 entity_id=scenario_id,
                 details=f"Soft deleted scenario {scenario_id}",
             )
-        except LeanCloudError as exc:
-            if exc.status_code == 404:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found") from exc
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scenario has sessions") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found") from exc
 
     async def restore_scenario(self, scenario_id: str, *, admin_token: str | None) -> AdminScenarioRecord:
         record = await self.repo.restore(scenario_id)

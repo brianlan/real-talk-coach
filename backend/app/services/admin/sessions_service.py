@@ -4,20 +4,19 @@ import asyncio
 
 from fastapi import HTTPException, status
 
-from app.clients.leancloud import LeanCloudClient, LeanCloudError
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
 from app.repositories.admin_scenario_repository import AdminScenarioRepository
 from app.repositories.session_repository import SessionRepository, PracticeSessionRecord
 from app.services.audit_log_service import record_audit_entry
 
 
-def _client() -> LeanCloudClient:
+def _client() -> MongoDBClient:
     settings = load_settings()
-    return LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    return MongoDBClient(
+        connection_string=mongo_connection_string,
+        database=settings.mongo_db,
     )
 
 
@@ -98,7 +97,5 @@ class AdminSessionsService:
                 entity_id=session_id,
                 details=f"Deleted session {session_id}",
             )
-        except LeanCloudError as exc:
-            if exc.status_code == 404:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found") from exc
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found") from exc

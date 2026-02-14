@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from app.clients.leancloud import LeanCloudClient
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
+from app.dependencies import get_mongodb_client
 from app.repositories.evaluation_repository import EvaluationRecord, EvaluationRepository
 from app.repositories.session_repository import SessionRepository
 from app.tasks.evaluation_runner import enqueue
@@ -15,26 +16,12 @@ from app.telemetry.tracing import emit_metric
 router = APIRouter()
 
 
-def _evaluation_repo() -> EvaluationRepository:
-    settings = load_settings()
-    client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
-    return EvaluationRepository(client)
+def _evaluation_repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> EvaluationRepository:
+    return EvaluationRepository(mongodb)
 
 
-def _session_repo() -> SessionRepository:
-    settings = load_settings()
-    client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
-    return SessionRepository(client)
+def _session_repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> SessionRepository:
+    return SessionRepository(mongodb)
 
 
 def _evaluation_response(record: EvaluationRecord) -> dict[str, object]:

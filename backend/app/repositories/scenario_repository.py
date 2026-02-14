@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
 
-from app.clients.leancloud import LeanCloudClient
+from bson import ObjectId
+
+from app.clients.mongodb import MongoDBClient
 
 
 @dataclass(frozen=True)
@@ -35,8 +36,8 @@ class Skill:
     description: str | None
 
 
-def _scenario_from_lc(payload: dict[str, Any], skill_map: dict[str, Skill]) -> Scenario:
-    skills = payload.get("skills", [])
+def _scenario_from_doc(doc: dict[str, Any], skill_map: dict[str, Skill]) -> Scenario:
+    skills = doc.get("skills", [])
     skill_summaries = []
     for skill_id in skills:
         skill = skill_map.get(skill_id)
@@ -46,68 +47,70 @@ def _scenario_from_lc(payload: dict[str, Any], skill_map: dict[str, Skill]) -> S
             {"skillId": skill.id, "name": skill.name, "rubric": skill.rubric}
         )
     return Scenario(
-        id=payload["objectId"],
-        category=payload.get("category", ""),
-        title=payload.get("title", ""),
-        description=payload.get("description", ""),
-        objective=payload.get("objective", ""),
-        ai_persona=payload.get("aiPersona", {}),
-        trainee_persona=payload.get("traineePersona", {}),
-        end_criteria=payload.get("endCriteria", []),
+        id=str(doc["_id"]),
+        category=doc.get("category", ""),
+        title=doc.get("title", ""),
+        description=doc.get("description", ""),
+        objective=doc.get("objective", ""),
+        ai_persona=doc.get("aiPersona", {}),
+        trainee_persona=doc.get("traineePersona", {}),
+        end_criteria=doc.get("endCriteria", []),
         skills=skills,
         skill_summaries=skill_summaries,
-        idle_limit_seconds=payload.get("idleLimitSeconds"),
-        duration_limit_seconds=payload.get("durationLimitSeconds"),
-        prompt=payload.get("prompt", ""),
-        status=payload.get("status", ""),
+        idle_limit_seconds=doc.get("idleLimitSeconds"),
+        duration_limit_seconds=doc.get("durationLimitSeconds"),
+        prompt=doc.get("prompt", ""),
+        status=doc.get("status", ""),
     )
 
 
-def _skill_from_lc(payload: dict[str, Any]) -> Skill:
+def _skill_from_doc(doc: dict[str, Any]) -> Skill:
     return Skill(
-        id=payload["objectId"],
-        external_id=payload.get("externalId", ""),
-        name=payload.get("name", ""),
-        category=payload.get("category", ""),
-        rubric=payload.get("rubric", ""),
-        description=payload.get("description"),
+        id=str(doc["_id"]),
+        external_id=doc.get("externalId", ""),
+        name=doc.get("name", ""),
+        category=doc.get("category", ""),
+        rubric=doc.get("rubric", ""),
+        description=doc.get("description"),
     )
 
 
 class ScenarioRepository:
-    def __init__(self, client: LeanCloudClient) -> None:
+    def __init__(self, client: MongoDBClient) -> None:
         self._client = client
 
     async def list_published(
         self, *, category: str | None = None, search: str | None = None, limit: int = 20
     ) -> list[Scenario]:
-        where: dict[str, Any] = {"status": "published"}
+        collection = await self._client.collection("Scenario")
+        query: dict[str, Any] = {"status": "published"}
         if category:
-            where["category"] = category
+            query["category"] = category
         if search:
-            where["$or"] = [
+            query["$or"] = [
                 {"title": {"$regex": search, "$options": "i"}},
                 {"objective": {"$regex": search, "$options": "i"}},
             ]
-        response = await self._client.get_json(
-            "/1.1/classes/Scenario",
-            params={"where": json.dumps(where), "limit": limit},
-        )
-        scenarios_payload = response.get("results", [])
+        cursor = collection.find(query).limit(limit)
+        docs = await cursor.to_list(length=limit)
         skills = await self.list_skills()
         skill_map = {skill.id: skill for skill in skills}
-        return [_scenario_from_lc(item, skill_map) for item in scenarios_payload]
+        return [_scenario_from_doc(doc, skill_map) for doc in docs]
 
     async def get(self, scenario_id: str) -> Scenario | None:
+        collection = await self._client.collection("Scenario")
         try:
-            payload = await self._client.get_json(f"/1.1/classes/Scenario/{scenario_id}")
+            doc = await collection.find_one({"_id": ObjectId(scenario_id)})
         except Exception:
+            return None
+        if doc is None:
             return None
         skills = await self.list_skills()
         skill_map = {skill.id: skill for skill in skills}
-        return _scenario_from_lc(payload, skill_map)
+        return _scenario_from_doc(doc, skill_map)
 
     async def list_skills(self) -> list[Skill]:
-        response = await self._client.get_json("/1.1/classes/Skill")
-        results = response.get("results", [])
-        return [_skill_from_lc(item) for item in results]
+        collection = await self._client.collection("Skill")
+        cursor = collection.find({})
+        docs = await cursor.to_list(length=None)
+        return [_skill_from_doc(doc) for doc in docs]

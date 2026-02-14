@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.clients.leancloud import LeanCloudClient
+from app.clients.mongodb import MongoDBClient
 
 
 @dataclass(frozen=True)
@@ -17,31 +17,30 @@ class AuditLogRecord:
     details: str | None
 
 
-def _from_lc(payload: dict[str, Any]) -> AuditLogRecord:
+def _from_doc(doc: dict[str, Any]) -> AuditLogRecord:
     return AuditLogRecord(
-        id=payload.get("objectId", ""),
-        admin_id=payload.get("adminId", ""),
-        action=payload.get("action", ""),
-        entity_type=payload.get("entityType", ""),
-        entity_id=payload.get("entityId", ""),
-        timestamp=payload.get("timestamp"),
-        details=payload.get("details"),
+        id=str(doc.get("_id", "")),
+        admin_id=doc.get("adminId", ""),
+        action=doc.get("action", ""),
+        entity_type=doc.get("entityType", ""),
+        entity_id=doc.get("entityId", ""),
+        timestamp=doc.get("timestamp"),
+        details=doc.get("details"),
     )
 
 
 class AuditLogRepository:
-    def __init__(self, client: LeanCloudClient) -> None:
+    def __init__(self, client: MongoDBClient) -> None:
         self._client = client
 
     async def create_entry(self, payload: dict[str, Any]) -> AuditLogRecord:
-        response = await self._client.post_json("/1.1/classes/AuditLog", payload)
-        record = payload | response
-        return _from_lc(record)
+        collection = await self._client.collection("AuditLog")
+        result = await collection.insert_one(payload)
+        doc = {**payload, "_id": result.inserted_id}
+        return _from_doc(doc)
 
     async def list_entries(self, params: dict[str, Any] | None = None) -> list[AuditLogRecord]:
-        response = await self._client.get_json(
-            "/1.1/classes/AuditLog",
-            params=params,
-        )
-        results = response.get("results", [])
-        return [_from_lc(item) for item in results]
+        collection = await self._client.collection("AuditLog")
+        cursor = collection.find(params or {})
+        results = await cursor.to_list(length=None)
+        return [_from_doc(item) for item in results]

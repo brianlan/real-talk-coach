@@ -4,8 +4,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.clients.leancloud import LeanCloudClient
+from app.clients.minio import MinioClient
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
+from app.dependencies import get_mongodb_client, get_minio_client
 from app.repositories.evaluation_repository import EvaluationRecord, EvaluationRepository
 from app.repositories.scenario_repository import ScenarioRepository
 from app.repositories.session_repository import PracticeSessionRecord, SessionRepository, TurnRecord
@@ -15,47 +17,20 @@ from app.telemetry.tracing import emit_metric
 router = APIRouter()
 
 
-def _session_repo() -> SessionRepository:
-    settings = load_settings()
-    client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
-    return SessionRepository(client)
+def _session_repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> SessionRepository:
+    return SessionRepository(mongodb)
 
 
-def _scenario_repo() -> ScenarioRepository:
-    settings = load_settings()
-    client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
-    return ScenarioRepository(client)
+def _scenario_repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> ScenarioRepository:
+    return ScenarioRepository(mongodb)
 
 
-def _evaluation_repo() -> EvaluationRepository:
-    settings = load_settings()
-    client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
-    return EvaluationRepository(client)
+def _evaluation_repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> EvaluationRepository:
+    return EvaluationRepository(mongodb)
 
 
-def _signing_client() -> LeanCloudClient:
-    settings = load_settings()
-    return LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
+def _signing_client(minio: MinioClient = Depends(get_minio_client)) -> MinioClient:
+    return minio
 
 
 def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
@@ -215,7 +190,7 @@ async def get_history_detail(
     repo: SessionRepository = Depends(_session_repo),
     scenario_repo: ScenarioRepository = Depends(_scenario_repo),
     evaluation_repo: EvaluationRepository = Depends(_evaluation_repo),
-    signing_client: LeanCloudClient = Depends(_signing_client),
+    signing_client: MinioClient = Depends(_signing_client),
 ):
     with start_span(
         "history.detail",
@@ -231,22 +206,23 @@ async def get_history_detail(
         turns.sort(key=lambda turn: turn.sequence)
         scenario = await scenario_repo.get(session.scenario_id)
         evaluation = await evaluation_repo.get_by_session(session_id)
-        urls = [turn.audio_url for turn in turns if turn.audio_url]
+        # Generate signed URLs for each turn's audio file using MinIO
         signed_map = {}
-        if urls:
-            with start_span(
-                "history.sign_urls",
-                {"sessionId": session_id, "urlCount": len(urls)},
-            ):
-                signed_map = await signing_client.create_signed_urls(
-                    urls, ttl_seconds=900
-                )
+        with start_span(
+            "history.sign_urls",
+            {"sessionId": session_id, "turnCount": len(turns)},
+        ):
+            for turn in turns:
+                if turn.audio_file_id:
+                    signed_map[turn.audio_file_id] = await signing_client.get_signed_url(
+                        turn.audio_file_id, expires=900
+                    )
         _emit_step_metric(session_id, historyStepCount, scope="detail")
         return {
             "session": _session_response(session),
             "scenario": _scenario_response(scenario) if scenario else None,
             "turns": [
-                _turn_response(turn, signed_map.get(turn.audio_url))
+                _turn_response(turn, signed_map.get(turn.audio_file_id))
                 for turn in turns
             ],
             "evaluation": _evaluation_response(evaluation) if evaluation else None,

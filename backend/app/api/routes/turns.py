@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.clients.leancloud import LeanCloudClient
+from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
+from app.dependencies import get_mongodb_client
 from app.models.session import TurnInput, enforce_drift
 from app.repositories.session_repository import SessionRepository
 from app.services.turn_pipeline import enqueue_turn_pipeline
@@ -19,15 +20,8 @@ MAX_AUDIO_BYTES = 128 * 1024
 MAX_AUDIO_BASE64_CHARS = 175000
 
 
-def _repo() -> SessionRepository:
-    settings = load_settings()
-    client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
-    )
-    return SessionRepository(client)
+def _repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> SessionRepository:
+    return SessionRepository(mongodb)
 
 
 def _audio_size_bytes(audio_base64: str) -> int:

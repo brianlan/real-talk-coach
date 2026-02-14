@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.api.routes.session_socket import hub
-from app.clients.leancloud import LeanCloudClient
+from app.clients.mongodb import MongoDBClient
+from app.clients.minio import MinioClient
 from app.clients.llm import QwenClient
 from app.config import load_settings
 from app.repositories.scenario_repository import ScenarioRepository
@@ -244,17 +245,16 @@ async def generate_initial_ai_turn(
     logger.info(f"[{session_id}] Starting AI turn initiation")
 
     settings = load_settings()
-    lc_client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    mongo_client = MongoDBClient(
+        connection_string=mongo_connection_string,
+        database=settings.mongo_db,
     )
     qwen_client = QwenClient(
         base_url=QWEN_BASE_URL,
         api_key=settings.dashscope_api_key,
     )
-    repo = SessionRepository(lc_client)
+    repo = SessionRepository(mongo_client)
 
     try:
         with start_span(
@@ -332,13 +332,19 @@ async def generate_initial_ai_turn(
                         from app.services.audio import convert_raw_pcm_to_mp3
                         mp3_bytes = convert_raw_pcm_to_mp3(audio_bytes, sample_rate=24000)
 
-                    logger.info(f"[{session_id}] Converted to {len(mp3_bytes)} bytes of MP3, uploading to LeanCloud")
-                    upload_ai = await lc_client.upload_file(
-                        f"turn-{ai_turn.id}.mp3", mp3_bytes, "audio/mpeg"
+                    logger.info(f"[{session_id}] Converted to {len(mp3_bytes)} bytes of MP3, uploading to MinIO")
+                    minio_client = MinioClient(
+                        endpoint=settings.minio_endpoint,
+                        access_key=settings.minio_access_key,
+                        secret_key=settings.minio_secret_key,
+                        bucket=settings.minio_bucket,
                     )
-                    ai_audio_id = upload_ai.get("objectId") or upload_ai.get("name")
-                    ai_audio_url = upload_ai.get("url")
-                    logger.info(f"[{session_id}] Audio uploaded successfully: id={ai_audio_id}, url={ai_audio_url}")
+                    await minio_client.initialize()
+                    object_name = f"turn-{ai_turn.id}.mp3"
+                    await minio_client.upload_file(object_name, mp3_bytes, "audio/mpeg")
+                    ai_audio_id = object_name
+                    ai_audio_url = ""
+                    logger.info(f"[{session_id}] Audio uploaded successfully: id={ai_audio_id}")
                 else:
                     logger.warning(f"[{session_id}] No audio data extracted from Qwen response")
             except AudioConversionError as exc:
@@ -403,7 +409,7 @@ async def generate_initial_ai_turn(
                         )
     finally:
         await qwen_client.close()
-        await lc_client.close()
+        await mongo_client.close()
 
 
 async def enqueue_turn_pipeline(*, session_id: str, turn_id: str, audio_base64: str) -> None:
@@ -412,17 +418,16 @@ async def enqueue_turn_pipeline(*, session_id: str, turn_id: str, audio_base64: 
 
 async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> None:
     settings = load_settings()
-    lc_client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    mongo_client = MongoDBClient(
+        connection_string=mongo_connection_string,
+        database=settings.mongo_db,
     )
     qwen_client = QwenClient(
         base_url=QWEN_BASE_URL,
         api_key=settings.dashscope_api_key,
     )
-    repo = SessionRepository(lc_client)
+    repo = SessionRepository(mongo_client)
 
     try:
         with start_span(
@@ -440,15 +445,22 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                 await _handle_audio_error(repo, session_id, turn_id, "Audio conversion failed")
                 return
 
-            upload = await lc_client.upload_file(
-                f"turn-{turn_id}.mp3", mp3_bytes, "audio/mpeg"
+            minio_client = MinioClient(
+                endpoint=settings.minio_endpoint,
+                access_key=settings.minio_access_key,
+                secret_key=settings.minio_secret_key,
+                bucket=settings.minio_bucket,
             )
-            file_id = upload.get("objectId") or upload.get("name")
+            await minio_client.initialize()
+            object_name = f"turn-{turn_id}.mp3"
+            await minio_client.upload_file(object_name, mp3_bytes, "audio/mpeg")
+            file_id = object_name
+            # No immediate URL; will generate signed URL on demand
             await repo.update_turn(
                 turn_id,
                 {
                     "audioFileId": file_id,
-                    "audioUrl": upload.get("url"),
+                    "audioUrl": "",
                     "asrStatus": "pending",
                 },
             )
@@ -468,7 +480,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
             session = await repo.get_session(session_id)
             scenario = None
             if session:
-                scenario_repo = ScenarioRepository(lc_client)
+                scenario_repo = ScenarioRepository(mongo_client)
                 scenario = await scenario_repo.get(session.scenario_id)
 
             messages = _build_turn_messages(
@@ -536,11 +548,17 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                         from app.services.audio import convert_raw_pcm_to_mp3
 
                         mp3_bytes = convert_raw_pcm_to_mp3(audio_bytes, sample_rate=24000)
-                    upload_ai = await lc_client.upload_file(
-                        f"turn-{ai_turn.id}.mp3", mp3_bytes, "audio/mpeg"
+                    minio_client = MinioClient(
+                        endpoint=settings.minio_endpoint,
+                        access_key=settings.minio_access_key,
+                        secret_key=settings.minio_secret_key,
+                        bucket=settings.minio_bucket,
                     )
-                    ai_audio_id = upload_ai.get("objectId") or upload_ai.get("name")
-                    ai_audio_url = upload_ai.get("url")
+                    await minio_client.initialize()
+                    object_name = f"turn-{ai_turn.id}.mp3"
+                    await minio_client.upload_file(object_name, mp3_bytes, "audio/mpeg")
+                    ai_audio_id = object_name
+                    ai_audio_url = ""
             except AudioConversionError as exc:
                 emit_event(
                     "turn.audio_error",
@@ -581,7 +599,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                         end_criteria=scenario.end_criteria,
                     )
                 else:
-                    scenario_repo = ScenarioRepository(lc_client)
+                    scenario_repo = ScenarioRepository(mongo_client)
                     scenario_data = await _fetch_scenario(repo, scenario_repo, session_id)
                     if scenario_data:
                         objective = await run_objective_check(
@@ -609,7 +627,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                     )
     finally:
         await qwen_client.close()
-        await lc_client.close()
+        await mongo_client.close()
 
 
 async def _run_asr_update(*, session_id: str, turn_id: str, mp3_base64: str) -> None:
@@ -617,17 +635,16 @@ async def _run_asr_update(*, session_id: str, turn_id: str, mp3_base64: str) -> 
     logger = logging.getLogger(__name__)
 
     settings = load_settings()
-    lc_client = LeanCloudClient(
-        app_id=settings.lean_app_id,
-        app_key=settings.lean_app_key,
-        master_key=settings.lean_master_key,
-        server_url=settings.lean_server_url,
+    mongo_connection_string = f"mongodb://{settings.mongo_host}:{settings.mongo_port}"
+    mongo_client = MongoDBClient(
+        connection_string=mongo_connection_string,
+        database=settings.mongo_db,
     )
     qwen_client = QwenClient(
         base_url=QWEN_BASE_URL,
         api_key=settings.dashscope_api_key,
     )
-    repo = SessionRepository(lc_client)
+    repo = SessionRepository(mongo_client)
     try:
         try:
             mp3_bytes = decode_audio_base64(mp3_base64)
@@ -680,7 +697,7 @@ async def _run_asr_update(*, session_id: str, turn_id: str, mp3_base64: str) -> 
         )
     finally:
         await qwen_client.close()
-        await lc_client.close()
+        await mongo_client.close()
 
 
 async def _terminate_for_qwen_error(repo: SessionRepository, session_id: str) -> None:

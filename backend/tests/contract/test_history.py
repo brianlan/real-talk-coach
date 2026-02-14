@@ -17,7 +17,7 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    monkeypatch.setenv("LEAN_SERVER_URL", "https://api.leancloud.cn")
+    # LeanCloud removed - using MongoDB
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("CHATAI_API_KEY", "secret")

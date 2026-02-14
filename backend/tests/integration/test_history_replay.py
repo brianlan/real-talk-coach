@@ -16,7 +16,7 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    monkeypatch.setenv("LEAN_SERVER_URL", "https://api.leancloud.cn")
+    # LeanCloud removed - using MongoDB
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("CHATAI_API_KEY", "secret")
@@ -161,6 +161,9 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
     class FakeSigningClient:
         async def create_signed_urls(self, urls, ttl_seconds=900):
             return {url: f"{url}?signed=1" for url in urls}
+        
+        async def get_signed_url(self, url, expires=900):
+            return f"{url}?signed=1"
 
     async def _noop_initial_turn(*args, **kwargs):
         return None
