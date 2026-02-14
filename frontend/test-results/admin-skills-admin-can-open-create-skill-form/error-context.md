@@ -1,0 +1,41 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - paragraph [ref=e4]: Admin
+      - heading "Data management" [level=1] [ref=e5]
+      - paragraph [ref=e6]: Manage skills, scenarios, sessions, and audit history for the coaching app.
+      - navigation "Admin navigation" [ref=e7]:
+        - generic [ref=e8]: Admin
+        - link "Skills" [ref=e9] [cursor=pointer]:
+          - /url: /admin/skills
+        - link "Scenarios" [ref=e10] [cursor=pointer]:
+          - /url: /admin/scenarios
+        - link "Sessions" [ref=e11] [cursor=pointer]:
+          - /url: /admin/sessions
+        - link "Audit Log" [ref=e12] [cursor=pointer]:
+          - /url: /admin/audit-log
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - heading "Skills" [level=2] [ref=e17]
+          - paragraph [ref=e18]: Manage reusable rubrics for scenarios.
+        - link "New Skill" [active] [ref=e19] [cursor=pointer]:
+          - /url: /admin/skills/new
+      - list [ref=e20]:
+        - listitem [ref=e21]:
+          - generic [ref=e22]:
+            - generic [ref=e23]:
+              - heading "Active Skill" [level=3] [ref=e24]
+              - paragraph [ref=e25]: Category
+            - generic [ref=e26]:
+              - link "Edit" [ref=e27] [cursor=pointer]:
+                - /url: /admin/skills/skill-1
+              - button "Delete" [ref=e28]
+          - paragraph [ref=e29]: Do great things
+  - button "Open Next.js Dev Tools" [ref=e35] [cursor=pointer]:
+    - img [ref=e36]
+  - alert [ref=e39]
+```
