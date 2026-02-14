@@ -4,7 +4,7 @@ This document covers how to deploy the Real Talk Coach application using Docker 
 
 ## Docker Compose Deployment
 
-The application is containerized into three main services: `backend`, `frontend`, and `nginx`. Nginx acts as a reverse proxy, publishing port 80.
+The application is containerized into five services: `backend`, `frontend`, `nginx`, `mongodb`, and `minio`. Nginx acts as a reverse proxy, publishing port 80. MongoDB stores structured data, and MinIO (S3-compatible) stores audio files.
 
 ### 1. Environment Setup
 
@@ -14,7 +14,7 @@ Copy the example environment file and fill in the required credentials:
 cp backend/.env.example backend/.env
 ```
 
-Edit `backend/.env` with your LeanCloud credentials, DashScope API key, and other required configuration.
+Edit `backend/.env` with your MongoDB, MinIO, DashScope API key, and other required configuration.
 
 #### Nginx Reverse Proxy Configuration
 When deploying behind the included Nginx proxy:
