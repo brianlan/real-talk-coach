@@ -1,8 +1,11 @@
 import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
- 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [GitHub],
-})
 
-export { handlers as GET, handlers as POST }
+const authConfig = {
+  providers: [GitHub],
+}
+
+const { handlers } = NextAuth(authConfig)
+
+export const GET = handlers.GET
+export const POST = handlers.POST
