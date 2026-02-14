@@ -83,3 +83,21 @@ export async function manualStopSession(sessionId: string, reason = "manual") {
 export function connectSessionSocket(sessionId: string): WebSocket {
   return new WebSocket(`${wsBase}/sessions/${sessionId}`);
 }
+
+export type PracticeSessionCreate = {
+  scenarioId: string;
+  clientSessionStartedAt: string;
+  language?: "en" | "zh";
+};
+
+export async function createSession(input: PracticeSessionCreate) {
+  const res = await fetch(`${apiBase}/api/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new Error("Failed to create session");
+  }
+  return res.json();
+}
