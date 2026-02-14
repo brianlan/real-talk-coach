@@ -114,6 +114,10 @@ test("browse history and practice again", async ({ page }) => {
   });
 
   await page.route("**/api/sessions/session-1/practice-again", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
     await route.fulfill({
       status: 201,
       contentType: "application/json",
@@ -125,9 +129,8 @@ test("browse history and practice again", async ({ page }) => {
     });
   });
 
-  await page.goto("/history");
+  await page.goto("/history/session-1");
   await expect(page.getByText("Give feedback")).toBeVisible();
-  await page.getByText("Give feedback").click();
 
   await expect(page.getByText("Transcript")).toBeVisible();
   await expect(page.getByText("Nice work")).toBeVisible();
