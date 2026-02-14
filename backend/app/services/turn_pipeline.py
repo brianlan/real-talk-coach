@@ -343,8 +343,9 @@ async def generate_initial_ai_turn(
                     object_name = f"turn-{ai_turn.id}.mp3"
                     await minio_client.upload_file(object_name, mp3_bytes, "audio/mpeg")
                     ai_audio_id = object_name
-                    ai_audio_url = ""
-                    logger.info(f"[{session_id}] Audio uploaded successfully: id={ai_audio_id}")
+                    # Generate signed URL for the audio file
+                    ai_audio_url = await minio_client.get_signed_url(object_name, expires=900)
+                    logger.info(f"[{session_id}] Audio uploaded successfully: id={ai_audio_id}, url={ai_audio_url[:50]}...")
                 else:
                     logger.warning(f"[{session_id}] No audio data extracted from Qwen response")
             except AudioConversionError as exc:
@@ -558,7 +559,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                     object_name = f"turn-{ai_turn.id}.mp3"
                     await minio_client.upload_file(object_name, mp3_bytes, "audio/mpeg")
                     ai_audio_id = object_name
-                    ai_audio_url = ""
+                    ai_audio_url = await minio_client.get_signed_url(object_name, expires=900)
             except AudioConversionError as exc:
                 emit_event(
                     "turn.audio_error",

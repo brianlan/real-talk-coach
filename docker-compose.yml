@@ -8,6 +8,7 @@ services:
     volumes:
       - ./logs/backend:/var/log/app
     command: 'sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 2>&1 | tee -a /var/log/app/backend.log"'
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/healthz').read()"]
       interval: 10s
