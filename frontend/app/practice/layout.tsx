@@ -16,7 +16,7 @@ export default function PracticeLayout({
   const { data: historyData } = useQuery({
     queryKey: ["history", user?.id],
     queryFn: () =>
-      fetchHistoryList({ historyStepCount: 0, pageSize: 20, userId: user?.id }),
+      fetchHistoryList({ historyStepCount: 1, pageSize: 20, userId: user?.id }),
   });
 
   const sessions = historyData?.items ?? [];
