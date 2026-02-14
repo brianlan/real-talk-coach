@@ -37,10 +37,11 @@ class _BaseLLMClient:
         api_key: str,
         timeout: float = 60.0,
         retries: int = 0,
-        transport: httpx.BaseTransport | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
         trust_env: bool = True,
     ) -> None:
         self._retries = retries
+        self._timeout = timeout
         self._http_client = httpx.AsyncClient(
             base_url=base_url,
             timeout=timeout,
@@ -70,7 +71,7 @@ class QwenClient(_BaseLLMClient):
         api_key: str,
         timeout: float = 30.0,
         retries: int = 2,
-        transport: httpx.BaseTransport | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         super().__init__(
             base_url=base_url,
@@ -81,7 +82,7 @@ class QwenClient(_BaseLLMClient):
         )
 
     def _should_retry(self, exc: Exception) -> bool:
-        if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
+        if isinstance(exc, (httpx.TimeoutException, TimeoutError, asyncio.TimeoutError)):
             return True
         if isinstance(exc, httpx.HTTPStatusError):
             return exc.response.status_code >= 500
@@ -135,7 +136,10 @@ class QwenClient(_BaseLLMClient):
 
         for attempt in range(self._retries + 1):
             try:
-                completion = await self._client.chat.completions.create(**client_params)
+                completion = await asyncio.wait_for(
+                    self._client.chat.completions.create(**client_params),
+                    timeout=self._timeout,
+                )
 
                 # Process the response
                 text_parts = []
@@ -143,19 +147,22 @@ class QwenClient(_BaseLLMClient):
 
                 if stream:
                     # Stream processing: collect all chunks
-                    async for chunk in completion:
-                        if chunk.choices:
-                            delta = chunk.choices[0].delta
+                    async def _collect_stream() -> None:
+                        async for chunk in completion:
+                            if chunk.choices:
+                                delta = chunk.choices[0].delta
 
-                            # Collect text content
-                            if hasattr(delta, "content") and delta.content:
-                                text_parts.append(delta.content)
+                                # Collect text content
+                                if hasattr(delta, "content") and delta.content:
+                                    text_parts.append(delta.content)
 
-                            # Collect audio data
-                            if hasattr(delta, "audio") and delta.audio:
-                                audio_data = delta.audio.get("data")
-                                if audio_data:
-                                    audio_parts.append(audio_data)
+                                # Collect audio data
+                                if hasattr(delta, "audio") and delta.audio:
+                                    audio_data = delta.audio.get("data")
+                                    if audio_data:
+                                        audio_parts.append(audio_data)
+
+                    await asyncio.wait_for(_collect_stream(), timeout=self._timeout)
                 else:
                     # Non-stream processing: single response
                     if completion.choices:
@@ -199,6 +206,7 @@ class QwenClient(_BaseLLMClient):
                     status_code=status_code,
                     body=body,
                 ) from exc
+        raise LLMError("Qwen generation failed: retries exhausted")
 
     async def asr(self, payload: dict[str, Any]) -> dict[str, Any]:
         """
@@ -282,6 +290,7 @@ class QwenClient(_BaseLLMClient):
                     status_code=status_code,
                     body=body,
                 ) from exc
+        raise LLMError("Qwen ASR failed: retries exhausted")
 
 
 class EvaluatorClient(_BaseLLMClient):
@@ -292,7 +301,7 @@ class EvaluatorClient(_BaseLLMClient):
         api_key: str,
         timeout: float = 60.0,
         retries: int = 0,
-        transport: httpx.BaseTransport | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         super().__init__(
             base_url=base_url,
@@ -367,3 +376,4 @@ class EvaluatorClient(_BaseLLMClient):
                     status_code=status_code,
                     body=body,
                 ) from exc
+        raise LLMError("Evaluator failed: retries exhausted")
