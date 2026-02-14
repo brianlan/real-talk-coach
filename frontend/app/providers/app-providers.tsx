@@ -5,7 +5,9 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
+import { SessionProvider } from "next-auth/react";
 import { getWsBase } from "@/services/api/base";
+import { AuthProvider } from "./auth-provider";
 
 export type WebSocketContextValue = {
   baseUrl: string;
@@ -31,10 +33,14 @@ export function AppProviders({ children }: AppProvidersProps) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <WebSocketContext.Provider value={wsContext}>
-        {children}
-      </WebSocketContext.Provider>
-    </QueryClientProvider>
+    <SessionProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <WebSocketContext.Provider value={wsContext}>
+            {children}
+          </WebSocketContext.Provider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </SessionProvider>
   );
 }
