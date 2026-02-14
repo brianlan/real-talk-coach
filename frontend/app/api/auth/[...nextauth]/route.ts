@@ -8,6 +8,7 @@ const authConfig = {
       clientSecret: process.env.GITHUB_SECRET,
     }),
   ],
+  trustHost: true,
 }
 
 const { handlers } = NextAuth(authConfig)
