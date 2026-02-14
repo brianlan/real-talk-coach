@@ -5,10 +5,12 @@ import { useParams } from "next/navigation";
 
 import HistoryDetail from "./history-detail";
 import { fetchHistoryDetail } from "@/services/api/history";
+import { useUser } from "@/hooks/useUser";
 
 export default function HistoryDetailPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = params?.sessionId;
+  const { user } = useUser();
   const [detail, setDetail] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export default function HistoryDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchHistoryDetail(sessionId, 2);
+        const data = await fetchHistoryDetail(sessionId, 2, user?.id);
         if (!canceled) {
           setDetail(data);
         }
@@ -41,7 +43,7 @@ export default function HistoryDetailPage() {
     return () => {
       canceled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, user?.id]);
 
   if (loading) {
     return (

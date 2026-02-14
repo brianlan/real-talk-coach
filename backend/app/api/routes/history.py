@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from app.clients.minio import MinioClient
 from app.clients.mongodb import MongoDBClient
@@ -38,6 +38,7 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
         "id": session.id,
         "scenarioId": session.scenario_id,
         "stubUserId": session.stub_user_id,
+        "userId": session.user_id,
         "language": session.language,
         "openingPrompt": session.opening_prompt,
         "status": session.status,
@@ -123,6 +124,7 @@ async def list_history(
     category: str | None = None,
     search: str | None = None,
     sort: str = Query("startedAtDesc"),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     repo: SessionRepository = Depends(_session_repo),
     scenario_repo: ScenarioRepository = Depends(_scenario_repo),
 ):
@@ -137,7 +139,11 @@ async def list_history(
             "scenarioId": scenarioId,
         },
     ):
-        sessions = await repo.list_sessions(load_settings().stub_user_id)
+        settings = load_settings()
+        if x_user_id:
+            sessions = await repo.list_sessions(settings.stub_user_id, x_user_id)
+        else:
+            sessions = await repo.list_sessions(settings.stub_user_id)
         items = [
             session
             for session in sessions
@@ -187,6 +193,7 @@ async def list_history(
 async def get_history_detail(
     session_id: str,
     historyStepCount: int = Query(..., ge=1),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     repo: SessionRepository = Depends(_session_repo),
     scenario_repo: ScenarioRepository = Depends(_scenario_repo),
     evaluation_repo: EvaluationRepository = Depends(_evaluation_repo),
@@ -200,7 +207,10 @@ async def get_history_detail(
         if not session:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         settings = load_settings()
-        if session.stub_user_id != settings.stub_user_id:
+        if session.user_id and x_user_id:
+            if x_user_id != session.user_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        elif session.stub_user_id != settings.stub_user_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         turns = await repo.list_turns(session_id)
         turns.sort(key=lambda turn: turn.sequence)

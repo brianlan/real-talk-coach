@@ -87,6 +87,7 @@ export function connectSessionSocket(sessionId: string): WebSocket {
 export type PracticeSessionCreate = {
   scenarioId: string;
   clientSessionStartedAt: string;
+  userId?: string;
   language?: "en" | "zh";
 };
 

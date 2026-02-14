@@ -23,6 +23,7 @@ def enforce_drift(
 class PracticeSessionCreate(BaseModel):
     scenarioId: str = Field(..., min_length=1)
     clientSessionStartedAt: datetime
+    userId: str | None = Field(default=None, min_length=1)
     language: str | None = None
     personas: dict[str, str] | None = None
     objectives: list[str] | None = None

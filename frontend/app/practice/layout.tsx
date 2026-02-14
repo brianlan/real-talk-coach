@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { fetchHistoryList } from "@/services/api/history";
 import { usePathname } from "next/navigation";
+import { useUser } from "@/hooks/useUser";
 
 export default function PracticeLayout({
   children,
@@ -11,9 +12,11 @@ export default function PracticeLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { user } = useUser();
   const { data: historyData } = useQuery({
-    queryKey: ["history"],
-    queryFn: () => fetchHistoryList({ historyStepCount: 0, pageSize: 20 }),
+    queryKey: ["history", user?.id],
+    queryFn: () =>
+      fetchHistoryList({ historyStepCount: 0, pageSize: 20, userId: user?.id }),
   });
 
   const sessions = historyData?.items ?? [];

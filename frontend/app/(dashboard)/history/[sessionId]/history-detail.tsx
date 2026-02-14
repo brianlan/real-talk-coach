@@ -6,6 +6,7 @@ import EvaluationPanel from "@/components/session/EvaluationPanel";
 import PracticeAgainButton from "@/components/history/PracticeAgainButton";
 import { fetchHistoryDetail } from "@/services/api/history";
 import { requeueEvaluation } from "@/services/api/evaluationClient";
+import { useUser } from "@/hooks/useUser";
 
 type HistoryDetailProps = {
   sessionId: string;
@@ -13,6 +14,7 @@ type HistoryDetailProps = {
 };
 
 export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetailProps) {
+  const { user } = useUser();
   const [detail, setDetail] = useState(initialDetail);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,7 +43,7 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
     setRefreshing(true);
     setError(null);
     try {
-      const next = await fetchHistoryDetail(sessionId, 2);
+      const next = await fetchHistoryDetail(sessionId, 2, user?.id);
       setDetail(next);
       setExpiredTurns(new Set());
     } catch (err) {

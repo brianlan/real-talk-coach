@@ -4,9 +4,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { getScenarios } from "@/services/api/scenarios";
 import { createSession } from "@/services/api/sessions";
+import { useUser } from "@/hooks/useUser";
 
 export default function PracticePage() {
   const router = useRouter();
+  const { user } = useUser();
   
   const { data: scenarios, isLoading } = useQuery({
     queryKey: ["scenarios"],
@@ -24,6 +26,7 @@ export default function PracticePage() {
     createSessionMutation.mutate({
       scenarioId,
       clientSessionStartedAt: new Date().toISOString(),
+      userId: user?.id,
     });
   };
 

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { fetchHistoryList, SessionPage } from "@/services/api/history";
 import { getApiBase } from "@/services/api/base";
+import { useUser } from "@/hooks/useUser";
 
 const apiBase = getApiBase();
 
@@ -29,6 +30,7 @@ async function fetchScenario(scenarioId: string): Promise<Scenario | null> {
 function HistoryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useUser();
   const [history, setHistory] = useState<SessionPage | null>(null);
   const [scenarioMap, setScenarioMap] = useState<Map<string, Scenario>>(new Map());
   const [categories, setCategories] = useState<string[]>([]);
@@ -53,6 +55,7 @@ function HistoryPageInner() {
           search: search || undefined,
           category: category || undefined,
           sort: sort || undefined,
+          userId: user?.id,
         });
         if (canceled) {
           return;
@@ -98,7 +101,7 @@ function HistoryPageInner() {
     return () => {
       canceled = true;
     };
-  }, [search, category, sort]);
+  }, [search, category, sort, user?.id]);
 
   const formKey = useMemo(
     () => `${search}|${category}|${sort}`,
