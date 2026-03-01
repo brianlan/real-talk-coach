@@ -53,6 +53,10 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
         "objectiveStatus": session.objective_status,
         "objectiveReason": session.objective_reason,
         "evaluationId": session.evaluation_id,
+        "mode": session.mode,
+        "rtcRoomId": session.rtc_room_id,
+        "rtcTaskId": session.rtc_task_id,
+        "realtimeState": session.realtime_state,
     }
 
 
@@ -89,6 +93,8 @@ def _turn_response(turn: TurnRecord, signed_url: str | None) -> dict[str, Any]:
         "endedAt": turn.ended_at,
         "context": turn.context,
         "latencyMs": turn.latency_ms,
+        "isInterrupted": turn.is_interrupted,
+        "interruptedAtMs": turn.interrupted_at_ms,
     }
 
 

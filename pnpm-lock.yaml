@@ -1,0 +1,29 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@volcengine/rtc':
+        specifier: ^4.68.1
+        version: 4.68.1
+
+packages:
+
+  '@volcengine/rtc@4.68.1':
+    resolution: {integrity: sha512-+S08IaTuouwG5B+aWAnC2PYvQcKimMIIFngtMrYTLgghHW5vCa96Tiq1vdkXK6QRKCB04W1ec8qrPM2ESSU96A==}
+
+  eventemitter3@4.0.7:
+    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
+
+snapshots:
+
+  '@volcengine/rtc@4.68.1':
+    dependencies:
+      eventemitter3: 4.0.7
+
+  eventemitter3@4.0.7: {}

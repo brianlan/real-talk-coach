@@ -25,6 +25,9 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
     setDetail(initialDetail);
   }, [initialDetail]);
 
+  const session = detail?.session;
+  const isRealtime = session?.mode === "realtime";
+
   const skillMap = useMemo(() => {
     const summaries = detail?.scenario?.skillSummaries ?? [];
     return summaries.reduce(
@@ -76,9 +79,42 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
           <p style={{ textTransform: "uppercase", letterSpacing: 2, fontSize: 12 }}>
             History Detail
           </p>
-          <h1 style={{ fontSize: 36, margin: "8px 0" }}>
-            {detail?.scenario?.title ?? "Session detail"}
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <h1 style={{ fontSize: 36, margin: 0 }}>
+              {detail?.scenario?.title ?? "Session detail"}
+            </h1>
+            {isRealtime ? (
+              <span
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 999,
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: "white",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
+                Realtime
+              </span>
+            ) : (
+              <span
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 999,
+                  background: "#e0d7cb",
+                  color: "#2f2a24",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
+                Turn-based
+              </span>
+            )}
+          </div>
           <p style={{ maxWidth: 640 }}>
             {detail?.scenario?.objective ?? "Review the conversation outcomes."}
           </p>
@@ -102,11 +138,33 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
                   padding: 16,
                   borderRadius: 12,
                   background: turn.speaker === "ai" ? "#f3eadf" : "#e9eef3",
+                  position: "relative",
+                  opacity: turn.isInterrupted ? 0.7 : 1,
                 }}
               >
+                {turn.isInterrupted ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      background: "#ff6b6b",
+                      color: "white",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                    title={`Interrupted at ${turn.interruptedAtMs}ms`}
+                  >
+                    ⚡ Interrupted
+                  </div>
+                ) : null}
                 <strong style={{ textTransform: "capitalize" }}>{turn.speaker}</strong>
                 <p style={{ margin: "6px 0 0" }}>
-                  {turn.transcript ?? "(transcript pending)"}
+                  {turn.transcript ?? (turn.isInterrupted ? "(interrupted)" : "(transcript pending)")}
                 </p>
                 {turn.audioUrl ? (
                   <div style={{ marginTop: 10 }}>
