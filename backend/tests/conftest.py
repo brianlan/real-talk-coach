@@ -3,7 +3,6 @@ import mongomock
 import pytest
 
 from app.clients.llm import EvaluatorClient, QwenClient
-from app.clients.mongodb import MongoDBClient
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +40,15 @@ def _set_default_env(monkeypatch):
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
     monkeypatch.setenv("ADMIN_ACCESS_TOKEN", "admin-token")
+    # Volcengine RTC env vars
+    monkeypatch.setenv("VOLCENGINE_ACCESS_KEY_ID", "ak-test")
+    monkeypatch.setenv("VOLCENGINE_SECRET_ACCESS_KEY", "sk-test")
+    monkeypatch.setenv("VOLCENGINE_RTC_APP_ID", "app-test")
+    monkeypatch.setenv("VOLCENGINE_RTC_APP_KEY", "app-key-test")
+    monkeypatch.setenv("VOLCENGINE_VOICE_CHAT_ENDPOINT", "https://rtc.volcengineapi.com")
+    monkeypatch.setenv("VOLCENGINE_VOICE_MODEL_ID", "doubao-voice-realtime")
+    monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", "test-callback-secret-key")
+    monkeypatch.setenv("VOLCENGINE_VOICE_MODEL_ID", "doubao-voice-realtime")
 
 
 @pytest.fixture
@@ -79,7 +87,7 @@ def mongomock_db(mongomock_client):
 def mongomock_client_fixture():
     """Provide an async-compatible MongoDB mock client for tests.
     
-    This fixture creates a mock MongoDB client that can be used in tests
+    This fixture creates a that can be used mock MongoDB client in tests
     instead of requiring a real MongoDB instance.
     
     Yields:

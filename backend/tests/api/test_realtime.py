@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 from fastapi import status
+from typing import Literal
 
 from app.clients.volcengine_rtc import VolcengineAPIError
 from app.main import app
@@ -13,7 +14,7 @@ def _make_session(
     session_id: str = "session-1",
     rtc_room_id: str | None = None,
     rtc_task_id: str | None = None,
-    realtime_state: str | None = None,
+    realtime_state: Literal["connecting", "active", "ended"] | None = None,
 ) -> PracticeSessionRecord:
     return PracticeSessionRecord(
         id=session_id,
