@@ -98,7 +98,16 @@ export async function createSession(input: PracticeSessionCreate) {
     body: JSON.stringify(input),
   });
   if (!res.ok) {
-    throw new Error("Failed to create session");
+    let detail = "Failed to create session";
+    try {
+      const payload = await res.json();
+      if (typeof payload?.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = `Failed to create session (${res.status})`;
+    }
+    throw new Error(detail);
   }
   return res.json();
 }

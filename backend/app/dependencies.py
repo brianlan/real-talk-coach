@@ -14,6 +14,6 @@ def get_mongodb_client(request: Request) -> MongoDBClient:
     return request.app.state.mongodb
 
 
-def get_minio_client(request: Request) -> MinioClient:
+def get_minio_client(request: Request) -> MinioClient | None:
     """Dependency for MinIO client from app state."""
     return request.app.state.minio

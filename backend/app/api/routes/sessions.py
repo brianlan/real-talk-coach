@@ -136,15 +136,15 @@ async def create_session(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),
             ) from exc
+        resolved_user_id = payload.userId or x_user_id
         try:
-            await ensure_capacity(repo, max_active=20)
+            await ensure_capacity(repo, user_id=resolved_user_id, max_active=20)
         except CapacityError as exc:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=str(exc),
             ) from exc
         now = datetime.now(timezone.utc).isoformat()
-        resolved_user_id = payload.userId or x_user_id
         record = await repo.create_session(
             {
                 "scenarioId": payload.scenarioId,

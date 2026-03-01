@@ -339,6 +339,7 @@ async def generate_initial_ai_turn(
                         access_key=settings.minio_access_key,
                         secret_key=settings.minio_secret_key,
                         bucket=settings.minio_bucket,
+                        public_endpoint=settings.minio_public_endpoint,
                     )
                     await minio_client.initialize()
                     object_name = f"turn-{ai_turn.id}.mp3"
@@ -572,6 +573,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                         access_key=settings.minio_access_key,
                         secret_key=settings.minio_secret_key,
                         bucket=settings.minio_bucket,
+                        public_endpoint=settings.minio_public_endpoint,
                     )
                     await minio_client.initialize()
                     object_name = f"turn-{ai_turn.id}.mp3"

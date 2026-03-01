@@ -115,6 +115,11 @@ export default function PracticePage() {
           </div>
         ))}
       </div>
+      {createSessionMutation.isError ? (
+        <p style={{ marginTop: 16, color: "#b24332" }}>
+          {(createSessionMutation.error as Error).message}
+        </p>
+      ) : null}
     </div>
   );
 }

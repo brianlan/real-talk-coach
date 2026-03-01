@@ -79,6 +79,7 @@ class QwenClient(_BaseLLMClient):
             timeout=timeout,
             retries=retries,
             transport=transport,
+            trust_env=False,
         )
 
     def _should_retry(self, exc: Exception) -> bool:

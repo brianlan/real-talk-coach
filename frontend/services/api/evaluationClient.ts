@@ -20,10 +20,13 @@ export type Evaluation = {
   completedAt?: string | null;
 };
 
-export async function fetchEvaluation(sessionId: string): Promise<Evaluation> {
+export async function fetchEvaluation(sessionId: string): Promise<Evaluation | null> {
   const response = await fetch(`${apiBase}/api/sessions/${sessionId}/evaluation`, {
     cache: "no-store",
   });
+  if (response.status === 404) {
+    return null;
+  }
   if (!response.ok) {
     throw new Error(`Evaluation fetch failed (${response.status})`);
   }

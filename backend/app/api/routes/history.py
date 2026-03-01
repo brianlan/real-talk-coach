@@ -29,7 +29,7 @@ def _evaluation_repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> Ev
     return EvaluationRepository(mongodb)
 
 
-def _signing_client(minio: MinioClient = Depends(get_minio_client)) -> MinioClient:
+def _signing_client(minio: MinioClient | None = Depends(get_minio_client)) -> MinioClient | None:
     return minio
 
 
@@ -197,7 +197,7 @@ async def get_history_detail(
     repo: SessionRepository = Depends(_session_repo),
     scenario_repo: ScenarioRepository = Depends(_scenario_repo),
     evaluation_repo: EvaluationRepository = Depends(_evaluation_repo),
-    signing_client: MinioClient = Depends(_signing_client),
+    signing_client: MinioClient | None = Depends(_signing_client),
 ):
     with start_span(
         "history.detail",
@@ -223,7 +223,7 @@ async def get_history_detail(
             {"sessionId": session_id, "turnCount": len(turns)},
         ):
             for turn in turns:
-                if turn.audio_file_id:
+                if signing_client and turn.audio_file_id:
                     signed_map[turn.audio_file_id] = await signing_client.get_signed_url(
                         turn.audio_file_id, expires=900
                     )
