@@ -3,9 +3,40 @@
 ## Prerequisites
 - Python 3.11 + pipx or uv
 - Node.js 20 LTS + pnpm 9
-- LeanCloud single-tenant credentials (appId, appKey, masterKey)
+- Volcengine account with RTC (Real-Time Communication) credentials
 - qwen3-omni-flash + evaluator model API keys (DashScope OpenAI-compatible SDK >=1.52.0)
 - GPT-5 mini secretKey (https://api.chataiapi.com)
+
+## Realtime Voice Conversation
+Real Talk Coach supports **real-time voice conversation** with AI using Volcengine RTC.
+
+### Features
+- Real-time bidirectional audio streaming between user and AI
+- Voice activity detection (VAD)
+- Low-latency speech synthesis
+- Automatic turn-taking based on voice activity
+
+### Volcengine Environment Variables
+Create a Volcengine account and RTC application, then configure these variables:
+
+```bash
+# Volcengine credentials for V4 signature authentication
+VOLCENGINE_ACCESS_KEY_ID=your_access_key_id
+VOLCENGINE_SECRET_ACCESS_KEY=your_secret_access_key
+# RTC application credentials
+VOLCENGINE_RTC_APP_ID=your_rtc_app_id
+VOLCENGINE_RTC_APP_KEY=your_rtc_app_key
+# API endpoint for StartVoiceChat/StopVoiceChat
+VOLCENGINE_VOICE_CHAT_ENDPOINT=https://rtcv2.volcengineapi.com
+# Model ID for SC2.0 voice model
+VOLCENGINE_VOICE_MODEL_ID=chattts-sc2-0
+```
+
+### Usage
+1. Start a practice session as usual
+2. Click the "📞 Call" button to join the realtime voice room
+3. Speak with the AI in real-time - the AI responds automatically when you stop speaking
+4. Click "End Call" to leave the room and return to text chat
 
 ## Environment
 Create `.env` files in both apps (never commit secrets). Use the examples below as a starting point:
@@ -80,7 +111,7 @@ certificate warning.
 Notes:
 - `NODE_TLS_REJECT_UNAUTHORIZED=0` is **dev-only** to allow Next.js server-side fetches
   against the self-signed backend cert.
-- If you don’t want to disable TLS verification, use a trusted certificate instead (see below).
+- If you don't want to disable TLS verification, use a trusted certificate instead (see below).
 
 ## Certificates (dev)
 The HTTPS proxy and backend TLS use `frontend/.certs/cert.pem` and `frontend/.certs/key.pem`.
