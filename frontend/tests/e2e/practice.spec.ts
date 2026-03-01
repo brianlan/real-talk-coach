@@ -162,10 +162,9 @@ test("practice flow with mocked websocket events", async ({ page }) => {
     });
   });
 
-  await page.goto("/scenarios/scenario-1");
+  await page.goto("/practice");
   await expect(page.getByText("Give constructive feedback to a peer")).toBeVisible();
-
-  await page.getByRole("button", { name: /start practice/i }).click();
+  await page.getByRole("button", { name: "Start Practice", exact: true }).click();
   await page.waitForURL(/\/practice\/session-1/);
   await page.waitForFunction(
     () => (window as any).__lastWebSocket?.onmessage
@@ -203,4 +202,177 @@ test("practice flow with mocked websocket events", async ({ page }) => {
   );
 
   await expect(page.locator("strong", { hasText: /session ended/i })).toBeVisible();
+});
+
+test("initial AI turn appears even when websocket message is missed", async ({ page }) => {
+  await page.addInitScript(() => {
+    class MockWebSocket {
+      url: string;
+      readyState = 1;
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onclose: ((event: CloseEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      private listeners: Record<string, Array<(event: any) => void>> = {};
+
+      constructor(url: string) {
+        this.url = url;
+        (window as any).__lastWebSocket = this;
+        setTimeout(() => this.onopen?.(new Event("open")), 0);
+      }
+
+      send() {}
+
+      close() {
+        this.readyState = 3;
+        this.onclose?.(new CloseEvent("close"));
+      }
+
+      addEventListener(type: string, listener: (event: any) => void) {
+        this.listeners[type] = this.listeners[type] ?? [];
+        this.listeners[type].push(listener);
+      }
+
+      removeEventListener(type: string, listener: (event: any) => void) {
+        this.listeners[type] = (this.listeners[type] ?? []).filter(
+          (item) => item !== listener
+        );
+      }
+
+      dispatchEvent(event: Event) {
+        const listeners = this.listeners[event.type] ?? [];
+        listeners.forEach((listener) => listener(event));
+        return true;
+      }
+    }
+
+    (window as any).WebSocket = MockWebSocket;
+  });
+
+  await mockScenarioApi(page, [
+    {
+      id: "scenario-1",
+      category: "Difficult Feedback",
+      title: "Give constructive feedback to a peer",
+      description: "Scenario description",
+      objective: "Objective",
+      aiPersona: { name: "Alex", role: "PM", background: "Test" },
+      traineePersona: { name: "You", role: "Lead", background: "Test" },
+      endCriteria: ["End"],
+      skills: [],
+      skillSummaries: [],
+      idleLimitSeconds: 8,
+      durationLimitSeconds: 300,
+      prompt: "Prompt",
+    },
+  ]);
+
+  await page.route("**/api/skills", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [] }),
+    });
+  });
+
+  await page.route("**/api/sessions", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "session-1",
+        scenarioId: "scenario-1",
+        stubUserId: "pilot-user",
+        status: "pending",
+        clientSessionStartedAt: "2025-01-01T00:00:00Z",
+        startedAt: "2025-01-01T00:00:00Z",
+        endedAt: null,
+        totalDurationSeconds: null,
+        idleLimitSeconds: 8,
+        durationLimitSeconds: 300,
+        wsChannel: "/ws/sessions/session-1",
+        objectiveStatus: "unknown",
+        objectiveReason: null,
+        evaluationId: null,
+      }),
+    });
+  });
+
+  let detailRequestCount = 0;
+  await page.route("**/api/sessions/session-1?**", async (route) => {
+    detailRequestCount += 1;
+    const turns =
+      detailRequestCount >= 2
+        ? [
+            {
+              id: "turn-0",
+              sessionId: "session-1",
+              sequence: 0,
+              speaker: "ai",
+              transcript: "Recovered initial AI turn",
+              audioFileId: "file-1",
+              audioUrl: "https://example.com/audio.mp3",
+              asrStatus: "not_applicable",
+              createdAt: "2025-01-01T00:00:00Z",
+              startedAt: "2025-01-01T00:00:00Z",
+              endedAt: "2025-01-01T00:00:00Z",
+              context: "",
+              latencyMs: 120,
+            },
+          ]
+        : [];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        session: {
+          id: "session-1",
+          scenarioId: "scenario-1",
+          stubUserId: "pilot-user",
+          status: "active",
+          terminationReason: null,
+          clientSessionStartedAt: "2025-01-01T00:00:00Z",
+          startedAt: "2025-01-01T00:00:00Z",
+          endedAt: null,
+          totalDurationSeconds: null,
+          idleLimitSeconds: 8,
+          durationLimitSeconds: 300,
+          wsChannel: "/ws/sessions/session-1",
+          objectiveStatus: "unknown",
+          objectiveReason: null,
+          evaluationId: null,
+        },
+        scenario: {
+          id: "scenario-1",
+          category: "Difficult Feedback",
+          title: "Give constructive feedback to a peer",
+          description: "Scenario description",
+          objective: "Objective",
+          aiPersona: { name: "Alex", role: "PM", background: "Test" },
+          traineePersona: { name: "You", role: "Lead", background: "Test" },
+          endCriteria: ["End"],
+          skills: [],
+          skillSummaries: [],
+          idleLimitSeconds: 8,
+          durationLimitSeconds: 300,
+          prompt: "Prompt",
+        },
+        turns,
+        evaluation: null,
+      }),
+    });
+  });
+
+  await page.goto("/practice");
+  await expect(page.getByRole("button", { name: "Start Practice", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Start Practice", exact: true }).click();
+  await page.waitForURL(/\/practice\/session-1/);
+
+  await expect(page.getByText("Recovered initial AI turn")).toBeVisible();
+  await expect(page.getByText("No turns yet. Waiting for the AI to begin...")).toHaveCount(0);
 });

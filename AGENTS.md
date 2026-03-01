@@ -16,6 +16,10 @@ frontend/
 tests/
 ```
 
+## Python Env
+
+/Users/rlan/miniforge3/envs/mykik_py311/bin/python
+
 ## Commands
 
 cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLOGIES] pytest [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLOGIES] ruff check .
@@ -23,6 +27,10 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 ## Code Style
 
 Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15: Follow standard conventions
+
+## Mind your Proxy Settings
+
+When encountering network issue accessing local IP and port, please try removing your proxy and try again.
 
 ## Recent Changes
 - 002-admin-data-management: Added Backend Python 3.11 (FastAPI); Frontend TypeScript/Next.js 15 + FastAPI, Uvicorn, httpx, MongoDB, MinIO

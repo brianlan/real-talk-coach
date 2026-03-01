@@ -28,6 +28,7 @@ class PracticeSessionRecord:
     objective_reason: str | None
     termination_reason: str | None
     evaluation_id: str | None
+    user_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,7 @@ def _session_from_doc(doc: dict[str, Any]) -> PracticeSessionRecord:
         id=str(doc.get("_id", "")),
         scenario_id=doc.get("scenarioId", ""),
         stub_user_id=doc.get("stubUserId", ""),
+        user_id=doc.get("userId"),
         language=doc.get("language"),
         opening_prompt=_normalize_opening_prompt(doc.get("openingPrompt")),
         status=doc.get("status", "pending"),
@@ -247,10 +249,16 @@ class SessionRepository:
         except Exception:
             return None
 
-    async def list_sessions(self, stub_user_id: str | None = None) -> list[PracticeSessionRecord]:
+    async def list_sessions(
+        self,
+        stub_user_id: str | None = None,
+        user_id: str | None = None,
+    ) -> list[PracticeSessionRecord]:
         query = {}
         if stub_user_id:
             query["stubUserId"] = stub_user_id
+        if user_id:
+            query["userId"] = user_id
 
         try:
             collection = await self._sessions_collection()

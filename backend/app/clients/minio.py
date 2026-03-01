@@ -14,7 +14,7 @@ class MinioError(Exception):
     """Exception for MinIO client errors."""
 
     message: str
-    status_code: int | None = None
+    status_code: str | int | None = None
     body: str | None = None
 
     def __str__(self) -> str:
@@ -33,6 +33,7 @@ class MinioClient:
         bucket: str,
         secure: bool = False,
         region: str | None = None,
+        public_endpoint: str | None = None,
     ) -> None:
         """Initialize the MinIO client and ensure bucket exists.
 
@@ -45,6 +46,11 @@ class MinioClient:
             region: Optional region for the bucket
         """
         self._bucket = bucket
+        self._access_key = access_key
+        self._secret_key = secret_key
+        self._secure = secure
+        self._region = region
+        self._public_endpoint = public_endpoint
         self._client = Minio(
             endpoint,
             access_key=access_key,
@@ -151,8 +157,17 @@ class MinioClient:
             # Convert expires seconds to timedelta
             from datetime import timedelta
             expires_delta = timedelta(seconds=expires)
+            signer = self._client
+            if self._public_endpoint:
+                signer = Minio(
+                    self._public_endpoint,
+                    access_key=self._access_key,
+                    secret_key=self._secret_key,
+                    secure=self._secure,
+                    region=self._region or "us-east-1",
+                )
             url = await asyncio.to_thread(
-                self._client.presigned_get_object,
+                signer.presigned_get_object,
                 self._bucket,
                 name,
                 expires_delta,

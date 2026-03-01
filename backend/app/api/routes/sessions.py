@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import re
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, status
 
 from app.clients.mongodb import MongoDBClient
 from app.config import load_settings
@@ -40,6 +40,7 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
         "id": session.id,
         "scenarioId": session.scenario_id,
         "stubUserId": session.stub_user_id,
+        "userId": session.user_id,
         "language": session.language,
         "openingPrompt": session.opening_prompt,
         "status": session.status,
@@ -111,6 +112,7 @@ def _detect_language(scenario) -> str:
 async def create_session(
     payload: PracticeSessionCreate,
     background_tasks: BackgroundTasks,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     repo: SessionRepository = Depends(_repo),
     scenario_repo: ScenarioRepository = Depends(_scenario_repo),
 ):
@@ -134,8 +136,9 @@ async def create_session(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),
             ) from exc
+        resolved_user_id = payload.userId or x_user_id
         try:
-            await ensure_capacity(repo, max_active=20)
+            await ensure_capacity(repo, user_id=resolved_user_id, max_active=20)
         except CapacityError as exc:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -146,6 +149,7 @@ async def create_session(
             {
                 "scenarioId": payload.scenarioId,
                 "stubUserId": settings.stub_user_id,
+                "userId": resolved_user_id,
                 "language": language,
                 "openingPrompt": None,
                 "status": "pending",
@@ -197,6 +201,7 @@ async def practice_again(
         new_payload = PracticeSessionCreate(
             scenarioId=session.scenario_id,
             clientSessionStartedAt=client_started,
+            userId=session.user_id,
             language=session.language,
         )
         return await create_session(

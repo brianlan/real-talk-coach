@@ -60,10 +60,11 @@ async def lifespan(app: FastAPI):
             access_key=settings.minio_access_key,
             secret_key=settings.minio_secret_key,
             bucket=settings.minio_bucket,
+            public_endpoint=settings.minio_public_endpoint,
         )
         # Ensure bucket exists
         await app.state.minio.initialize()
-    except Exception as e:
+    except Exception:
         # MinIO is optional - log warning and continue
         app.state.minio = None
 

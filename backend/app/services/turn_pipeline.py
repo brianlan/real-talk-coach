@@ -309,6 +309,7 @@ async def generate_initial_ai_turn(
                     "latencyMs": -1,
                 }
             )
+            ai_turn_id = ai_turn.id
 
             ai_audio_url = None
             ai_audio_id = None
@@ -338,6 +339,7 @@ async def generate_initial_ai_turn(
                         access_key=settings.minio_access_key,
                         secret_key=settings.minio_secret_key,
                         bucket=settings.minio_bucket,
+                        public_endpoint=settings.minio_public_endpoint,
                     )
                     await minio_client.initialize()
                     object_name = f"turn-{ai_turn.id}.mp3"
@@ -359,13 +361,15 @@ async def generate_initial_ai_turn(
 
             if ai_audio_id:
                 await repo.update_turn(
-                    ai_turn.id,
+                    ai_turn_id,
                     {
                         "audioFileId": ai_audio_id,
                         "audioUrl": ai_audio_url or "",
                     },
                 )
-                ai_turn = await repo.get_turn(ai_turn.id)
+                updated_ai_turn = await repo.get_turn(ai_turn_id)
+                if updated_ai_turn:
+                    ai_turn = updated_ai_turn
 
             await hub.broadcast(
                 session_id,
@@ -378,7 +382,7 @@ async def generate_initial_ai_turn(
                 "turn.ai_created",
                 1,
                 session_id=session_id,
-                turn_id=ai_turn.id,
+                turn_id=ai_turn_id,
             )
 
             if transcript:
@@ -408,6 +412,20 @@ async def generate_initial_ai_turn(
                             else "objective_failed",
                             _utc_now(),
                         )
+    except Exception as exc:
+        logger.error(
+            "[%s] Initial AI turn initiation failed unexpectedly: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        emit_event(
+            "turn.initiation_failed",
+            session_id=session_id,
+            attributes={"reason": "initiation_unexpected_failed", "error": str(exc)},
+        )
+        await _terminate_for_qwen_error(repo, session_id)
+        return
     finally:
         await qwen_client.close()
         await mongo_client.close()
@@ -537,6 +555,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                     "latencyMs": None,
                 }
             )
+            ai_turn_id = ai_turn.id
 
             ai_audio_url = None
             ai_audio_id = None
@@ -554,6 +573,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                         access_key=settings.minio_access_key,
                         secret_key=settings.minio_secret_key,
                         bucket=settings.minio_bucket,
+                        public_endpoint=settings.minio_public_endpoint,
                     )
                     await minio_client.initialize()
                     object_name = f"turn-{ai_turn.id}.mp3"
@@ -570,13 +590,15 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
 
             if ai_audio_id:
                 await repo.update_turn(
-                    ai_turn.id,
+                    ai_turn_id,
                     {
                         "audioFileId": ai_audio_id,
                         "audioUrl": ai_audio_url,
                     },
                 )
-                ai_turn = await repo.get_turn(ai_turn.id)
+                updated_ai_turn = await repo.get_turn(ai_turn_id)
+                if updated_ai_turn:
+                    ai_turn = updated_ai_turn
 
             await hub.broadcast(
                 session_id,
@@ -589,7 +611,7 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
                 "turn.ai_created",
                 1,
                 session_id=session_id,
-                turn_id=ai_turn.id,
+                turn_id=ai_turn_id,
             )
 
             if transcript:

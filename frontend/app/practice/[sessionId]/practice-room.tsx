@@ -39,6 +39,18 @@ type SkillSummary = {
   rubric: string;
 };
 
+type SessionSnapshot = {
+  session?: {
+    status?: string;
+    terminationReason?: string | null;
+    endedAt?: string | null;
+  };
+  turns?: Turn[];
+  scenario?: {
+    skillSummaries?: SkillSummary[];
+  };
+};
+
 export default function PracticeRoom({ sessionId }: { sessionId: string }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [termination, setTermination] = useState<Termination | null>(null);
@@ -57,6 +69,34 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
   const evaluationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recorder = useAudioRecorder();
 
+  const applySessionSnapshot = (data: SessionSnapshot) => {
+    const initialTurns = (data.turns ?? []) as Turn[];
+    const scenarioSkills = (data.scenario?.skillSummaries ?? []) as SkillSummary[];
+    setSkillMap(
+      scenarioSkills.reduce<Record<string, SkillSummary>>((acc, skill) => {
+        acc[skill.skillId] = skill;
+        return acc;
+      }, {})
+    );
+    setTurns(initialTurns);
+    if (initialTurns.length) {
+      const maxSequence = Math.max(...initialTurns.map((turn) => turn.sequence));
+      setSequence(maxSequence + 1);
+    }
+    const session = data.session;
+    if (session?.status === "ended") {
+      setTermination({
+        reason: session.terminationReason ?? "ended",
+        terminatedAt: session.endedAt ?? new Date().toISOString(),
+      });
+      setMessage(
+        session.terminationReason === "qa_error"
+          ? "Qwen is unavailable. Please retry your turn."
+          : "Session ended"
+      );
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     const loadSession = async () => {
@@ -71,27 +111,7 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
       if (!isMounted) {
         return;
       }
-      const initialTurns = (data.turns ?? []) as Turn[];
-      const scenarioSkills = (data.scenario?.skillSummaries ?? []) as SkillSummary[];
-      setSkillMap(
-        scenarioSkills.reduce<Record<string, SkillSummary>>((acc, skill) => {
-          acc[skill.skillId] = skill;
-          return acc;
-        }, {})
-      );
-      setTurns(initialTurns);
-      if (initialTurns.length) {
-        const maxSequence = Math.max(...initialTurns.map((turn) => turn.sequence));
-        setSequence(maxSequence + 1);
-      }
-      const session = data.session;
-      if (session?.status === "ended") {
-        setTermination({
-          reason: session.terminationReason ?? "ended",
-          terminatedAt: session.endedAt ?? new Date().toISOString(),
-        });
-        setMessage("Session ended");
-      }
+      applySessionSnapshot(data);
     };
     loadSession();
     return () => {
@@ -104,7 +124,9 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
     socket.onmessage = (event) => {
       const payload = JSON.parse(event.data) as SessionEvent;
       if (payload.type === "ai_turn") {
-        setTurns((prev) => [...prev, payload.turn]);
+        setTurns((prev) =>
+          prev.some((turn) => turn.id === payload.turn.id) ? prev : [...prev, payload.turn]
+        );
         setSequence(payload.turn.sequence + 1);
       }
       if (payload.type === "termination") {
@@ -120,6 +142,34 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
   }, [sessionId, wsUrl]);
 
   useEffect(() => {
+    if (termination || turns.length > 0) {
+      return;
+    }
+    let canceled = false;
+    const syncSession = async () => {
+      const response = await fetch(`${apiBase}/api/sessions/${sessionId}?historyStepCount=1`, {
+        cache: "no-store",
+      });
+      if (!response.ok || canceled) {
+        return;
+      }
+      const data = await response.json();
+      if (!canceled) {
+        applySessionSnapshot(data);
+      }
+    };
+
+    const intervalId = setInterval(() => {
+      void syncSession();
+    }, 3000);
+    void syncSession();
+    return () => {
+      canceled = true;
+      clearInterval(intervalId);
+    };
+  }, [sessionId, termination, turns.length]);
+
+  useEffect(() => {
     if (!termination) {
       return;
     }
@@ -129,6 +179,11 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
       try {
         const next = await fetchEvaluation(sessionId);
         if (canceled) {
+          return;
+        }
+        if (!next) {
+          setEvaluationError(null);
+          evaluationTimer.current = setTimeout(loadEvaluation, 5000);
           return;
         }
         setEvaluation(next);

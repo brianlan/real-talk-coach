@@ -37,7 +37,9 @@ class Skill:
 
 
 def _scenario_from_doc(doc: dict[str, Any], skill_map: dict[str, Skill]) -> Scenario:
-    skills = doc.get("skills", [])
+    # Normalize skills to string IDs (handle potential ObjectId from MongoDB)
+    raw_skills = doc.get("skills", [])
+    skills = [str(skill_id) for skill_id in raw_skills]
     skill_summaries = []
     for skill_id in skills:
         skill = skill_map.get(skill_id)

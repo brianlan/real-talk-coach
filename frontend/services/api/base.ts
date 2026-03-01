@@ -23,9 +23,18 @@ export function getApiBase(): string {
     // Local dev default
     return "http://localhost:8000";
   } else {
-    // Browser-side: use NEXT_PUBLIC_API_BASE if set explicitly
-    // If empty/undefined, return empty string for relative URLs
-    return process.env.NEXT_PUBLIC_API_BASE ?? "";
+    // Browser-side: use NEXT_PUBLIC_API_BASE if explicitly set and non-empty
+    const explicit = process.env.NEXT_PUBLIC_API_BASE;
+    if (explicit && explicit.trim().length > 0) {
+      return explicit;
+    }
+    // Only use local backend fallback when running frontend dev server on port 3000
+    const { hostname, port } = window.location;
+    if ((hostname === "localhost" || hostname === "127.0.0.1") && port === "3000") {
+      return "http://localhost:8000";
+    }
+    // Otherwise use relative URLs (empty base) so nginx proxy handles routing
+    return "";
   }
 }
 
@@ -39,9 +48,14 @@ export function getWsBase(): string {
     if (explicit && explicit.trim().length > 0) {
       return explicit;
     }
-    // Auto-derive from current location: protocol + host + /ws
-    const { protocol, host } = window.location;
+    // Only use local WS fallback when running frontend dev server on port 3000
+    const { hostname, protocol, port } = window.location;
+    if ((hostname === "localhost" || hostname === "127.0.0.1") && port === "3000") {
+      const wsProtocol = protocol === "https:" ? "wss:" : "ws:";
+      return `${wsProtocol}//localhost:8000/ws`;
+    }
+    // Otherwise derive from current location (works with nginx proxy)
     const wsProtocol = protocol === "https:" ? "wss:" : "ws:";
-    return `${wsProtocol}//${host}/ws`;
+    return `${wsProtocol}//${window.location.host}/ws`;
   }
 }

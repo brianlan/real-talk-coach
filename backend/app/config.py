@@ -18,6 +18,7 @@ class Settings:
     minio_access_key: str
     minio_secret_key: str
     minio_bucket: str
+    minio_public_endpoint: str | None
     dashscope_api_key: str
     qwen_voice_id: str | None
     chatai_api_base: str
@@ -82,6 +83,7 @@ def load_settings() -> Settings:
     minio_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin").strip()
     minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin").strip()
     minio_bucket = os.getenv("MINIO_BUCKET", "audio").strip()
+    minio_public_endpoint = _optional_env("MINIO_PUBLIC_ENDPOINT")
     dashscope_api_key = _require_env("DASHSCOPE_API_KEY")
     qwen_voice_id = _optional_env("QWEN_VOICE_ID")
     chatai_api_base = _require_url("CHATAI_API_BASE", _require_env("CHATAI_API_BASE"))
@@ -107,6 +109,7 @@ def load_settings() -> Settings:
         minio_access_key=minio_access_key,
         minio_secret_key=minio_secret_key,
         minio_bucket=minio_bucket,
+        minio_public_endpoint=minio_public_endpoint,
         dashscope_api_key=dashscope_api_key,
         qwen_voice_id=qwen_voice_id,
         chatai_api_base=chatai_api_base,

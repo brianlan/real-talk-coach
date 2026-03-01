@@ -23,11 +23,15 @@ def _is_terminal(status: str) -> bool:
 async def ensure_capacity(
     repo: SessionRepository,
     *,
+    user_id: str | None = None,
     max_active: int = 20,
     max_pending: int = 5,
 ) -> None:
     settings = load_settings()
-    sessions = await repo.list_sessions(settings.stub_user_id)
+    try:
+        sessions = await repo.list_sessions(settings.stub_user_id, user_id)
+    except TypeError:
+        sessions = await repo.list_sessions(settings.stub_user_id)
     active = [session for session in sessions if session.status != "ended"]
     pending = [session for session in sessions if session.status == "pending"]
     if len(active) >= max_active or len(pending) >= max_pending:

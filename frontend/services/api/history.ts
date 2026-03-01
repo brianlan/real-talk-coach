@@ -10,6 +10,7 @@ export type HistoryListFilters = {
   search?: string;
   sort?: "startedAtDesc" | "startedAtAsc";
   historyStepCount: number;
+  userId?: string;
 };
 
 export type SessionSummary = {
@@ -48,6 +49,7 @@ export async function fetchHistoryList(filters: HistoryListFilters): Promise<Ses
   }
   const response = await fetch(`${apiBase}/api/sessions?${query}`, {
     cache: "no-store",
+    headers: filters.userId ? { "X-User-Id": filters.userId } : undefined,
   });
   if (!response.ok) {
     throw new Error(`History fetch failed (${response.status})`);
@@ -55,10 +57,17 @@ export async function fetchHistoryList(filters: HistoryListFilters): Promise<Ses
   return response.json();
 }
 
-export async function fetchHistoryDetail(sessionId: string, historyStepCount: number) {
+export async function fetchHistoryDetail(
+  sessionId: string,
+  historyStepCount: number,
+  userId?: string
+) {
   const response = await fetch(
     `${apiBase}/api/sessions/${sessionId}?historyStepCount=${historyStepCount}`,
-    { cache: "no-store" }
+    {
+      cache: "no-store",
+      headers: userId ? { "X-User-Id": userId } : undefined,
+    }
   );
   if (!response.ok) {
     throw new Error(`History detail fetch failed (${response.status})`);
