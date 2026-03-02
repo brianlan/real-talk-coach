@@ -26,3 +26,4 @@ scenario.json
 .certs/
 frontend/.certs/
 .sisyphus/
+frontend/test-results/
