@@ -11,8 +11,6 @@ import argparse
 import asyncio
 import os
 import sys
-from datetime import datetime
-from typing import Any
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -118,7 +116,7 @@ class MigrationRunner:
         print(f"Found {len(records)} records in LeanCloud")
         
         if not records:
-            print(f"Migrated: 0")
+            print("Migrated: 0")
             return
         
         if self.dry_run:

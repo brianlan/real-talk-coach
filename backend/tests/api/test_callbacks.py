@@ -10,13 +10,12 @@ Tests POST /callbacks/doubao endpoint including:
 import hmac
 import hashlib
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.repositories.session_repository import SessionRepository, TurnRecord
 
 
 # Test constants

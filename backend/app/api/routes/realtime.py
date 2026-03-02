@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.clients.mongodb import MongoDBClient
-from app.config import load_settings
+from app.config import Settings, SettingsError, load_settings
 from app.dependencies import get_mongodb_client
 from app.repositories.session_repository import PracticeSessionRecord, SessionRepository
 
@@ -55,16 +56,52 @@ def _is_rtc_error(exc: Exception) -> bool:
     return exc.__class__.__name__ in {"VolcengineRTCError", "VolcengineAPIError", "VolcengineAuthError"}
 
 
+@dataclass(frozen=True)
+class RealtimeVolcengineConfig:
+    access_key_id: str
+    secret_access_key: str
+    rtc_app_id: str
+    rtc_app_key: str
+    voice_chat_endpoint: str
+    voice_model_id: str
+
+
+def _require_volcengine_settings(settings: Settings) -> RealtimeVolcengineConfig:
+    required_fields = [
+        ("VOLCENGINE_ACCESS_KEY_ID", settings.volcengine_access_key_id),
+        ("VOLCENGINE_SECRET_ACCESS_KEY", settings.volcengine_secret_access_key),
+        ("VOLCENGINE_RTC_APP_ID", settings.volcengine_rtc_app_id),
+        ("VOLCENGINE_RTC_APP_KEY", settings.volcengine_rtc_app_key),
+        ("VOLCENGINE_VOICE_CHAT_ENDPOINT", settings.volcengine_voice_chat_endpoint),
+        ("VOLCENGINE_VOICE_MODEL_ID", settings.volcengine_voice_model_id),
+    ]
+    for env_name, value in required_fields:
+        if not value:
+            raise SettingsError(f"Missing required environment variable: {env_name}")
+    return RealtimeVolcengineConfig(
+        access_key_id=cast(str, settings.volcengine_access_key_id),
+        secret_access_key=cast(str, settings.volcengine_secret_access_key),
+        rtc_app_id=cast(str, settings.volcengine_rtc_app_id),
+        rtc_app_key=cast(str, settings.volcengine_rtc_app_key),
+        voice_chat_endpoint=cast(str, settings.volcengine_voice_chat_endpoint),
+        voice_model_id=cast(str, settings.volcengine_voice_model_id),
+    )
+
+
 async def _rtc_client() -> AsyncIterator[Any]:
-    settings = load_settings()
+    try:
+        config = _require_volcengine_settings(load_settings())
+    except SettingsError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
     rtc_module = __import__("app.clients.volcengine_rtc", fromlist=["VolcengineRTCClient"])
     client = rtc_module.VolcengineRTCClient(
-        access_key_id=settings.volcengine_access_key_id,
-        secret_access_key=settings.volcengine_secret_access_key,
-        app_id=settings.volcengine_rtc_app_id,
-        app_key=settings.volcengine_rtc_app_key,
-        voice_chat_endpoint=settings.volcengine_voice_chat_endpoint,
-        voice_model_id=settings.volcengine_voice_model_id,
+        access_key_id=config.access_key_id,
+        secret_access_key=config.secret_access_key,
+        app_id=config.rtc_app_id,
+        app_key=config.rtc_app_key,
+        voice_chat_endpoint=config.voice_chat_endpoint,
+        voice_model_id=config.voice_model_id,
     )
     try:
         yield client
@@ -97,7 +134,7 @@ async def create_realtime_token(
     return RealtimeTokenResponse(
         token=token,
         room_id=room_id,
-        app_id=load_settings().volcengine_rtc_app_id,
+        app_id=_require_volcengine_settings(load_settings()).rtc_app_id,
     )
 
 

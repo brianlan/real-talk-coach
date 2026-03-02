@@ -32,12 +32,12 @@ class Settings:
     admin_access_token: str
     admin_audit_admin_id: str | None
     admin_auth_disabled: bool
-    volcengine_access_key_id: str
-    volcengine_secret_access_key: str
-    volcengine_rtc_app_id: str
-    volcengine_rtc_app_key: str
-    volcengine_voice_chat_endpoint: str
-    volcengine_voice_model_id: str
+    volcengine_access_key_id: str | None
+    volcengine_secret_access_key: str | None
+    volcengine_rtc_app_id: str | None
+    volcengine_rtc_app_key: str | None
+    volcengine_voice_chat_endpoint: str | None
+    volcengine_voice_model_id: str | None
 
 
 def _require_env(name: str) -> str:
@@ -106,12 +106,12 @@ def load_settings() -> Settings:
     admin_access_token = _require_env("ADMIN_ACCESS_TOKEN")
     admin_audit_admin_id = _optional_env("ADMIN_AUDIT_ADMIN_ID")
     admin_auth_disabled = _optional_bool("ADMIN_AUTH_DISABLED", default=False)
-    volcengine_access_key_id = _require_env("VOLCENGINE_ACCESS_KEY_ID")
-    volcengine_secret_access_key = _require_env("VOLCENGINE_SECRET_ACCESS_KEY")
-    volcengine_rtc_app_id = _require_env("VOLCENGINE_RTC_APP_ID")
-    volcengine_rtc_app_key = _require_env("VOLCENGINE_RTC_APP_KEY")
-    volcengine_voice_chat_endpoint = _require_env("VOLCENGINE_VOICE_CHAT_ENDPOINT")
-    volcengine_voice_model_id = _require_env("VOLCENGINE_VOICE_MODEL_ID")
+    volcengine_access_key_id = _optional_env("VOLCENGINE_ACCESS_KEY_ID")
+    volcengine_secret_access_key = _optional_env("VOLCENGINE_SECRET_ACCESS_KEY")
+    volcengine_rtc_app_id = _optional_env("VOLCENGINE_RTC_APP_ID")
+    volcengine_rtc_app_key = _optional_env("VOLCENGINE_RTC_APP_KEY")
+    volcengine_voice_chat_endpoint = _optional_env("VOLCENGINE_VOICE_CHAT_ENDPOINT")
+    volcengine_voice_model_id = _optional_env("VOLCENGINE_VOICE_MODEL_ID")
 
     return Settings(
         mongo_host=mongo_host,

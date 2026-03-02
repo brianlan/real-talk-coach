@@ -324,3 +324,18 @@ async def test_stop_realtime_chat_rtc_error(mock_session_repo):
         assert response.status_code == status.HTTP_502_BAD_GATEWAY
     finally:
         app.dependency_overrides.pop(realtime_routes._rtc_client, None)
+
+
+@pytest.mark.asyncio
+async def test_realtime_endpoints_fail_fast_when_volcengine_config_missing(mock_session_repo, monkeypatch):
+    monkeypatch.setenv("VOLCENGINE_ACCESS_KEY_ID", "")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/realtime/token",
+            json={"session_id": "session-1", "user_id": "user-1"},
+        )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json()["detail"] == "Missing required environment variable: VOLCENGINE_ACCESS_KEY_ID"

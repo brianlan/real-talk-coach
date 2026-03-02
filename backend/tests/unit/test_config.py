@@ -64,3 +64,22 @@ def test_objective_check_base_defaults_to_evaluator_base(monkeypatch):
     settings = load_settings()
 
     assert settings.objective_check_api_base == settings.chatai_api_base
+
+
+def test_volcengine_envs_are_optional_and_empty_is_treated_as_missing(monkeypatch):
+    _set_required_envs(monkeypatch)
+    monkeypatch.setenv("VOLCENGINE_ACCESS_KEY_ID", "")
+    monkeypatch.setenv("VOLCENGINE_SECRET_ACCESS_KEY", "")
+    monkeypatch.setenv("VOLCENGINE_RTC_APP_ID", "")
+    monkeypatch.setenv("VOLCENGINE_RTC_APP_KEY", "")
+    monkeypatch.setenv("VOLCENGINE_VOICE_CHAT_ENDPOINT", "")
+    monkeypatch.setenv("VOLCENGINE_VOICE_MODEL_ID", "")
+
+    settings = load_settings()
+
+    assert settings.volcengine_access_key_id is None
+    assert settings.volcengine_secret_access_key is None
+    assert settings.volcengine_rtc_app_id is None
+    assert settings.volcengine_rtc_app_key is None
+    assert settings.volcengine_voice_chat_endpoint is None
+    assert settings.volcengine_voice_model_id is None

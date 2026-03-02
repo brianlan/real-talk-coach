@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.clients.mongodb import MongoDBClient
-from app.config import load_settings
 from app.dependencies import get_mongodb_client
 from app.models.session import TurnInput, enforce_drift
 from app.repositories.session_repository import SessionRepository
