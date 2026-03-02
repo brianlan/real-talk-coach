@@ -33,15 +33,11 @@ RUN pnpm build
 FROM node:20-slim AS runner
 WORKDIR /app
 
-# Enable corepack
-RUN corepack enable
-
 ENV NODE_ENV=production
 
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --prod --frozen-lockfile && chown -R node:node /app
-
 USER node
+
+COPY --from=builder /app/node_modules ./node_modules
 
 COPY --from=builder /app/.next ./.next
 
@@ -58,4 +54,4 @@ ENV NEXT_PUBLIC_ADMIN_TOKEN=${NEXT_PUBLIC_ADMIN_TOKEN}
 
 EXPOSE 3000
 
-CMD ["pnpm", "start"]
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]

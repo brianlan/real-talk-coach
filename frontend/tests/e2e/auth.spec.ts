@@ -14,12 +14,14 @@ test.describe('Authentication Flow', () => {
   test('Clicking GitHub button initiates OAuth redirect', async ({ page }) => {
     await page.goto('/signin');
     const githubButton = page.getByRole('button', { name: 'Sign in with GitHub' });
-    
-    const requestPromise = page.waitForRequest(req => req.url().includes('github.com'));
+
+    const requestPromise = page.waitForRequest((req) =>
+      req.url().includes('/api/auth/signin')
+    );
     
     await githubButton.click();
     
     const request = await requestPromise;
-    expect(request.url()).toContain('github.com');
+    expect(request.url()).toContain('/api/auth/signin');
   });
 });
