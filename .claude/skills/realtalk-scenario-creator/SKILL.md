@@ -16,8 +16,8 @@ Creates complete communication training scenarios for the Real Talk Coach applic
    - If `./scenario.json` already exists, warn the user and ask for overwrite confirmation.
    - Only write the file after the user explicitly confirms overwrite (or if the file does not exist).
 5) **Insert into DB**:
-   - Call `backend/scripts/insert_scenario.py` using `PYTHONPATH` and loading `.env`.
-   - Example invocation: `set -a; source backend/.env; set +a; PYTHONPATH=backend python backend/scripts/insert_scenario.py --file ./scenario.json`
+   - Call `backend/scripts/seed_scenarios.py` using `PYTHONPATH` and loading `.env`.
+   - Example invocation: `set -a; source backend/.env; set +a; PYTHONPATH=backend python backend/scripts/seed_scenarios.py --single-scenario ./scenario.json`
    - Report success with `objectId` and timestamps if returned.
 
 ## Input Format
