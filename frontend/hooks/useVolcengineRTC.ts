@@ -28,6 +28,7 @@ export type UseVolcengineRTC = {
   isConnected: boolean;
   aiStatus: AIStatus;
   roomState: RoomState;
+  error: string | null;
   joinRoom: (token: string, roomId: string, userId: string) => Promise<void>;
   leaveRoom: () => Promise<void>;
   sendCommand: (cmd: Command) => void;
@@ -40,6 +41,7 @@ export function useVolcengineRTC(): UseVolcengineRTC {
   const [engine, setEngine] = useState<IRTCEngine | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatus>("disconnected");
+  const [error, setError] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState>({
     roomId: null,
     userId: null,
@@ -48,17 +50,26 @@ export function useVolcengineRTC(): UseVolcengineRTC {
 
   useEffect(() => {
     const initEngine = () => {
-      const appId = process.env.NEXT_PUBLIC_VOLCENGINE_APP_ID || "";
-      const newEngine = VERTC.createEngine(appId);
-
-      engineRef.current = newEngine;
-      setEngine(newEngine);
-      setupEventHandlers(newEngine);
-
-      return newEngine;
+      try {
+        const appId =
+          process.env.NEXT_PUBLIC_VOLCENGINE_APP_ID ||
+          (process.env.NODE_ENV === "test" ? "test-app-id" : "");
+        if (!appId || (appId === "test-app-id" && process.env.NODE_ENV !== "test")) {
+          setError("Volcengine RTC not configured");
+          return null;
+        }
+        const newEngine = VERTC.createEngine(appId);
+        engineRef.current = newEngine;
+        setEngine(newEngine);
+        setupEventHandlers(newEngine);
+        return newEngine;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to initialize RTC engine");
+        return null;
+      }
     };
 
-    const newEngine = initEngine();
+    initEngine();
 
     return () => {
       if (engineRef.current) {
@@ -120,6 +131,9 @@ export function useVolcengineRTC(): UseVolcengineRTC {
 
   const joinRoom = useCallback(
     async (token: string, roomId: string, userId: string) => {
+      if (error) {
+        throw new Error(error);
+      }
       if (!engineRef.current) {
         throw new Error("RTC engine not initialized");
       }
@@ -131,7 +145,6 @@ export function useVolcengineRTC(): UseVolcengineRTC {
 
       try {
         await engineRef.current.joinRoom(token, roomId, { userId });
-        
         setIsConnected(true);
         setRoomState({
           roomId,
@@ -139,18 +152,16 @@ export function useVolcengineRTC(): UseVolcengineRTC {
           connectionState: ConnectionState.CONNECTION_STATE_CONNECTED,
         });
         setAiStatus("joining");
-
-        console.log("[RTC] Joined room:", roomId, "as user:", userId);
-      } catch (error) {
-        console.error("[RTC] Failed to join room:", error);
+      } catch (err) {
+        console.error("[RTC] Failed to join room:", err);
         setRoomState((prev) => ({
           ...prev,
           connectionState: ConnectionState.CONNECTION_STATE_DISCONNECTED,
         }));
-        throw error;
+        throw err;
       }
     },
-    []
+    [error]
   );
 
   const leaveRoom = useCallback(async () => {
@@ -207,6 +218,7 @@ export function useVolcengineRTC(): UseVolcengineRTC {
     isConnected,
     aiStatus,
     roomState,
+    error,
     joinRoom,
     leaveRoom,
     sendCommand,

@@ -38,6 +38,13 @@ class Settings:
     volcengine_rtc_app_key: str | None
     volcengine_voice_chat_endpoint: str | None
     volcengine_voice_model_id: str | None
+    volcengine_e2e_ws_url: str | None
+    volcengine_e2e_api_key: str | None
+    volcengine_e2e_model: str | None
+    volcengine_e2e_app_id: str | None
+    realtime_voice_model_app_id: str | None
+    realtime_voice_model_access_token: str | None
+    realtime_voice_model_secret_key: str | None
 
 
 def _require_env(name: str) -> str:
@@ -112,6 +119,13 @@ def load_settings() -> Settings:
     volcengine_rtc_app_key = _optional_env("VOLCENGINE_RTC_APP_KEY")
     volcengine_voice_chat_endpoint = _optional_env("VOLCENGINE_VOICE_CHAT_ENDPOINT")
     volcengine_voice_model_id = _optional_env("VOLCENGINE_VOICE_MODEL_ID")
+    volcengine_e2e_ws_url = _optional_env("VOLCENGINE_E2E_WS_URL")
+    volcengine_e2e_api_key = _optional_env("VOLCENGINE_E2E_API_KEY")
+    volcengine_e2e_model = _optional_env("VOLCENGINE_E2E_MODEL")
+    volcengine_e2e_app_id = _optional_env("VOLCENGINE_E2E_APP_ID")
+    realtime_voice_model_app_id = _optional_env("REALTIME_VOICE_MODEL_APP_ID")
+    realtime_voice_model_access_token = _optional_env("REALTIME_VOICE_MODEL_ACCESS_TOKEN")
+    realtime_voice_model_secret_key = _optional_env("REALTIME_VOICE_MODEL_SECRET_KEY")
 
     return Settings(
         mongo_host=mongo_host,
@@ -141,4 +155,11 @@ def load_settings() -> Settings:
         volcengine_rtc_app_key=volcengine_rtc_app_key,
         volcengine_voice_chat_endpoint=volcengine_voice_chat_endpoint,
         volcengine_voice_model_id=volcengine_voice_model_id,
+        volcengine_e2e_ws_url=volcengine_e2e_ws_url,
+        volcengine_e2e_api_key=volcengine_e2e_api_key,
+        volcengine_e2e_model=volcengine_e2e_model,
+        volcengine_e2e_app_id=volcengine_e2e_app_id,
+        realtime_voice_model_app_id=realtime_voice_model_app_id,
+        realtime_voice_model_access_token=realtime_voice_model_access_token,
+        realtime_voice_model_secret_key=realtime_voice_model_secret_key,
     )

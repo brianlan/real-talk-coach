@@ -3,12 +3,12 @@
 ## Prerequisites
 - Python 3.11 + pipx or uv
 - Node.js 20 LTS + pnpm 9
-- Volcengine account with RTC (Real-Time Communication) credentials
+- Volcengine account with 端到端实时语音大模型 (SC2.0) credentials
 - qwen3-omni-flash + evaluator model API keys (DashScope OpenAI-compatible SDK >=1.52.0)
 - GPT-5 mini secretKey (https://api.chataiapi.com)
 
 ## Realtime Voice Conversation
-Real Talk Coach supports **real-time voice conversation** with AI using Volcengine RTC.
+Real Talk Coach supports **real-time voice conversation** with AI using Volcengine 6561 end-to-end voice model over WebSocket.
 
 ### Features
 - Real-time bidirectional audio streaming between user and AI
@@ -17,19 +17,18 @@ Real Talk Coach supports **real-time voice conversation** with AI using Volcengi
 - Automatic turn-taking based on voice activity
 
 ### Volcengine Environment Variables
-Create a Volcengine account and RTC application, then configure these variables:
+Create a Volcengine 6561 application and configure these variables:
 
 ```bash
-# Volcengine credentials for V4 signature authentication
-VOLCENGINE_ACCESS_KEY_ID=your_access_key_id
-VOLCENGINE_SECRET_ACCESS_KEY=your_secret_access_key
-# RTC application credentials
-VOLCENGINE_RTC_APP_ID=your_rtc_app_id
-VOLCENGINE_RTC_APP_KEY=your_rtc_app_key
-# API endpoint for StartVoiceChat/StopVoiceChat
-VOLCENGINE_VOICE_CHAT_ENDPOINT=https://rtcv2.volcengineapi.com
-# Model ID for SC2.0 voice model
-VOLCENGINE_VOICE_MODEL_ID=chattts-sc2-0
+# Upstream websocket endpoint from 6561 docs
+VOLCENGINE_E2E_WS_URL=wss://your-upstream-websocket
+# Optional model id when required by endpoint
+VOLCENGINE_E2E_MODEL=
+
+# Credentials from realtime voice model console
+REALTIME_VOICE_MODEL_APP_ID=your_app_id
+REALTIME_VOICE_MODEL_ACCESS_TOKEN=your_access_token
+REALTIME_VOICE_MODEL_SECRET_KEY=your_secret_key
 ```
 
 ### Usage

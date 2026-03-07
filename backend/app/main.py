@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.api.routes.e2e_socket import router as e2e_socket_router
 from app.api.routes.session_socket import router as session_socket_router
 from app.clients.mongodb import MongoDBClient
 from app.clients.minio import MinioClient
@@ -87,3 +88,4 @@ app.add_middleware(
 )
 app.include_router(api_router, prefix="/api")
 app.include_router(session_socket_router)
+app.include_router(e2e_socket_router)
