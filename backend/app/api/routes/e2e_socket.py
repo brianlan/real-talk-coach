@@ -416,16 +416,19 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                 await websocket.close(code=1011)
                 return
 
-            opening_content = client_session_cfg.get("opening")
-            if not isinstance(opening_content, str) or not opening_content.strip():
-                opening_content = "Hi, I am your AI coach. Tell me what you want to practice and we can begin now."
-            await upstream_ws.send(
-                _build_full_request(
-                    EVENT_OPENING_REQUEST,
-                    {"content": opening_content.strip()},
-                    session_id=runtime_session_id,
+            send_opening_flag = client_session_cfg.get("send_opening")
+            should_send_opening = True if send_opening_flag is None else bool(send_opening_flag)
+            if should_send_opening:
+                opening_content = client_session_cfg.get("opening")
+                if not isinstance(opening_content, str) or not opening_content.strip():
+                    opening_content = "Hi, I am your AI coach. Tell me what you want to practice and we can begin now."
+                await upstream_ws.send(
+                    _build_full_request(
+                        EVENT_OPENING_REQUEST,
+                        {"content": opening_content.strip()},
+                        session_id=runtime_session_id,
+                    )
                 )
-            )
 
             await _safe_send_json(websocket, {"type": "session.ready"})
 

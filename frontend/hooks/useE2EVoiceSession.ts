@@ -17,7 +17,7 @@ const PLAYBACK_SAMPLE_RATE = 24000;
 const VAD_THRESHOLD = 0.01;
 const COMMIT_SILENCE_MS = 700;
 const FORCE_COMMIT_MS = 1200;
-const MAX_RECONNECT_DELAY_MS = 5000;
+const MAX_RECONNECT_DELAY_MS = 20000;
 
 function downsampleFloat32ToInt16(input: Float32Array, inputRate: number, outputRate: number): Int16Array {
   if (inputRate === outputRate) {
@@ -111,6 +111,7 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const manualCloseRef = useRef(false);
+  const hasSentOpeningRef = useRef(false);
 
   const sendJson = useCallback((payload: Record<string, unknown>) => {
     const ws = wsRef.current;
@@ -281,11 +282,16 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
           modalities: ["audio", "text"],
           input_audio_format: "pcm16",
           output_audio_format: "pcm16",
+          send_opening: !hasSentOpeningRef.current,
         };
 
         const model = process.env.NEXT_PUBLIC_VOLCENGINE_E2E_MODEL;
         if (model && model.trim().length > 0) {
           sessionConfig.model = model.trim();
+        }
+
+        if (!hasSentOpeningRef.current) {
+          hasSentOpeningRef.current = true;
         }
 
         ws.send(JSON.stringify({ type: "session.update", session: sessionConfig }));
