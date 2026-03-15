@@ -42,6 +42,9 @@ class Settings:
     volcengine_e2e_api_key: str | None
     volcengine_e2e_model: str | None
     volcengine_e2e_app_id: str | None
+    volcengine_e2e_resource_id: str | None
+    volcengine_e2e_speaker: str | None
+    volcengine_e2e_app_key: str | None
     realtime_voice_model_app_id: str | None
     realtime_voice_model_access_token: str | None
     realtime_voice_model_secret_key: str | None
@@ -123,6 +126,9 @@ def load_settings() -> Settings:
     volcengine_e2e_api_key = _optional_env("VOLCENGINE_E2E_API_KEY")
     volcengine_e2e_model = _optional_env("VOLCENGINE_E2E_MODEL")
     volcengine_e2e_app_id = _optional_env("VOLCENGINE_E2E_APP_ID")
+    volcengine_e2e_resource_id = _optional_env("VOLCENGINE_E2E_RESOURCE_ID")
+    volcengine_e2e_speaker = _optional_env("VOLCENGINE_E2E_SPEAKER")
+    volcengine_e2e_app_key = _optional_env("VOLCENGINE_E2E_APP_KEY")
     realtime_voice_model_app_id = _optional_env("REALTIME_VOICE_MODEL_APP_ID")
     realtime_voice_model_access_token = _optional_env("REALTIME_VOICE_MODEL_ACCESS_TOKEN")
     realtime_voice_model_secret_key = _optional_env("REALTIME_VOICE_MODEL_SECRET_KEY")
@@ -159,6 +165,9 @@ def load_settings() -> Settings:
         volcengine_e2e_api_key=volcengine_e2e_api_key,
         volcengine_e2e_model=volcengine_e2e_model,
         volcengine_e2e_app_id=volcengine_e2e_app_id,
+        volcengine_e2e_resource_id=volcengine_e2e_resource_id,
+        volcengine_e2e_speaker=volcengine_e2e_speaker,
+        volcengine_e2e_app_key=volcengine_e2e_app_key,
         realtime_voice_model_app_id=realtime_voice_model_app_id,
         realtime_voice_model_access_token=realtime_voice_model_access_token,
         realtime_voice_model_secret_key=realtime_voice_model_secret_key,

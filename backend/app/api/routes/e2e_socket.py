@@ -34,11 +34,16 @@ EVENT_FINISH_CONNECTION = 2
 EVENT_START_SESSION = 100
 EVENT_FINISH_SESSION = 102
 EVENT_TASK_REQUEST = 200
+EVENT_TASK_COMMIT = 201
+EVENT_OPENING_REQUEST = 300
 
 EVENT_TTS_RESPONSE = 352
 EVENT_TTS_ENDED = 359
 EVENT_LLM_TEXT = 550
 EVENT_LLM_TEXT_END = 559
+
+E2E_RESOURCE_ID = "volc.speech.dialog"
+E2E_FIXED_APP_KEY = "PlgvMymc7f3tQnJ6"
 
 
 @dataclass(frozen=True)
@@ -46,9 +51,10 @@ class E2EConfig:
     ws_url: str
     app_id: str
     access_key: str
+    model: str | None
+    resource_id: str
     app_key: str
-    model: str
-    speaker: str
+    speaker: str | None
 
 
 def _load_e2e_config() -> E2EConfig:
@@ -56,23 +62,23 @@ def _load_e2e_config() -> E2EConfig:
     ws_url = (settings.volcengine_e2e_ws_url or "wss://openspeech.bytedance.com/api/v3/realtime/dialogue").strip()
     app_id = (settings.realtime_voice_model_app_id or settings.volcengine_e2e_app_id or "").strip()
     access_key = (settings.realtime_voice_model_access_token or settings.volcengine_e2e_api_key or "").strip()
-    app_key = (settings.realtime_voice_model_secret_key or "").strip()
-    model = (settings.volcengine_e2e_model or "SC2.0").strip()
+    model = (settings.volcengine_e2e_model or "").strip() or None
+    resource_id = (settings.volcengine_e2e_resource_id or E2E_RESOURCE_ID).strip()
+    app_key = (settings.volcengine_e2e_app_key or E2E_FIXED_APP_KEY).strip()
+    speaker = (settings.volcengine_e2e_speaker or "").strip() or None
 
     if not app_id:
         raise SettingsError("Missing required environment variable: REALTIME_VOICE_MODEL_APP_ID")
     if not access_key:
         raise SettingsError("Missing required environment variable: REALTIME_VOICE_MODEL_ACCESS_TOKEN")
-    if not app_key:
-        raise SettingsError("Missing required environment variable: REALTIME_VOICE_MODEL_SECRET_KEY")
-
     return E2EConfig(
         ws_url=ws_url,
         app_id=app_id,
         access_key=access_key,
-        app_key=app_key,
         model=model,
-        speaker="zh_female_vv_jupiter_bigtts",
+        resource_id=resource_id,
+        app_key=app_key,
+        speaker=speaker,
     )
 
 
@@ -229,7 +235,12 @@ def _build_start_session_payload(config: E2EConfig, session_id: str, client_sess
     if isinstance(maybe_model, str) and maybe_model.strip():
         model = maybe_model.strip()
 
-    return {
+    speaker = config.speaker
+    maybe_speaker = client_session.get("speaker")
+    if isinstance(maybe_speaker, str) and maybe_speaker.strip():
+        speaker = maybe_speaker.strip()
+
+    payload: dict[str, Any] = {
         "asr": {"extra": {"end_smooth_window_ms": 500}},
         "tts": {
             "audio_config": {
@@ -237,18 +248,21 @@ def _build_start_session_payload(config: E2EConfig, session_id: str, client_sess
                 "format": "pcm",
                 "sample_rate": 24000,
             },
-            "speaker": config.speaker,
         },
         "dialog": {
             "bot_name": "Real Talk Coach",
             "system_role": "You are an AI communication coach helping the user practice difficult conversations.",
             "dialog_id": session_id,
             "extra": {
-                "model": model,
                 "strict_audit": False,
             },
         },
     }
+    if model:
+        payload["dialog"]["extra"]["model"] = model
+    if speaker:
+        payload["tts"]["speaker"] = speaker
+    return payload
 
 
 async def _pipe_client_audio(client_ws: WebSocket, upstream_ws, session_id: str) -> None:
@@ -269,8 +283,17 @@ async def _pipe_client_audio(client_ws: WebSocket, upstream_ws, session_id: str)
             if isinstance(audio_b64, str) and audio_b64:
                 pcm_bytes = base64.b64decode(audio_b64)
                 await upstream_ws.send(_build_audio_request(EVENT_TASK_REQUEST, session_id, pcm_bytes))
+        elif event_type == "input_audio_buffer.commit":
+            await upstream_ws.send(_build_full_request(EVENT_TASK_COMMIT, {}, session_id=session_id))
         elif event_type == "finish_session":
             await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=session_id))
+
+
+async def _safe_send_json(websocket: WebSocket, payload: dict[str, Any]) -> None:
+    try:
+        await websocket.send_json(payload)
+    except RuntimeError:
+        return
 
 
 async def _pipe_upstream_events(client_ws: WebSocket, upstream_ws) -> None:
@@ -309,6 +332,18 @@ async def _pipe_upstream_events(client_ws: WebSocket, upstream_ws) -> None:
             await client_ws.send_json({"type": "response.text.done"})
 
 
+def _extract_upstream_error(parsed: dict[str, Any]) -> str | None:
+    payload = parsed.get("payload")
+    if parsed.get("message_type") == SERVER_ERROR_RESPONSE:
+        return f"code={parsed.get('error_code')} payload={payload}"
+    if isinstance(payload, dict):
+        code = payload.get("code")
+        message = payload.get("message") or payload.get("msg")
+        if code not in (None, 0):
+            return f"code={code} message={message}"
+    return None
+
+
 @router.websocket("/ws/e2e/sessions/{session_id}")
 async def e2e_voice_socket(websocket: WebSocket, session_id: str):
     await websocket.accept()
@@ -332,7 +367,7 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
     headers = {
         "X-Api-App-ID": config.app_id,
         "X-Api-Access-Key": config.access_key,
-        "X-Api-Resource-Id": "volc.speech.dialog",
+        "X-Api-Resource-Id": config.resource_id,
         "X-Api-App-Key": config.app_key,
         "X-Api-Connect-Id": str(uuid.uuid4()),
     }
@@ -345,13 +380,54 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
             max_size=None,
         ) as upstream_ws:
             await upstream_ws.send(_build_full_request(EVENT_START_CONNECTION, {}))
-            _ = await upstream_ws.recv()
+            start_conn_ack = await upstream_ws.recv()
+            if not isinstance(start_conn_ack, (bytes, bytearray)):
+                await websocket.send_json({"type": "error", "message": "Invalid StartConnection response from upstream"})
+                await websocket.close(code=1011)
+                return
+            start_conn_parsed = _parse_upstream_packet(bytes(start_conn_ack))
+            start_conn_error = _extract_upstream_error(start_conn_parsed)
+            if start_conn_error:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": f"StartConnection failed: {start_conn_error}",
+                    }
+                )
+                await websocket.close(code=1011)
+                return
 
             start_payload = _build_start_session_payload(config, runtime_session_id, client_session_cfg)
             await upstream_ws.send(_build_full_request(EVENT_START_SESSION, start_payload, session_id=runtime_session_id))
-            _ = await upstream_ws.recv()
+            start_session_ack = await upstream_ws.recv()
+            if not isinstance(start_session_ack, (bytes, bytearray)):
+                await websocket.send_json({"type": "error", "message": "Invalid StartSession response from upstream"})
+                await websocket.close(code=1011)
+                return
+            start_session_parsed = _parse_upstream_packet(bytes(start_session_ack))
+            start_session_error = _extract_upstream_error(start_session_parsed)
+            if start_session_error:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": f"StartSession failed: {start_session_error}",
+                    }
+                )
+                await websocket.close(code=1011)
+                return
 
-            await websocket.send_json({"type": "session.ready"})
+            opening_content = client_session_cfg.get("opening")
+            if not isinstance(opening_content, str) or not opening_content.strip():
+                opening_content = "Hi, I am your AI coach. Tell me what you want to practice and we can begin now."
+            await upstream_ws.send(
+                _build_full_request(
+                    EVENT_OPENING_REQUEST,
+                    {"content": opening_content.strip()},
+                    session_id=runtime_session_id,
+                )
+            )
+
+            await _safe_send_json(websocket, {"type": "session.ready"})
 
             to_upstream = asyncio.create_task(_pipe_client_audio(websocket, upstream_ws, runtime_session_id))
             to_client = asyncio.create_task(_pipe_upstream_events(websocket, upstream_ws))
@@ -364,13 +440,22 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                 if exc is not None:
                     raise exc
 
-            await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=runtime_session_id))
-            await upstream_ws.send(_build_full_request(EVENT_FINISH_CONNECTION, {}))
+            try:
+                await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=runtime_session_id))
+                await upstream_ws.send(_build_full_request(EVENT_FINISH_CONNECTION, {}))
+            except WebSocketException:
+                pass
     except WebSocketDisconnect:
         return
     except WebSocketException as exc:
-        await websocket.send_json({"type": "error", "message": f"Upstream websocket error: {exc}"})
-        await websocket.close(code=1011)
+        await _safe_send_json(websocket, {"type": "error", "message": f"Upstream websocket error: {exc}"})
+        try:
+            await websocket.close(code=1011)
+        except RuntimeError:
+            return
     except Exception as exc:
-        await websocket.send_json({"type": "error", "message": f"Voice gateway error: {exc}"})
-        await websocket.close(code=1011)
+        await _safe_send_json(websocket, {"type": "error", "message": f"Voice gateway error: {exc}"})
+        try:
+            await websocket.close(code=1011)
+        except RuntimeError:
+            return
