@@ -16,6 +16,8 @@ const TARGET_SAMPLE_RATE = 16000;
 const PLAYBACK_SAMPLE_RATE = 24000;
 const VAD_THRESHOLD = 0.01;
 const COMMIT_SILENCE_MS = 700;
+const FORCE_COMMIT_MS = 1200;
+const MAX_RECONNECT_DELAY_MS = 5000;
 
 function downsampleFloat32ToInt16(input: Float32Array, inputRate: number, outputRate: number): Int16Array {
   if (inputRate === outputRate) {
@@ -104,6 +106,11 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
   const lastSpeechAtRef = useRef(0);
   const hasUncommittedAudioRef = useRef(false);
   const captureStartedRef = useRef(false);
+  const appendSinceCommitRef = useRef(false);
+  const lastCommitAtRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const manualCloseRef = useRef(false);
 
   const sendJson = useCallback((payload: Record<string, unknown>) => {
     const ws = wsRef.current;
@@ -195,10 +202,15 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
 
       const audioBase64 = pcm16ToBase64(pcm16);
       sendJson({ type: "input_audio_buffer.append", audio: audioBase64 });
+      appendSinceCommitRef.current = true;
 
-      const silenceMs = Date.now() - lastSpeechAtRef.current;
-      if (hasUncommittedAudioRef.current && silenceMs > COMMIT_SILENCE_MS) {
+      const nowMs = Date.now();
+      const silenceMs = nowMs - lastSpeechAtRef.current;
+      const forceCommit = appendSinceCommitRef.current && nowMs - lastCommitAtRef.current > FORCE_COMMIT_MS;
+      if ((hasUncommittedAudioRef.current && silenceMs > COMMIT_SILENCE_MS) || forceCommit) {
         sendJson({ type: "input_audio_buffer.commit" });
+        lastCommitAtRef.current = nowMs;
+        appendSinceCommitRef.current = false;
         hasUncommittedAudioRef.current = false;
       }
     };
@@ -226,6 +238,11 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
   }, []);
 
   const disconnect = useCallback(async () => {
+    manualCloseRef.current = true;
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     await stopCapture();
     if (wsRef.current) {
       wsRef.current.close();
@@ -243,75 +260,112 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
   }, []);
 
   useEffect(() => {
+    manualCloseRef.current = false;
+    reconnectAttemptRef.current = 0;
+
     const base = getWsBase();
     const wsUrl = `${base}/e2e/sessions/${encodeURIComponent(sessionId)}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = async () => {
-      setConnectionStatus("connected");
-      setError(null);
-
-      const sessionConfig: Record<string, unknown> = {
-        modalities: ["audio", "text"],
-        input_audio_format: "pcm16",
-        output_audio_format: "pcm16",
-      };
-
-      const model = process.env.NEXT_PUBLIC_VOLCENGINE_E2E_MODEL;
-      if (model && model.trim().length > 0) {
-        sessionConfig.model = model.trim();
-      }
-
-      ws.send(JSON.stringify({ type: "session.update", session: sessionConfig }));
-    };
-
-    ws.onmessage = async (event) => {
-      if (typeof event.data !== "string") {
+    const connect = () => {
+      if (manualCloseRef.current) {
         return;
       }
 
-      try {
-        const payload = JSON.parse(event.data) as Record<string, unknown>;
-        const type = payload.type;
-        if (type === "error" && typeof payload.message === "string") {
-          setError(payload.message);
+      setConnectionStatus("connecting");
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = async () => {
+        setError(null);
+
+        const sessionConfig: Record<string, unknown> = {
+          modalities: ["audio", "text"],
+          input_audio_format: "pcm16",
+          output_audio_format: "pcm16",
+        };
+
+        const model = process.env.NEXT_PUBLIC_VOLCENGINE_E2E_MODEL;
+        if (model && model.trim().length > 0) {
+          sessionConfig.model = model.trim();
+        }
+
+        ws.send(JSON.stringify({ type: "session.update", session: sessionConfig }));
+      };
+
+      ws.onmessage = async (event) => {
+        if (typeof event.data !== "string") {
+          return;
+        }
+
+        try {
+          const payload = JSON.parse(event.data) as Record<string, unknown>;
+          const type = payload.type;
+          if (type === "error" && typeof payload.message === "string") {
+            const message = payload.message;
+            if (message.includes("DialogAudioIdleTimeoutError")) {
+              setError("No speech detected in time. Reconnecting call...");
+              ws.close();
+              return;
+            }
+            setError(message);
+            setConnectionStatus("disconnected");
+            return;
+          }
+
+          if (type === "session.ready" && !captureStartedRef.current) {
+            setConnectionStatus("connected");
+            reconnectAttemptRef.current = 0;
+            captureStartedRef.current = true;
+            try {
+              await startCapture();
+            } catch (captureError) {
+              setError(captureError instanceof Error ? captureError.message : "Microphone initialization failed");
+              setConnectionStatus("disconnected");
+            }
+            return;
+          }
+
+          const audioChunk = extractAudioChunk(payload);
+          if (audioChunk) {
+            await playPcmChunk(audioChunk);
+          }
+        } catch {}
+      };
+
+      ws.onerror = () => {
+        setError("Voice websocket connection failed");
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        if (manualCloseRef.current) {
           setConnectionStatus("disconnected");
           return;
         }
-
-        if (type === "session.ready" && !captureStartedRef.current) {
-          captureStartedRef.current = true;
-          try {
-            await startCapture();
-          } catch (captureError) {
-            setError(captureError instanceof Error ? captureError.message : "Microphone initialization failed");
-            setConnectionStatus("disconnected");
-          }
-          return;
+        setConnectionStatus("connecting");
+        reconnectAttemptRef.current += 1;
+        const delay = Math.min(1000 * reconnectAttemptRef.current, MAX_RECONNECT_DELAY_MS);
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
         }
-
-        const audioChunk = extractAudioChunk(payload);
-        if (audioChunk) {
-          await playPcmChunk(audioChunk);
-        }
-      } catch {}
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          connect();
+        }, delay);
+      };
     };
 
-    ws.onerror = () => {
-      setError("Voice websocket connection failed");
-      setConnectionStatus("disconnected");
-    };
-
-    ws.onclose = () => {
-      setConnectionStatus("disconnected");
-    };
+    connect();
 
     return () => {
       captureStartedRef.current = false;
+      appendSinceCommitRef.current = false;
       void disconnect();
       if (aiSpeakingTimeoutRef.current) {
         clearTimeout(aiSpeakingTimeoutRef.current);
+      }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
       if (playbackContextRef.current) {
         void playbackContextRef.current.close();
