@@ -254,6 +254,7 @@ def _build_start_session_payload(config: E2EConfig, session_id: str, client_sess
             "system_role": "You are an AI communication coach helping the user practice difficult conversations.",
             "dialog_id": session_id,
             "extra": {
+                "input_mod": "keep_alive",
                 "strict_audit": False,
             },
         },
