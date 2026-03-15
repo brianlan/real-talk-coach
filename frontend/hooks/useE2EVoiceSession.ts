@@ -343,6 +343,7 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
 
       ws.onclose = () => {
         wsRef.current = null;
+        captureStartedRef.current = false;
         if (manualCloseRef.current) {
           setConnectionStatus("disconnected");
           return;

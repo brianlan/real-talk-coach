@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { manualStopSession } from "@/services/api/sessions";
+import { manualStopSession, manualStopSessionBestEffort } from "@/services/api/sessions";
 import { useE2EVoiceSession } from "@/hooks/useE2EVoiceSession";
 
 export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
@@ -13,6 +13,7 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
   const [callDuration, setCallDuration] = useState(0);
   const [isEnding, setIsEnding] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasSentStopRef = useRef(false);
 
   useEffect(() => {
     if (connectionStatus !== "connected") {
@@ -47,6 +48,7 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
     }
 
     setIsEnding(true);
+    hasSentStopRef.current = true;
     try {
       await disconnect();
       await manualStopSession(sessionId, "manual");
@@ -54,6 +56,24 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
       router.push("/");
     }
   }, [disconnect, isEnding, router, sessionId]);
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      if (hasSentStopRef.current) {
+        return;
+      }
+      hasSentStopRef.current = true;
+      manualStopSessionBestEffort(sessionId, "manual");
+      void disconnect();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handlePageHide);
+    };
+  }, [disconnect, sessionId]);
 
   const SpeakingIndicator = ({ speaking }: { speaking: boolean }) => (
     <div
@@ -290,7 +310,7 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
           <button
             type="button"
             onClick={toggleMute}
-            disabled={connectionStatus !== "connected"}
+            disabled={connectionStatus === "disconnected" || isEnding}
             style={{
               width: "64px",
               height: "64px",
@@ -299,7 +319,7 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
               background: isMuted
                 ? "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)"
                 : "linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)",
-              cursor: connectionStatus === "connected" ? "pointer" : "not-allowed",
+              cursor: connectionStatus === "disconnected" || isEnding ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -308,7 +328,7 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
                 ? "0 4px 12px rgba(245, 158, 11, 0.4)"
                 : "0 4px 12px rgba(156, 163, 175, 0.4)",
               transition: "all 0.2s ease",
-              opacity: connectionStatus === "connected" ? 1 : 0.5,
+              opacity: connectionStatus === "disconnected" || isEnding ? 0.5 : 1,
             }}
             aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
           >
@@ -318,14 +338,14 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
           <button
             type="button"
             onClick={handleEndCall}
-            disabled={isEnding || connectionStatus === "connecting"}
+            disabled={isEnding}
             style={{
               width: "80px",
               height: "80px",
               borderRadius: "50%",
               border: "none",
               background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
-              cursor: isEnding || connectionStatus === "connecting" ? "not-allowed" : "pointer",
+              cursor: isEnding ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

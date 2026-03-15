@@ -80,6 +80,16 @@ export async function manualStopSession(sessionId: string, reason = "manual") {
   });
 }
 
+export function manualStopSessionBestEffort(sessionId: string, reason = "manual"): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined" || typeof navigator.sendBeacon !== "function") {
+    return false;
+  }
+
+  const payload = JSON.stringify({ reason });
+  const blob = new Blob([payload], { type: "application/json" });
+  return navigator.sendBeacon(`${apiBase}/api/sessions/${sessionId}/manual-stop`, blob);
+}
+
 export function connectSessionSocket(sessionId: string): WebSocket {
   return new WebSocket(`${wsBase}/sessions/${sessionId}`);
 }
