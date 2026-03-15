@@ -244,10 +244,11 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
+    const wsToClose = wsRef.current;
+    wsRef.current = null;
     await stopCapture();
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    if (wsToClose && wsToClose.readyState < WebSocket.CLOSING) {
+      wsToClose.close();
     }
     setConnectionStatus("disconnected");
   }, [stopCapture]);
@@ -276,6 +277,9 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
       wsRef.current = ws;
 
       ws.onopen = async () => {
+        if (wsRef.current !== ws) {
+          return;
+        }
         setError(null);
 
         const sessionConfig: Record<string, unknown> = {
@@ -298,6 +302,9 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
       };
 
       ws.onmessage = async (event) => {
+        if (wsRef.current !== ws) {
+          return;
+        }
         if (typeof event.data !== "string") {
           return;
         }
@@ -338,10 +345,16 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
       };
 
       ws.onerror = () => {
+        if (wsRef.current !== ws) {
+          return;
+        }
         setError("Voice websocket connection failed");
       };
 
       ws.onclose = () => {
+        if (wsRef.current !== ws) {
+          return;
+        }
         wsRef.current = null;
         captureStartedRef.current = false;
         if (manualCloseRef.current) {
