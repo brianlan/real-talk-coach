@@ -8,6 +8,8 @@ type UseE2EVoiceSession = {
   error: string | null;
   isMuted: boolean;
   isAiSpeaking: boolean;
+  debugSystemPrompt: string | null;
+  debugOpeningText: string | null;
   disconnect: () => Promise<void>;
   toggleMute: () => void;
 };
@@ -18,6 +20,10 @@ const VAD_THRESHOLD = 0.01;
 const COMMIT_SILENCE_MS = 700;
 const FORCE_COMMIT_MS = 1200;
 const MAX_RECONNECT_DELAY_MS = 20000;
+
+function isDebugPromptsEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_PHONE_CALL_ROOM_DEBUG_PROMPTS === "1";
+}
 
 function downsampleFloat32ToInt16(input: Float32Array, inputRate: number, outputRate: number): Int16Array {
   if (inputRate === outputRate) {
@@ -94,6 +100,8 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const [debugSystemPrompt, setDebugSystemPrompt] = useState<string | null>(null);
+  const [debugOpeningText, setDebugOpeningText] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const captureStreamRef = useRef<MediaStream | null>(null);
@@ -289,6 +297,10 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
           send_opening: !hasSentOpeningRef.current,
         };
 
+        if (isDebugPromptsEnabled()) {
+          sessionConfig.debug_prompts = true;
+        }
+
         const model = process.env.NEXT_PUBLIC_VOLCENGINE_E2E_MODEL;
         if (model && model.trim().length > 0) {
           sessionConfig.model = model.trim();
@@ -325,6 +337,16 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
           }
 
           if (type === "session.ready" && !captureStartedRef.current) {
+            const debug = payload.debug;
+            if (debug && typeof debug === "object") {
+              const debugPayload = debug as Record<string, unknown>;
+              setDebugSystemPrompt(
+                typeof debugPayload.systemPrompt === "string" ? debugPayload.systemPrompt : null,
+              );
+              setDebugOpeningText(
+                typeof debugPayload.openingText === "string" ? debugPayload.openingText : null,
+              );
+            }
             setConnectionStatus("connected");
             reconnectAttemptRef.current = 0;
             captureStartedRef.current = true;
@@ -399,6 +421,8 @@ export function useE2EVoiceSession(sessionId: string): UseE2EVoiceSession {
     error,
     isMuted,
     isAiSpeaking,
+    debugSystemPrompt,
+    debugOpeningText,
     disconnect,
     toggleMute,
   };

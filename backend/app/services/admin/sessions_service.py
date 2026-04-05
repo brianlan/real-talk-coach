@@ -66,7 +66,7 @@ class AdminSessionsService:
         )
         title_map: dict[str, str] = {}
         for record in results:
-            if isinstance(record, Exception) or record is None:
+            if isinstance(record, BaseException) or record is None:
                 continue
             title = record.title
             if record.id and title:

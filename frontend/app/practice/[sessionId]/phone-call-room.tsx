@@ -5,15 +5,28 @@ import { useRouter } from "next/navigation";
 import { manualStopSession, manualStopSessionBestEffort } from "@/services/api/sessions";
 import { useE2EVoiceSession } from "@/hooks/useE2EVoiceSession";
 
+function isDebugPromptsEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_PHONE_CALL_ROOM_DEBUG_PROMPTS === "1";
+}
+
 export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  const { connectionStatus, error, isMuted, isAiSpeaking, disconnect, toggleMute } =
-    useE2EVoiceSession(sessionId);
+  const {
+    connectionStatus,
+    error,
+    isMuted,
+    isAiSpeaking,
+    debugSystemPrompt,
+    debugOpeningText,
+    disconnect,
+    toggleMute,
+  } = useE2EVoiceSession(sessionId);
 
   const [callDuration, setCallDuration] = useState(0);
   const [isEnding, setIsEnding] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasSentStopRef = useRef(false);
+  const debugPromptsEnabled = isDebugPromptsEnabled();
 
   useEffect(() => {
     if (connectionStatus !== "connected") {
@@ -224,143 +237,236 @@ export default function PhoneCallRoom({ sessionId }: { sessionId: string }) {
         style={{
           minHeight: "100vh",
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "center",
           padding: "24px",
           background: "linear-gradient(180deg, #fef2f2 0%, #fff7ed 50%, #fef3c7 100%)",
         }}
       >
-        <header
+        <div
           style={{
             width: "100%",
+            maxWidth: debugPromptsEnabled ? "1400px" : "960px",
             display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "12px",
-            paddingTop: "16px",
+            gap: "24px",
+            flexWrap: "wrap",
+            alignItems: "stretch",
+            justifyContent: "center",
           }}
         >
           <div
             style={{
-              display: "inline-flex",
+              flex: "1 1 720px",
+              minWidth: "320px",
+              display: "flex",
+              flexDirection: "column",
               alignItems: "center",
-              gap: "8px",
-              padding: "6px 12px",
-              borderRadius: "999px",
-              background: colors.bg,
-              border: `1px solid ${colors.border}`,
-              color: colors.text,
-              fontSize: "13px",
-              fontWeight: 500,
+              justifyContent: "space-between",
             }}
           >
-            <div
+            <header
               style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: colors.border,
-                animation: connectionStatus === "connecting" ? "blink 1s ease-in-out infinite" : "none",
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "12px",
+                paddingTop: "16px",
               }}
-            />
-            {connectionStatus === "connecting"
-              ? "Connecting..."
-              : connectionStatus === "connected"
-              ? "Connected"
-              : "Disconnected"}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "6px 12px",
+                  borderRadius: "999px",
+                  background: colors.bg,
+                  border: `1px solid ${colors.border}`,
+                  color: colors.text,
+                  fontSize: "13px",
+                  fontWeight: 500,
+                }}
+              >
+                <div
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: colors.border,
+                    animation: connectionStatus === "connecting" ? "blink 1s ease-in-out infinite" : "none",
+                  }}
+                />
+                {connectionStatus === "connecting"
+                  ? "Connecting..."
+                  : connectionStatus === "connected"
+                  ? "Connected"
+                  : "Disconnected"}
+              </div>
+              <div
+                style={{
+                  fontSize: "32px",
+                  fontWeight: 700,
+                  color: "#1f2937",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {formatDuration(callDuration)}
+              </div>
+              {error ? <p style={{ color: "#dc2626", fontSize: "14px", margin: 0 }}>{error}</p> : null}
+            </header>
+
+            <section
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+              }}
+            >
+              <AIAvatar />
+              <UserIndicator />
+            </section>
+
+            <footer
+              style={{
+                width: "100%",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "32px",
+                paddingBottom: "32px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={toggleMute}
+                disabled={connectionStatus === "disconnected" || isEnding}
+                style={{
+                  width: "64px",
+                  height: "64px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: isMuted
+                    ? "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)"
+                    : "linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)",
+                  cursor: connectionStatus === "disconnected" || isEnding ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "28px",
+                  boxShadow: isMuted
+                    ? "0 4px 12px rgba(245, 158, 11, 0.4)"
+                    : "0 4px 12px rgba(156, 163, 175, 0.4)",
+                  transition: "all 0.2s ease",
+                  opacity: connectionStatus === "disconnected" || isEnding ? 0.5 : 1,
+                }}
+                aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
+              >
+                {isMuted ? "🔇" : "🎤"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleEndCall}
+                disabled={isEnding}
+                style={{
+                  width: "80px",
+                  height: "80px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                  cursor: isEnding ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "32px",
+                  boxShadow: "0 6px 20px rgba(239, 68, 68, 0.5)",
+                  transition: "all 0.2s ease",
+                  transform: isEnding ? "scale(0.95)" : "scale(1)",
+                }}
+                aria-label="End call"
+              >
+                📞
+              </button>
+
+              <div style={{ width: "64px", height: "64px" }} />
+            </footer>
           </div>
-          <div
-            style={{
-              fontSize: "32px",
-              fontWeight: 700,
-              color: "#1f2937",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {formatDuration(callDuration)}
-          </div>
-          {error ? <p style={{ color: "#dc2626", fontSize: "14px", margin: 0 }}>{error}</p> : null}
-        </header>
 
-        <section
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-          }}
-        >
-          <AIAvatar />
-          <UserIndicator />
-        </section>
+          {debugPromptsEnabled ? (
+            <aside
+              data-testid="phone-call-debug-sidebar"
+              style={{
+                flex: "0 1 360px",
+                minWidth: "280px",
+                maxWidth: "420px",
+                alignSelf: "stretch",
+                borderRadius: "20px",
+                border: "1px solid rgba(148, 163, 184, 0.35)",
+                background: "rgba(255, 255, 255, 0.78)",
+                boxShadow: "0 18px 50px rgba(15, 23, 42, 0.12)",
+                backdropFilter: "blur(18px)",
+                padding: "20px",
+                display: "grid",
+                gap: "16px",
+              }}
+            >
+              <div style={{ display: "grid", gap: "4px" }}>
+                <p style={{ margin: 0, fontSize: "12px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#92400e", fontWeight: 700 }}>
+                  Debug prompt data
+                </p>
+                <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>
+                  Visible only when NEXT_PUBLIC_PHONE_CALL_ROOM_DEBUG_PROMPTS=1.
+                </p>
+              </div>
 
-        <footer
-          style={{
-            width: "100%",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "32px",
-            paddingBottom: "32px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={toggleMute}
-            disabled={connectionStatus === "disconnected" || isEnding}
-            style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "50%",
-              border: "none",
-              background: isMuted
-                ? "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)"
-                : "linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)",
-              cursor: connectionStatus === "disconnected" || isEnding ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "28px",
-              boxShadow: isMuted
-                ? "0 4px 12px rgba(245, 158, 11, 0.4)"
-                : "0 4px 12px rgba(156, 163, 175, 0.4)",
-              transition: "all 0.2s ease",
-              opacity: connectionStatus === "disconnected" || isEnding ? 0.5 : 1,
-            }}
-            aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
-          >
-            {isMuted ? "🔇" : "🎤"}
-          </button>
+              <div style={{ display: "grid", gap: "8px" }}>
+                <p style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "#1f2937" }}>Initial system prompt</p>
+                <div
+                  style={{
+                    borderRadius: "14px",
+                    border: "1px solid rgba(203, 213, 225, 0.9)",
+                    background: "rgba(248, 250, 252, 0.92)",
+                    padding: "12px",
+                    fontSize: "12px",
+                    lineHeight: 1.5,
+                    color: "#0f172a",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    overflowY: "auto",
+                    maxHeight: "36vh",
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  }}
+                >
+                  {debugSystemPrompt ?? "No debug system prompt received."}
+                </div>
+              </div>
 
-          <button
-            type="button"
-            onClick={handleEndCall}
-            disabled={isEnding}
-            style={{
-              width: "80px",
-              height: "80px",
-              borderRadius: "50%",
-              border: "none",
-              background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
-              cursor: isEnding ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "32px",
-              boxShadow: "0 6px 20px rgba(239, 68, 68, 0.5)",
-              transition: "all 0.2s ease",
-              transform: isEnding ? "scale(0.95)" : "scale(1)",
-            }}
-            aria-label="End call"
-          >
-            📞
-          </button>
-
-          <div style={{ width: "64px", height: "64px" }} />
-        </footer>
+              <div style={{ display: "grid", gap: "8px" }}>
+                <p style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "#1f2937" }}>Opening text</p>
+                <div
+                  style={{
+                    borderRadius: "14px",
+                    border: "1px solid rgba(203, 213, 225, 0.9)",
+                    background: "rgba(248, 250, 252, 0.92)",
+                    padding: "12px",
+                    fontSize: "13px",
+                    lineHeight: 1.5,
+                    color: "#0f172a",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    overflowY: "auto",
+                    maxHeight: "24vh",
+                  }}
+                >
+                  {debugOpeningText ?? "No opening text received."}
+                </div>
+              </div>
+            </aside>
+          ) : null}
+        </div>
       </main>
     </>
   );

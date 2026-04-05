@@ -4,6 +4,7 @@ import asyncio
 import base64
 import gzip
 import json
+import logging
 import random
 import uuid
 from array import array
@@ -15,8 +16,17 @@ from websockets.asyncio.client import connect as ws_connect
 from websockets.exceptions import WebSocketException
 
 from app.config import SettingsError, load_settings
+from app.repositories.scenario_repository import ScenarioRepository
+from app.repositories.session_repository import SessionRepository
+from app.services import opening_prompt_service
+from app.services.e2e_prompt_builder import (
+    build_e2e_system_prompt,
+    resolve_bot_name,
+    resolve_opening_content,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = 0b0001
 CLIENT_FULL_REQUEST = 0b0001
@@ -229,7 +239,13 @@ async def _recv_client_config(client_ws: WebSocket) -> dict[str, Any]:
                 return session
 
 
-def _build_start_session_payload(config: E2EConfig, session_id: str, client_session: dict[str, Any]) -> dict[str, Any]:
+def _build_start_session_payload(
+    config: E2EConfig,
+    session_id: str,
+    client_session: dict[str, Any],
+    scenario: Any | None = None,
+    language: str = "en",
+) -> dict[str, Any]:
     model = config.model
     maybe_model = client_session.get("model")
     if isinstance(maybe_model, str) and maybe_model.strip():
@@ -250,8 +266,8 @@ def _build_start_session_payload(config: E2EConfig, session_id: str, client_sess
             },
         },
         "dialog": {
-            "bot_name": "Real Talk Coach",
-            "system_role": "You are an AI communication coach helping the user practice difficult conversations.",
+            "bot_name": resolve_bot_name(scenario),
+            "system_role": build_e2e_system_prompt(scenario, language),
             "dialog_id": session_id,
             "extra": {
                 "input_mod": "keep_alive",
@@ -263,6 +279,21 @@ def _build_start_session_payload(config: E2EConfig, session_id: str, client_sess
         payload["dialog"]["extra"]["model"] = model
     if speaker:
         payload["tts"]["speaker"] = speaker
+    return payload
+
+
+def _build_session_ready_payload(
+    start_payload: dict[str, Any],
+    opening_content: str,
+    *,
+    send_debug_prompts: bool,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"type": "session.ready"}
+    if send_debug_prompts:
+        payload["debug"] = {
+            "systemPrompt": start_payload["dialog"]["system_role"],
+            "openingText": opening_content.strip(),
+        }
     return payload
 
 
@@ -365,6 +396,39 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
     except WebSocketDisconnect:
         return
 
+    send_debug_prompts = bool(client_session_cfg.get("debug_prompts"))
+
+    scenario = None
+    language = "en"
+    try:
+        mongodb = websocket.app.state.mongodb
+        session_repository = SessionRepository(mongodb)
+        scenario_repository = ScenarioRepository(mongodb)
+        session_record = await asyncio.wait_for(
+            session_repository.get_session(session_id),
+            timeout=5,
+        )
+        if session_record is None:
+            raise LookupError(f"Session not found: {session_id}")
+        if session_record.language in {"en", "zh"}:
+            language = session_record.language
+        if not session_record.scenario_id:
+            raise LookupError(f"Session missing scenario_id: {session_id}")
+        scenario = await asyncio.wait_for(
+            scenario_repository.get(session_record.scenario_id),
+            timeout=5,
+        )
+        if scenario is None:
+            raise LookupError(f"Scenario not found: {session_record.scenario_id}")
+    except Exception as exc:
+        logger.warning(
+            "Falling back to default realtime prompt for session %s: %s",
+            session_id,
+            exc,
+        )
+        scenario = None
+        language = "en"
+
     headers = {
         "X-Api-App-ID": config.app_id,
         "X-Api-Access-Key": config.access_key,
@@ -398,7 +462,13 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                 await websocket.close(code=1011)
                 return
 
-            start_payload = _build_start_session_payload(config, runtime_session_id, client_session_cfg)
+            start_payload = _build_start_session_payload(
+                config,
+                runtime_session_id,
+                client_session_cfg,
+                scenario=scenario,
+                language=language,
+            )
             await upstream_ws.send(_build_full_request(EVENT_START_SESSION, start_payload, session_id=runtime_session_id))
             start_session_ack = await upstream_ws.recv()
             if not isinstance(start_session_ack, (bytes, bytearray)):
@@ -419,10 +489,27 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
 
             send_opening_flag = client_session_cfg.get("send_opening")
             should_send_opening = True if send_opening_flag is None else bool(send_opening_flag)
+            opening_content = ""
             if should_send_opening:
-                opening_content = client_session_cfg.get("opening")
-                if not isinstance(opening_content, str) or not opening_content.strip():
-                    opening_content = "Hi, I am your AI coach. Tell me what you want to practice and we can begin now."
+                who_talks_first = getattr(scenario, "who_talks_first", "ai") if scenario is not None else "ai"
+                opening_content, needs_llm_generation = resolve_opening_content(
+                    scenario,
+                    language,
+                    who_talks_first,
+                )
+                if needs_llm_generation and scenario is not None:
+                    try:
+                        opening_content, _, _, _ = await opening_prompt_service.generate_opening_prompt(
+                            scenario=scenario,
+                            language=language,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Falling back to casual opening for session %s: %s",
+                            session_id,
+                            exc,
+                        )
+                        opening_content, _ = resolve_opening_content(None, language, who_talks_first)
                 await upstream_ws.send(
                     _build_full_request(
                         EVENT_OPENING_REQUEST,
@@ -431,7 +518,14 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                     )
                 )
 
-            await _safe_send_json(websocket, {"type": "session.ready"})
+            await _safe_send_json(
+                websocket,
+                _build_session_ready_payload(
+                    start_payload,
+                    opening_content,
+                    send_debug_prompts=send_debug_prompts,
+                ),
+            )
 
             to_upstream = asyncio.create_task(_pipe_client_audio(websocket, upstream_ws, runtime_session_id))
             to_client = asyncio.create_task(_pipe_upstream_events(websocket, upstream_ws))

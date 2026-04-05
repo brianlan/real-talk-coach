@@ -19,9 +19,9 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
@@ -269,7 +269,7 @@ def _stub_pipeline(monkeypatch):
     monkeypatch.setattr(turns_routes, "enqueue_turn_pipeline", _noop_pipeline)
 
     async def _noop_initial_turn(*, session_id: str, scenario, opening_prompt=None, language=None):
-        repo = SessionRepository(object())
+        repo = SessionRepository(object())  # pyright: ignore[reportArgumentType]
         await repo.add_turn(
             {
                 "sessionId": session_id,

@@ -71,6 +71,7 @@ def _record_to_payload(record: AdminScenarioRecord) -> dict[str, Any]:
         "endCriteria": record.end_criteria,
         "skills": record.skills,
         "prompt": record.prompt,
+        "whoTalksFirst": record.who_talks_first,
         "status": record.status,
     }
 

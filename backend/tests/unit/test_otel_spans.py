@@ -120,9 +120,9 @@ async def test_session_create_starts_span(monkeypatch):
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
@@ -130,14 +130,14 @@ async def test_session_create_starts_span(monkeypatch):
 
     payload = sessions_routes.PracticeSessionCreate(
         scenarioId="scenario-1",
-        clientSessionStartedAt=datetime.now(timezone.utc).isoformat(),
+        clientSessionStartedAt=datetime.now(timezone.utc),
     )
 
     await sessions_routes.create_session(
         payload,
         background_tasks=BackgroundTasks(),
-        repo=FakeRepo(),
-        scenario_repo=FakeScenarioRepo(),
+        repo=FakeRepo(),  # pyright: ignore[reportArgumentType]
+        scenario_repo=FakeScenarioRepo(),  # pyright: ignore[reportArgumentType]
     )
 
     assert spans
@@ -217,7 +217,9 @@ async def test_turn_create_starts_span(monkeypatch):
         endedAt=now,
     )
 
-    await turns_routes.submit_turn("session-1", payload, repo=FakeRepo())
+    await turns_routes.submit_turn(
+        "session-1", payload, repo=FakeRepo()  # pyright: ignore[reportArgumentType]
+    )
 
     assert spans
     assert spans[0][0] == "turns.create"

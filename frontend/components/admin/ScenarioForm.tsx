@@ -14,7 +14,7 @@ export function ScenarioForm({
   scenarioId?: string;
   initialValues?: Partial<ScenarioInput>;
   version?: string | null;
-  onSaved?: () => void;
+  onSaved?: (newVersion?: string | null) => void;
 }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [values, setValues] = useState<ScenarioInput>({
@@ -28,6 +28,7 @@ export function ScenarioForm({
       initialValues?.traineePersona ?? ({ name: "", role: "", background: "" } as ScenarioInput["traineePersona"]),
     endCriteria: initialValues?.endCriteria ?? [""],
     skills: initialValues?.skills ?? [],
+    whoTalksFirst: initialValues?.whoTalksFirst ?? "ai",
     prompt: initialValues?.prompt ?? "",
     idleLimitSeconds: initialValues?.idleLimitSeconds,
     durationLimitSeconds: initialValues?.durationLimitSeconds,
@@ -80,8 +81,9 @@ export function ScenarioForm({
     setNotice(null);
     try {
       if (scenarioId) {
-        await updateScenario(scenarioId, values, version ?? "");
+        const result = await updateScenario(scenarioId, values, version ?? "");
         setNotice("Saved");
+        onSaved?.(result.version);
       } else {
         await createScenario(values);
         setNotice("Created");
@@ -112,6 +114,18 @@ export function ScenarioForm({
       <label style={{ display: "grid", gap: 6 }}>
         <span>Objective</span>
         <textarea required value={values.objective} onChange={handleChange("objective")} style={{ padding: 10, borderRadius: 8, border: "1px solid #d9d3cb", minHeight: 80 }} />
+      </label>
+
+      <label style={{ display: "grid", gap: 6 }}>
+        <span>Who Talks First</span>
+        <select
+          value={values.whoTalksFirst}
+          onChange={(e) => setValues((prev) => ({ ...prev, whoTalksFirst: e.target.value as "ai" | "trainee" }))}
+          style={{ padding: 10, borderRadius: 8, border: "1px solid #d9d3cb", background: "#fff" }}
+        >
+          <option value="ai">AI</option>
+          <option value="trainee">Trainee</option>
+        </select>
       </label>
 
       <div style={{ display: "grid", gap: 8, border: "1px solid #e4ddd4", borderRadius: 10, padding: 12 }}>

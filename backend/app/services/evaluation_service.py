@@ -90,8 +90,8 @@ def _parse_tool_call(payload: dict[str, Any]) -> EvaluationResult:
 async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
     settings = load_settings()
     client = EvaluatorClient(
-        base_url=settings.chatai_api_base,
-        api_key=settings.chatai_api_key,
+        base_url=settings.openai_compatible_api_base,
+        api_key=settings.openai_compatible_api_key,
         timeout=20.0,
         retries=1,
     )
@@ -99,7 +99,7 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
     skill_rubric = _format_skill_rubric(context.skill_summaries)
     end_criteria = _format_end_criteria(context.end_criteria)
     payload = {
-        "model": settings.evaluator_model or settings.chatai_api_model,
+        "model": settings.evaluator_model or settings.openai_compatible_api_model,
         "messages": [
             {
                 "role": "system",

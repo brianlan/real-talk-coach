@@ -21,9 +21,9 @@ class Settings:
     minio_public_endpoint: str | None
     dashscope_api_key: str
     qwen_voice_id: str | None
-    chatai_api_base: str
-    chatai_api_key: str
-    chatai_api_model: str
+    openai_compatible_api_base: str
+    openai_compatible_api_key: str
+    openai_compatible_api_model: str
     evaluator_model: str
     objective_check_api_base: str
     objective_check_api_key: str
@@ -102,11 +102,15 @@ def load_settings() -> Settings:
     minio_public_endpoint = _optional_env("MINIO_PUBLIC_ENDPOINT")
     dashscope_api_key = _require_env("DASHSCOPE_API_KEY")
     qwen_voice_id = _optional_env("QWEN_VOICE_ID")
-    chatai_api_base = _require_url("CHATAI_API_BASE", _require_env("CHATAI_API_BASE"))
-    chatai_api_key = _require_env("CHATAI_API_KEY")
-    chatai_api_model = _require_env("CHATAI_API_MODEL")
+    openai_compatible_api_base = _require_url(
+        "OPENAI_COMPATIBLE_API_BASE", _require_env("OPENAI_COMPATIBLE_API_BASE")
+    )
+    openai_compatible_api_key = _require_env("OPENAI_COMPATIBLE_API_KEY")
+    openai_compatible_api_model = _require_env("OPENAI_COMPATIBLE_API_MODEL")
     evaluator_model = _require_env("EVALUATOR_MODEL")
-    objective_check_api_base = _optional_env("OBJECTIVE_CHECK_API_BASE") or chatai_api_base
+    objective_check_api_base = (
+        _optional_env("OBJECTIVE_CHECK_API_BASE") or openai_compatible_api_base
+    )
     objective_check_api_base = _require_url(
         "OBJECTIVE_CHECK_API_BASE", objective_check_api_base
     )
@@ -144,9 +148,9 @@ def load_settings() -> Settings:
         minio_public_endpoint=minio_public_endpoint,
         dashscope_api_key=dashscope_api_key,
         qwen_voice_id=qwen_voice_id,
-        chatai_api_base=chatai_api_base,
-        chatai_api_key=chatai_api_key,
-        chatai_api_model=chatai_api_model,
+        openai_compatible_api_base=openai_compatible_api_base,
+        openai_compatible_api_key=openai_compatible_api_key,
+        openai_compatible_api_model=openai_compatible_api_model,
         evaluator_model=evaluator_model,
         objective_check_api_base=objective_check_api_base,
         objective_check_api_key=objective_check_api_key,

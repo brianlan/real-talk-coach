@@ -24,6 +24,7 @@ class Scenario:
     duration_limit_seconds: int | None
     prompt: str
     status: str
+    who_talks_first: str = "ai"
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ def _scenario_from_doc(doc: dict[str, Any], skill_map: dict[str, Skill]) -> Scen
         duration_limit_seconds=doc.get("durationLimitSeconds"),
         prompt=doc.get("prompt", ""),
         status=doc.get("status", ""),
+        who_talks_first=doc.get("whoTalksFirst", "ai"),
     )
 
 

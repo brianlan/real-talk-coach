@@ -27,6 +27,7 @@ def _response(record: AdminScenarioRecord) -> dict[str, Any]:
         "endCriteria": record.end_criteria,
         "skills": record.skills,
         "prompt": record.prompt,
+        "whoTalksFirst": record.who_talks_first,
         "status": record.status,
         "recordStatus": record.record_status,
         "idleLimitSeconds": record.idle_limit_seconds,

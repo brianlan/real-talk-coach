@@ -12,9 +12,9 @@ def _set_required_envs(monkeypatch):
     monkeypatch.setenv("MINIO_SECRET_KEY", "minioadmin")
     monkeypatch.setenv("MINIO_BUCKET", "audio")
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
@@ -28,9 +28,9 @@ def test_missing_required_envs_raise_actionable_error(monkeypatch):
         "MONGO_PORT",
         "MONGO_DB",
         "DASHSCOPE_API_KEY",
-        "CHATAI_API_BASE",
-        "CHATAI_API_KEY",
-        "CHATAI_API_MODEL",
+        "OPENAI_COMPATIBLE_API_BASE",
+        "OPENAI_COMPATIBLE_API_KEY",
+        "OPENAI_COMPATIBLE_API_MODEL",
         "EVALUATOR_MODEL",
         "OBJECTIVE_CHECK_API_KEY",
         "OBJECTIVE_CHECK_MODEL",
@@ -49,12 +49,12 @@ def test_missing_required_envs_raise_actionable_error(monkeypatch):
 
 def test_invalid_urls_are_rejected(monkeypatch):
     _set_required_envs(monkeypatch)
-    monkeypatch.setenv("CHATAI_API_BASE", "not-a-url")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "not-a-url")
 
     with pytest.raises(SettingsError) as exc:
         load_settings()
 
-    assert "Invalid URL for CHATAI_API_BASE" in str(exc.value)
+    assert "Invalid URL for OPENAI_COMPATIBLE_API_BASE" in str(exc.value)
 
 
 def test_objective_check_base_defaults_to_evaluator_base(monkeypatch):
@@ -63,7 +63,7 @@ def test_objective_check_base_defaults_to_evaluator_base(monkeypatch):
 
     settings = load_settings()
 
-    assert settings.objective_check_api_base == settings.chatai_api_base
+    assert settings.objective_check_api_base == settings.openai_compatible_api_base
 
 
 def test_volcengine_envs_are_optional_and_empty_is_treated_as_missing(monkeypatch):

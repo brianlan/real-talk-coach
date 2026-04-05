@@ -39,7 +39,10 @@ export default function EditScenarioPage() {
           scenarioId={scenarioId}
           initialValues={initial}
           version={version}
-          onSaved={() => setError(null)}
+          onSaved={(newVersion) => {
+            setError(null);
+            if (newVersion) setVersion(newVersion);
+          }}
         />
       ) : null}
     </div>

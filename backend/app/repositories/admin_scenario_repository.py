@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
 from typing import Any
 
@@ -29,6 +30,7 @@ class AdminScenarioRecord:
     idle_limit_seconds: int | None
     duration_limit_seconds: int | None
     version: str | None
+    who_talks_first: str = "ai"
 
 
 def _from_doc(doc: dict[str, Any]) -> AdminScenarioRecord:
@@ -47,8 +49,19 @@ def _from_doc(doc: dict[str, Any]) -> AdminScenarioRecord:
         record_status=doc.get("recordStatus", doc.get("status", "active")),
         idle_limit_seconds=doc.get("idleLimitSeconds"),
         duration_limit_seconds=doc.get("durationLimitSeconds"),
-        version=doc.get("updatedAt"),
+        version=_version_from_doc(doc),
+        who_talks_first=doc.get("whoTalksFirst", "ai"),
     )
+
+
+def _version_from_doc(doc: dict[str, Any]) -> str:
+    updated = doc.get("updatedAt")
+    if updated:
+        return str(updated)
+    oid = doc.get("_id")
+    if isinstance(oid, ObjectId):
+        return oid.generation_time.isoformat()
+    return str(oid)
 
 
 class AdminScenarioRepository:
@@ -96,7 +109,7 @@ class AdminScenarioRepository:
             raise ConflictError("Scenario has changed; refresh and retry")
         await collection.update_one(
             {"_id": ObjectId(scenario_id)},
-            {"$set": payload}
+            {"$set": {**payload, "updatedAt": datetime.datetime.utcnow().isoformat()}}
         )
         updated = await self.get(scenario_id)
         if updated:

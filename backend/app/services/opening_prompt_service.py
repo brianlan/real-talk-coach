@@ -119,8 +119,8 @@ async def generate_opening_prompt(*, scenario: Any, language: str) -> tuple[str,
     ai_name = ai_persona.get("name", "") or ""
     trainee_name = trainee_persona.get("name", "") or ""
     client = EvaluatorClient(
-        base_url=settings.chatai_api_base,
-        api_key=settings.chatai_api_key,
+        base_url=settings.openai_compatible_api_base,
+        api_key=settings.openai_compatible_api_key,
         timeout=20.0,
         retries=1,
     )
@@ -128,7 +128,7 @@ async def generate_opening_prompt(*, scenario: Any, language: str) -> tuple[str,
         for attempt in range(2):
             messages = _build_messages(scenario, language, strict=attempt == 1)
             payload = {
-                "model": settings.chatai_api_model,
+                "model": settings.openai_compatible_api_model,
                 "messages": messages,
                 "temperature": 0.3,
             }
@@ -153,7 +153,7 @@ async def generate_opening_prompt(*, scenario: Any, language: str) -> tuple[str,
                 )
                 continue
             logger.info("Opening prompt generated (%s chars)", len(content))
-            return content, settings.chatai_api_model, "chatai", _now_iso()
+            return content, settings.openai_compatible_api_model, "openai_compatible", _now_iso()
     finally:
         await client.close()
     raise LLMError("Opening prompt failed validation after retries")
