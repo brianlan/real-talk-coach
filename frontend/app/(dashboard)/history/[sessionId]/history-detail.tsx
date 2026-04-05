@@ -29,10 +29,10 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
   const isRealtime = session?.mode === "realtime";
 
   const skillMap = useMemo(() => {
-    const summaries = detail?.scenario?.skillSummaries ?? [];
-    return summaries.reduce(
-      (acc: Record<string, { name: string; rubric?: string }>, skill: any) => {
-        acc[skill.skillId] = { name: skill.name, rubric: skill.rubric };
+    const criteria = detail?.scenario?.evaluationConfig?.evaluationCriteria ?? [];
+    return criteria.reduce(
+      (acc: Record<string, { name: string; rubric?: string }>, c: any) => {
+        acc[c.id] = { name: c.description };
         return acc;
       },
       {} as Record<string, { name: string; rubric?: string }>
@@ -81,7 +81,7 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <h1 style={{ fontSize: 36, margin: 0 }}>
-              {detail?.scenario?.title ?? "Session detail"}
+              {detail?.scenario?.metadata?.title ?? "Session detail"}
             </h1>
             {isRealtime ? (
               <span
@@ -116,7 +116,7 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
             )}
           </div>
           <p style={{ maxWidth: 640 }}>
-            {detail?.scenario?.objective ?? "Review the conversation outcomes."}
+            {detail?.scenario?.metadata?.description || detail?.scenario?.context?.situation || "Review the conversation outcomes."}
           </p>
         </header>
 

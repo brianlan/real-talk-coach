@@ -42,10 +42,14 @@ test("history detail shows realtime transcript and interruption markers", async 
         },
         scenario: {
           id: scenarioId,
-          category: "Realtime",
-          title: "Handle interruption in a phone call",
-          objective: "Recover politely after barge-in.",
-          skillSummaries: [],
+          metadata: {
+            category: "Realtime",
+            title: "Handle interruption in a phone call",
+            objective: "Recover politely after barge-in.",
+          },
+          evaluationConfig: {
+            evaluationCriteria: [],
+          },
         },
         turns: [
           {
