@@ -85,9 +85,12 @@ async def test_history_default_sort_and_page_size(monkeypatch):
                 "Scenario",
                 (),
                 {
-                    "category": "Feedback",
-                    "title": "Difficult feedback",
-                    "objective": "Provide clear feedback",
+                    "id": scenario_id,
+                    "metadata": {"domain": "Feedback", "title": "Difficult feedback"},
+                    "context": {"situation": "Provide clear feedback"},
+                    "simulation_config": {},
+                    "evaluation_config": {},
+                    "status": "published",
                 },
             )()
 
@@ -151,18 +154,24 @@ async def test_history_filtering_by_category_and_search(monkeypatch):
                     "Scenario",
                     (),
                     {
-                        "category": "Feedback",
-                        "title": "Difficult feedback",
-                        "objective": "Provide clear feedback",
+                        "id": scenario_id,
+                        "metadata": {"domain": "Feedback", "title": "Difficult feedback"},
+                        "context": {"situation": "Provide clear feedback"},
+                        "simulation_config": {},
+                        "evaluation_config": {},
+                        "status": "published",
                     },
                 )()
             return type(
                 "Scenario",
                 (),
                 {
-                    "category": "Conflict",
-                    "title": "Hard conversation",
-                    "objective": "Resolve tension",
+                    "id": scenario_id,
+                    "metadata": {"domain": "Conflict", "title": "Hard conversation"},
+                    "context": {"situation": "Resolve tension"},
+                    "simulation_config": {},
+                    "evaluation_config": {},
+                    "status": "published",
                 },
             )()
 

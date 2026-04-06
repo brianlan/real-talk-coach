@@ -109,8 +109,8 @@ export default function ScenariosPage() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <div>
-                <h3 style={{ margin: "0 0 4px" }}>{scenario.title}</h3>
-                <p style={{ margin: 0, color: "#4a433b" }}>{scenario.category}</p>
+                <h3 style={{ margin: "0 0 4px" }}>{scenario.metadata?.title ?? "Untitled"}</h3>
+                <p style={{ margin: 0, color: "#4a433b" }}>{scenario.metadata?.domain ?? "No Domain"}</p>
                 <p style={{ margin: "4px 0", color: "#4a433b" }}>Status: {scenario.status}</p>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

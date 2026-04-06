@@ -120,18 +120,17 @@ def _stub_repositories(monkeypatch):
     async def fake_get_scenario(self, scenario_id: str):
         return Scenario(
             id=scenario_id,
-            category="practice",
-            title="Test Scenario",
-            description="Test description",
-            objective="Test objective",
-            ai_persona={"name": "Coach", "role": "Coach", "background": "Test"},
-            trainee_persona={"name": "Trainee", "role": "Trainee", "background": "Test"},
-            end_criteria=["done"],
-            skills=[],
-            skill_summaries=[],
-            idle_limit_seconds=8,
-            duration_limit_seconds=300,
-            prompt="Begin.",
+            metadata={"title": "Test Scenario"},
+            context={"situation": "Test situation"},
+            simulation_config={
+                "ai": {"name": "Coach", "role": "Coach"},
+                "trainee": {"name": "Trainee", "role": "Trainee"},
+                "conversationStart": {
+                    "speakerRoleId": "trainee",
+                    "initialPromptToUser": "Begin.",
+                },
+            },
+            evaluation_config={},
             status="published",
         )
 

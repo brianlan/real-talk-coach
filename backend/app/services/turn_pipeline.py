@@ -34,6 +34,48 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _scenario_dict(scenario: Any, snake_name: str, camel_name: str) -> dict[str, Any]:
+    return _as_dict(getattr(scenario, snake_name, None) or getattr(scenario, camel_name, None))
+
+
+def _scenario_title(scenario: Any) -> str:
+    metadata = _scenario_dict(scenario, "metadata", "metadata")
+    return str(metadata.get("title") or "").strip()
+
+
+def _scenario_description(scenario: Any) -> str:
+    metadata = _scenario_dict(scenario, "metadata", "metadata")
+    context = _scenario_dict(scenario, "context", "context")
+    description = str(metadata.get("description") or "").strip()
+    if description:
+        return description
+    return str(context.get("situation") or "").strip()
+
+
+def _scenario_personas(scenario: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    simulation_config = _scenario_dict(scenario, "simulation_config", "simulationConfig")
+    return _as_dict(simulation_config.get("ai")), _as_dict(simulation_config.get("trainee"))
+
+
+def _scenario_objective_inputs(scenario: Any) -> tuple[str, list[str]]:
+    evaluation_config = _scenario_dict(scenario, "evaluation_config", "evaluationConfig")
+    simulation_config = _scenario_dict(scenario, "simulation_config", "simulationConfig")
+    end_conditions = _as_dict(simulation_config.get("conversationEndConditions"))
+    learning_objectives = _text_list(evaluation_config.get("learningObjectives"))
+    end_states = _text_list(end_conditions.get("possibleEndStates"))
+    return " ".join(learning_objectives), end_states
+
+
 def _parse_qwen_text(response: dict[str, Any]) -> str:
     choices = response.get("choices", [])
     if not choices:
@@ -102,14 +144,10 @@ def _persona_block(persona: dict[str, Any] | None, label: str) -> str:
 
 
 def _build_auto_prompt(scenario: Any) -> str:
-    title = getattr(scenario, "title", "") or ""
-    description = getattr(scenario, "description", "") or ""
-    ai_persona = getattr(scenario, "ai_persona", None) or getattr(
-        scenario, "aiPersona", None
-    )
-    trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
-        scenario, "traineePersona", None
-    )
+    title = _scenario_title(scenario)
+    description = _scenario_description(scenario)
+    context = _scenario_dict(scenario, "context", "context")
+    ai_persona, trainee_persona = _scenario_personas(scenario)
     ai_name = (ai_persona or {}).get("name") or "the AI roleplayer"
     ai_role = (ai_persona or {}).get("role") or "role"
     trainee_name = (trainee_persona or {}).get("name") or "the trainee"
@@ -118,9 +156,14 @@ def _build_auto_prompt(scenario: Any) -> str:
     parts: list[str] = [
         f"Start as {ai_name} ({ai_role}) speaking with {trainee_name} ({trainee_role})."
     ]
-    context_bits = " ".join(bit for bit in [title, description] if bit)
+    context_bits = " ".join(
+        bit for bit in [title, description, str(context.get("background") or "").strip()] if bit
+    )
     if context_bits:
         parts.append(f"Context: {context_bits}")
+    setting = str(context.get("setting") or "").strip()
+    if setting:
+        parts.append(f"Setting: {setting}")
     parts.append(
         "Open with a natural first line that fits the context and invites a response."
     )
@@ -134,15 +177,10 @@ def _language_label(language: str) -> str:
 def _build_initiation_messages(
     scenario: Any, *, opening_prompt: str | None = None, language: str | None = None
 ) -> list[dict[str, str]]:
-    title = getattr(scenario, "title", "") or ""
-    description = getattr(scenario, "description", "") or ""
-    prompt = getattr(scenario, "prompt", "") or ""
-    ai_persona = getattr(scenario, "ai_persona", None) or getattr(
-        scenario, "aiPersona", None
-    )
-    trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
-        scenario, "traineePersona", None
-    )
+    title = _scenario_title(scenario)
+    description = _scenario_description(scenario)
+    context = _scenario_dict(scenario, "context", "context")
+    ai_persona, trainee_persona = _scenario_personas(scenario)
 
     system_lines = [
         "You are the AI roleplayer for a practice conversation.",
@@ -153,11 +191,15 @@ def _build_initiation_messages(
         system_lines.append(f"Scenario title: {title}")
     if description:
         system_lines.append(f"Scenario description: {description}")
+    if context.get("background"):
+        system_lines.append(f"Scenario background: {context.get('background')}")
+    if context.get("setting"):
+        system_lines.append(f"Conversation setting: {context.get('setting')}")
     system_lines.append("You must start the conversation as the AI.")
     if language:
         system_lines.append(f"Use {_language_label(language)} for all responses.")
 
-    user_prompt = opening_prompt or prompt or _build_auto_prompt(scenario)
+    user_prompt = opening_prompt or _build_auto_prompt(scenario)
     return [
         {"role": "system", "content": "\n".join(system_lines)},
         {"role": "user", "content": user_prompt},
@@ -165,14 +207,10 @@ def _build_initiation_messages(
 
 
 def _build_system_prompt(scenario: Any) -> str:
-    title = getattr(scenario, "title", "") or ""
-    description = getattr(scenario, "description", "") or ""
-    ai_persona = getattr(scenario, "ai_persona", None) or getattr(
-        scenario, "aiPersona", None
-    )
-    trainee_persona = getattr(scenario, "trainee_persona", None) or getattr(
-        scenario, "traineePersona", None
-    )
+    title = _scenario_title(scenario)
+    description = _scenario_description(scenario)
+    context = _scenario_dict(scenario, "context", "context")
+    ai_persona, trainee_persona = _scenario_personas(scenario)
     system_lines = [
         "You are the AI roleplayer for a practice conversation.",
         _persona_block(ai_persona, "Your persona"),
@@ -182,6 +220,10 @@ def _build_system_prompt(scenario: Any) -> str:
         system_lines.append(f"Scenario title: {title}")
     if description:
         system_lines.append(f"Scenario description: {description}")
+    if context.get("background"):
+        system_lines.append(f"Scenario background: {context.get('background')}")
+    if context.get("setting"):
+        system_lines.append(f"Conversation setting: {context.get('setting')}")
     system_lines.append("Stay in character and respond naturally to the trainee.")
     return "\n".join(system_lines)
 
@@ -386,10 +428,7 @@ async def generate_initial_ai_turn(
             )
 
             if transcript:
-                end_criteria = getattr(scenario, "end_criteria", None) or getattr(
-                    scenario, "endCriteria", []
-                )
-                objective = getattr(scenario, "objective", "") or ""
+                objective, end_criteria = _scenario_objective_inputs(scenario)
                 if end_criteria or objective:
                     objective_result = await run_objective_check(
                         scenario_objective=objective,
@@ -616,10 +655,11 @@ async def _process_turn(*, session_id: str, turn_id: str, audio_base64: str) -> 
 
             if transcript:
                 if scenario:
+                    scenario_objective, end_criteria = _scenario_objective_inputs(scenario)
                     objective = await run_objective_check(
-                        scenario_objective=scenario.objective,
+                        scenario_objective=scenario_objective,
                         transcript=transcript,
-                        end_criteria=scenario.end_criteria,
+                        end_criteria=end_criteria,
                     )
                 else:
                     scenario_repo = ScenarioRepository(mongo_client)
@@ -785,7 +825,8 @@ async def _fetch_scenario(
     scenario = await scenario_repo.get(session.scenario_id)
     if not scenario:
         return None
+    objective, end_criteria = _scenario_objective_inputs(scenario)
     return {
-        "objective": scenario.objective,
-        "endCriteria": scenario.end_criteria,
+        "objective": objective,
+        "endCriteria": end_criteria,
     }

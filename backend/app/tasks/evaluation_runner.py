@@ -22,6 +22,19 @@ _IN_FLIGHT: set[str] = set()
 _LOCK = asyncio.Lock()
 
 
+def _scenario_section(scenario: Any, snake_name: str, camel_name: str) -> dict[str, Any]:
+    value = getattr(scenario, snake_name, None)
+    if value is None:
+        value = getattr(scenario, camel_name, None)
+    return value if isinstance(value, dict) else {}
+
+
+def _scenario_title(scenario: Any) -> str:
+    metadata = _scenario_section(scenario, "metadata", "metadata")
+    title = metadata.get("title")
+    return title if isinstance(title, str) else ""
+
+
 @dataclass(frozen=True)
 class _Repos:
     session_repo: SessionRepository
@@ -225,12 +238,21 @@ async def _evaluate_once(session_id: str, repos: _Repos):
     if not scenario:
         raise ValueError("scenario missing")
     turns = await repos.session_repo.list_turns(session_id)
+    evaluation_config = _scenario_section(
+        scenario, "evaluation_config", "evaluationConfig"
+    )
+    scenario_context = _scenario_section(scenario, "context", "context")
     context = EvaluationContext(
         session_id=session_id,
-        scenario_title=scenario.title,
-        objective=scenario.objective,
-        end_criteria=scenario.end_criteria,
-        skill_summaries=scenario.skill_summaries,
+        scenario_title=_scenario_title(scenario),
+        scenario_context=scenario_context,
+        learning_objectives=evaluation_config.get("learningObjectives", []),
+        evaluation_criteria=evaluation_config.get("evaluationCriteria", []),
+        skills_assessed=evaluation_config.get("skillsAssessed", []),
+        scoring=evaluation_config.get("scoring", {}),
+        evaluation_instructions=evaluation_config.get(
+            "evaluationInstructionsForLLM", ""
+        ),
         turns=[
             {"speaker": turn.speaker, "transcript": turn.transcript}
             for turn in turns

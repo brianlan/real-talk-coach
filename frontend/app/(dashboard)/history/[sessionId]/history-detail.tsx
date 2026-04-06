@@ -116,7 +116,7 @@ export default function HistoryDetail({ sessionId, initialDetail }: HistoryDetai
             )}
           </div>
           <p style={{ maxWidth: 640 }}>
-            {detail?.scenario?.metadata?.description || detail?.scenario?.context?.situation || "Review the conversation outcomes."}
+            {detail?.scenario?.context?.situation || "Review the conversation outcomes."}
           </p>
         </header>
 

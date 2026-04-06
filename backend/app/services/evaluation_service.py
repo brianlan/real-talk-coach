@@ -14,9 +14,12 @@ from app.telemetry.otel import start_span
 class EvaluationContext:
     session_id: str
     scenario_title: str
-    objective: str
-    end_criteria: list[str]
-    skill_summaries: list[dict[str, Any]]
+    scenario_context: dict[str, Any]
+    learning_objectives: list[str]
+    evaluation_criteria: list[dict[str, Any]]
+    skills_assessed: list[str]
+    scoring: dict[str, Any]
+    evaluation_instructions: str
     turns: list[dict[str, Any]]
 
 
@@ -29,19 +32,27 @@ def _format_transcript(turns: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _format_skill_rubric(skill_summaries: list[dict[str, Any]]) -> str:
+def _format_evaluation_criteria(evaluation_criteria: list[dict[str, Any]]) -> str:
     lines = []
-    for skill in skill_summaries:
-        lines.append(
-            f"{skill.get('skillId')}: {skill.get('name')} — {skill.get('rubric')}"
-        )
+    for criterion in evaluation_criteria:
+        criterion_id = criterion.get("id") or "unknown_criterion"
+        description = criterion.get("description") or "No description provided"
+        lines.append(f"{criterion_id}: {description}")
+    if not lines:
+        return "Not provided"
     return "\n".join(lines)
 
 
-def _format_end_criteria(end_criteria: list[str]) -> str:
-    if not end_criteria:
+def _format_bullets(items: list[Any]) -> str:
+    if not items:
         return "Not provided"
-    return "\n".join(f"- {item}" for item in end_criteria)
+    return "\n".join(f"- {item}" for item in items)
+
+
+def _format_json_block(value: Any) -> str:
+    if not value:
+        return "Not provided"
+    return json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True)
 
 
 def _parse_tool_call(payload: dict[str, Any]) -> EvaluationResult:
@@ -96,8 +107,12 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
         retries=1,
     )
     transcript = _format_transcript(context.turns)
-    skill_rubric = _format_skill_rubric(context.skill_summaries)
-    end_criteria = _format_end_criteria(context.end_criteria)
+    evaluation_criteria = _format_evaluation_criteria(context.evaluation_criteria)
+    learning_objectives = _format_bullets(context.learning_objectives)
+    skills_assessed = _format_bullets(context.skills_assessed)
+    scenario_context = _format_json_block(context.scenario_context)
+    scoring = _format_json_block(context.scoring)
+    evaluation_instructions = context.evaluation_instructions or "Not provided"
     payload = {
         "model": settings.evaluator_model or settings.openai_compatible_api_model,
         "messages": [
@@ -112,9 +127,13 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
                 "role": "user",
                 "content": (
                     f"Scenario: {context.scenario_title}\n"
-                    f"Objective: {context.objective}\n"
-                    f"End criteria:\n{end_criteria}\n"
-                    f"Skills:\n{skill_rubric}\n"
+                    f"Scenario context:\n{scenario_context}\n"
+                    f"Learning objectives:\n{learning_objectives}\n"
+                    f"Evaluation criteria (use each criterion id as skillId in scores):\n"
+                    f"{evaluation_criteria}\n"
+                    f"Skills assessed:\n{skills_assessed}\n"
+                    f"Scoring config:\n{scoring}\n"
+                    f"Additional evaluation instructions:\n{evaluation_instructions}\n"
                     f"Transcript:\n{transcript}"
                 ),
             },

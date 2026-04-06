@@ -89,13 +89,13 @@ export default function PracticePage() {
                 marginBottom: 12,
               }}
             >
-              {scenario.category}
+              {scenario.metadata.domain}
             </span>
             <h3 style={{ fontSize: 20, margin: "0 0 8px", color: "#2f2a24" }}>
-              {scenario.title}
+              {scenario.metadata.title}
             </h3>
             <p style={{ margin: "0 0 24px", color: "#6b6054", fontSize: 14, flex: 1 }}>
-              {scenario.description}
+              {scenario.context.situation}
             </p>
             <button
               disabled={createSessionMutation.isPending}

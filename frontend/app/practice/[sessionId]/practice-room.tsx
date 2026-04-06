@@ -33,10 +33,9 @@ type SessionEvent =
   | { type: "termination"; termination: Termination; message?: string }
   | { type: "evaluation_ready"; evaluation: Evaluation };
 
-type SkillSummary = {
-  skillId: string;
-  name: string;
-  rubric: string;
+type EvaluationCriterion = {
+  id: string;
+  description: string;
 };
 
 type SessionSnapshot = {
@@ -47,7 +46,9 @@ type SessionSnapshot = {
   };
   turns?: Turn[];
   scenario?: {
-    skillSummaries?: SkillSummary[];
+    evaluationConfig?: {
+      evaluationCriteria?: EvaluationCriterion[];
+    };
   };
 };
 
@@ -61,7 +62,7 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [evaluationError, setEvaluationError] = useState<string | null>(null);
   const [requeueing, setRequeueing] = useState(false);
-  const [skillMap, setSkillMap] = useState<Record<string, SkillSummary>>({});
+  const [skillMap, setSkillMap] = useState<Record<string, { name: string }>>({});
   const [manualPlayback, setManualPlayback] = useState<Set<string>>(new Set());
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const lastAutoPlayId = useRef<string | null>(null);
@@ -71,10 +72,11 @@ export default function PracticeRoom({ sessionId }: { sessionId: string }) {
 
   const applySessionSnapshot = (data: SessionSnapshot) => {
     const initialTurns = (data.turns ?? []) as Turn[];
-    const scenarioSkills = (data.scenario?.skillSummaries ?? []) as SkillSummary[];
+    const evaluationCriteria =
+      (data.scenario?.evaluationConfig?.evaluationCriteria ?? []) as EvaluationCriterion[];
     setSkillMap(
-      scenarioSkills.reduce<Record<string, SkillSummary>>((acc, skill) => {
-        acc[skill.skillId] = skill;
+      evaluationCriteria.reduce<Record<string, { name: string }>>((acc, criterion) => {
+        acc[criterion.id] = { name: criterion.description };
         return acc;
       }, {})
     );

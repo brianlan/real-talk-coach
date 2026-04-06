@@ -24,32 +24,21 @@ async function fetchScenarios(params: {
   return data.items ?? [];
 }
 
-async function fetchSkills() {
-  const response = await fetch(`${apiBase}/api/skills`, { cache: "no-store" });
-  if (!response.ok) {
-    return [];
-  }
-  const data = await response.json();
-  return data.items ?? [];
-}
-
 export default async function ScenariosPage({
   searchParams,
 }: {
   searchParams?: Promise<{ search?: string; category?: string }>;
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const [scenarios, skills] = await Promise.all([
+  const [scenarios] = await Promise.all([
     fetchScenarios({
       search: resolvedSearchParams.search,
       category: resolvedSearchParams.category,
     }),
-    fetchSkills(),
   ]);
 
-  const skillMap = new Map(skills.map((skill: any) => [skill.id, skill]));
   const categories: string[] = Array.from(
-    new Set(scenarios.map((scenario: any) => scenario.category))
+    new Set(scenarios.map((scenario: any) => scenario.metadata?.domain).filter(Boolean))
   );
 
   return (
@@ -157,16 +146,15 @@ export default async function ScenariosPage({
                 }}
               >
                 <div style={{ fontSize: 12, letterSpacing: 1.5 }}>
-                  {scenario.category}
+                  {scenario.metadata?.domain}
                 </div>
-                <h2 style={{ margin: 0, fontSize: 24 }}>{scenario.title}</h2>
-                <p style={{ margin: 0, lineHeight: 1.5 }}>{scenario.objective}</p>
+                <h2 style={{ margin: 0, fontSize: 24 }}>{scenario.metadata?.title}</h2>
+                <p style={{ margin: 0, lineHeight: 1.5 }}>{scenario.context?.situation}</p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {(scenario.skills ?? []).map((skillId: string) => {
-                    const skill = skillMap.get(skillId) as any;
+                  {(scenario.evaluationConfig?.skillsAssessed ?? []).map((skillLabel: string, index: number) => {
                     return (
                       <span
-                        key={skillId}
+                        key={index}
                         style={{
                           fontSize: 12,
                           padding: "4px 8px",
@@ -174,7 +162,7 @@ export default async function ScenariosPage({
                           background: "#f2e8dd",
                         }}
                       >
-                        {skill?.name ?? "Skill"}
+                        {skillLabel}
                       </span>
                     );
                   })}

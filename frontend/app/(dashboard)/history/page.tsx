@@ -12,9 +12,13 @@ const apiBase = getApiBase();
 
 type Scenario = {
   id: string;
-  category?: string;
-  title?: string;
-  objective?: string;
+  metadata?: {
+    domain: string;
+    title: string;
+  };
+  context?: {
+    situation: string;
+  };
 };
 
 async function fetchScenario(scenarioId: string): Promise<Scenario | null> {
@@ -81,7 +85,7 @@ function HistoryPageInner() {
             new Set(
               scenarios
                 .filter(Boolean)
-                .map((scenario) => scenario!.category)
+                .map((scenario) => scenario!.metadata?.domain)
                 .filter(Boolean) as string[]
             )
           )
@@ -255,13 +259,13 @@ function HistoryPageInner() {
                   }}
                 >
                   <div style={{ fontSize: 12, letterSpacing: 1.5 }}>
-                    {scenario?.category ?? "Session"}
+                    {scenario?.metadata?.domain ?? "Session"}
                   </div>
                   <h2 style={{ margin: 0, fontSize: 22 }}>
-                    {scenario?.title ?? item.scenarioId}
+                    {scenario?.metadata?.title ?? item.scenarioId}
                   </h2>
                   <p style={{ margin: 0 }}>
-                    {scenario?.objective ?? "Review session details."}
+                    {scenario?.context?.situation || "Review session details."}
                   </p>
                   <p style={{ margin: 0, color: "#6a5f54", fontSize: 12 }}>
                     {item.startedAt

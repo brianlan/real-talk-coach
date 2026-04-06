@@ -18,20 +18,12 @@ def _service() -> AdminScenariosService:
 def _response(record: AdminScenarioRecord) -> dict[str, Any]:
     return {
         "id": record.id,
-        "category": record.category,
-        "title": record.title,
-        "description": record.description,
-        "objective": record.objective,
-        "aiPersona": record.ai_persona,
-        "traineePersona": record.trainee_persona,
-        "endCriteria": record.end_criteria,
-        "skills": record.skills,
-        "prompt": record.prompt,
-        "whoTalksFirst": record.who_talks_first,
+        "metadata": record.metadata,
+        "context": record.context,
+        "simulationConfig": record.simulationConfig,
+        "evaluationConfig": record.evaluationConfig,
         "status": record.status,
         "recordStatus": record.record_status,
-        "idleLimitSeconds": record.idle_limit_seconds,
-        "durationLimitSeconds": record.duration_limit_seconds,
         "version": record.version,
     }
 

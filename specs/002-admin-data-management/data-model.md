@@ -38,29 +38,32 @@ Rules:
 
 ## Scenario
 - `id` — unique identifier.
-- `category` — taxonomy label.
-- `title` — display title.
-- `description` — scenario context.
-- `objective` — success criteria text.
-- `aiPersona` — `{name, role, background}`.
-- `traineePersona` — `{name, role, background}`.
-- `endCriteria` — ordered list of stop conditions.
-- `prompt` — initiation prompt text.
-- `skills` — ordered list of skill IDs.
-- `idleLimitSeconds` — optional override.
-- `durationLimitSeconds` — optional override.
+- `metadata` — `{title, slug, domain, scenarioType, difficulty, conflictLevel, estimatedDurationMinutes, tags}`.
+- `context` — `{situation, background, setting}`.
+- `simulationConfig` — `{ai: Persona, trainee: Persona, language, conversationStart: {speakerRoleId, initialPromptToUser}, conversationRules, conversationDynamics, decisionConstraints, conversationEndConditions}`.
+- `evaluationConfig` — `{learningObjectives, evaluationCriteria: [{id, description}], skillsAssessed: [string], scoring, evaluationInstructionsForLLM}`.
 - `status` — `draft` or `published`.
 - `recordStatus` — `active` or `deleted` (soft delete).
 - `createdAt/updatedAt` — timestamps.
 
 Validation:
-- Required fields must be present before publish.
-- `skills` must contain at least one unique skill ID.
+- Required nested fields must be present before publish.
+- `evaluationConfig.skillsAssessed` must contain at least one unique skill label.
 
 Rules:
-- Publishing blocked if required fields are missing or `skills` is empty.
+- Publishing blocked if required fields are missing or `skillsAssessed` is empty.
 - Scenario deletion is soft delete only.
 - Scenario deletion blocked if any sessions exist for the scenario.
+
+## Persona
+- `name`
+- `role`
+- `personality`
+- `motivations`
+- `constraints`
+- `tendencies`
+- `knowledge`
+- `emotionalState`
 
 ## Practice Session (Admin View)
 - `id` — unique identifier.
@@ -90,7 +93,6 @@ Admin actions:
 - Scenario 1:N PracticeSession
 - PracticeSession 1:N Turn (read-only in admin)
 - PracticeSession 1:1 Evaluation
-- Skill N:N Scenario (ordered list per scenario)
 
 ## State Transitions
 

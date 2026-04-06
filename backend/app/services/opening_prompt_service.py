@@ -16,15 +16,57 @@ def _language_label(language: str) -> str:
     return "Simplified Chinese" if language == "zh" else "English"
 
 
-def _build_blueprint(scenario: Any, language: str) -> str:
-    ai_persona = getattr(scenario, "ai_persona", {}) or {}
-    trainee_persona = getattr(scenario, "trainee_persona", {}) or {}
-    title = getattr(scenario, "title", "") or ""
-    description = getattr(scenario, "description", "") or ""
-    objective = getattr(scenario, "objective", "") or ""
-    end_criteria = getattr(scenario, "end_criteria", []) or []
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
-    end_criteria_text = "\n".join(f"- {item}" for item in end_criteria) or "Not provided"
+
+def _text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _scenario_dict(scenario: Any, snake_name: str, camel_name: str) -> dict[str, Any]:
+    return _as_dict(getattr(scenario, snake_name, None) or getattr(scenario, camel_name, None))
+
+
+def _scenario_personas(scenario: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    simulation_config = _scenario_dict(scenario, "simulation_config", "simulationConfig")
+    return _as_dict(simulation_config.get("ai")), _as_dict(simulation_config.get("trainee"))
+
+
+def _scenario_title(scenario: Any) -> str:
+    metadata = _scenario_dict(scenario, "metadata", "metadata")
+    return str(metadata.get("title") or "").strip()
+
+
+def _scenario_description(scenario: Any) -> str:
+    metadata = _scenario_dict(scenario, "metadata", "metadata")
+    context = _scenario_dict(scenario, "context", "context")
+    description = str(metadata.get("description") or "").strip()
+    if description:
+        return description
+    return str(context.get("situation") or "").strip()
+
+
+def _learning_objectives_text(scenario: Any) -> str:
+    evaluation_config = _scenario_dict(scenario, "evaluation_config", "evaluationConfig")
+    objectives = _text_list(evaluation_config.get("learningObjectives"))
+    return "\n".join(f"- {item}" for item in objectives) or "Not provided"
+
+
+def _end_states_text(scenario: Any) -> str:
+    simulation_config = _scenario_dict(scenario, "simulation_config", "simulationConfig")
+    end_conditions = _as_dict(simulation_config.get("conversationEndConditions"))
+    end_states = _text_list(end_conditions.get("possibleEndStates"))
+    return "\n".join(f"- {item}" for item in end_states) or "Not provided"
+
+
+def _build_blueprint(scenario: Any, language: str) -> str:
+    ai_persona, trainee_persona = _scenario_personas(scenario)
+    title = _scenario_title(scenario)
+    description = _scenario_description(scenario)
+    context = _scenario_dict(scenario, "context", "context")
 
     return (
         f"Language: {_language_label(language)}\n"
@@ -32,8 +74,10 @@ def _build_blueprint(scenario: Any, language: str) -> str:
         f"Trainee persona: {trainee_persona.get('name', '')} ({trainee_persona.get('role', '')}). Background: {trainee_persona.get('background', '')}\n"
         f"Scenario title: {title}\n"
         f"Scenario description: {description}\n"
-        f"Objective: {objective}\n"
-        f"End criteria:\n{end_criteria_text}\n"
+        f"Context background: {context.get('background', '')}\n"
+        f"Conversation setting: {context.get('setting', '')}\n"
+        f"Learning objectives:\n{_learning_objectives_text(scenario)}\n"
+        f"Possible end states:\n{_end_states_text(scenario)}\n"
     )
 
 
@@ -41,8 +85,7 @@ def _build_messages(
     scenario: Any, language: str, *, strict: bool = False
 ) -> list[dict[str, str]]:
     blueprint = _build_blueprint(scenario, language)
-    ai_persona = getattr(scenario, "ai_persona", {}) or {}
-    trainee_persona = getattr(scenario, "trainee_persona", {}) or {}
+    ai_persona, trainee_persona = _scenario_personas(scenario)
     ai_name = ai_persona.get("name", "") or "the AI persona"
     trainee_name = trainee_persona.get("name", "") or "the trainee persona"
     strict_lines = ""
@@ -114,8 +157,7 @@ def _is_contradicting_prompt(
 async def generate_opening_prompt(*, scenario: Any, language: str) -> tuple[str, str, str, str]:
     settings = load_settings()
     logger.info("Opening prompt generation requested (language=%s)", language)
-    ai_persona = getattr(scenario, "ai_persona", {}) or {}
-    trainee_persona = getattr(scenario, "trainee_persona", {}) or {}
+    ai_persona, trainee_persona = _scenario_personas(scenario)
     ai_name = ai_persona.get("name", "") or ""
     trainee_name = trainee_persona.get("name", "") or ""
     client = EvaluatorClient(

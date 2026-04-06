@@ -1,3 +1,10 @@
+"""Red-phase contract tests for e2e_socket prompt/opening helpers.
+
+These tests encode the canonical nested scenario shape and verify the
+new prompt/opening contracts.  They are expected to FAIL until the
+production code is refactored.
+"""
+
 from types import SimpleNamespace
 
 from app.api.routes.e2e_socket import (
@@ -22,32 +29,88 @@ def _make_config(**overrides) -> E2EConfig:
     return E2EConfig(**defaults)
 
 
-def _make_scenario(**overrides) -> SimpleNamespace:
+def _make_nested_scenario(**overrides):
     data = {
-        "title": "Salary Negotiation",
-        "description": "Practice asking for a raise.",
-        "objective": "Get agreement to revisit compensation.",
-        "end_criteria": ["Manager acknowledges impact", "Next step is agreed"],
-        "prompt": "Be firm but fair.",
-        "ai_persona": {
-            "name": "Jordan",
-            "role": "Manager",
-            "background": "Busy but open to discussion",
+        "metadata": {
+            "title": "Request a Salary Increase After Taking on Expanded Responsibilities",
+            "slug": "salary-raise-expanded-responsibilities",
+            "domain": "Workplace",
+            "scenarioType": "Negotiation",
+            "difficulty": "Medium",
+            "conflictLevel": "Medium",
+            "estimatedDurationMinutes": 8,
+            "tags": ["salary negotiation"],
         },
-        "trainee_persona": {
-            "name": "Taylor",
-            "role": "Engineer",
-            "background": "Senior individual contributor",
+        "context": {
+            "situation": "An employee has taken on significant additional responsibilities.",
+            "background": "The company is currently facing moderate budget pressure.",
+            "setting": "A scheduled one-on-one meeting.",
         },
-        "who_talks_first": "ai",
+        "simulationConfig": {
+            "ai": {
+                "name": "Jordan",
+                "role": "Engineering Manager",
+                "personality": ["professional", "pragmatic"],
+                "motivations": ["retain high-performing employees"],
+                "constraints": ["raises above 5-8% require director approval"],
+                "tendencies": ["initially cautious"],
+                "knowledge": ["the employee has taken on additional work"],
+                "emotionalState": "calm but slightly cautious",
+            },
+            "trainee": {
+                "name": "Alex",
+                "role": "Software Engineer",
+                "personality": ["professional"],
+                "motivations": ["receive compensation that reflects expanded responsibilities"],
+                "constraints": ["wants to avoid appearing confrontational"],
+                "tendencies": ["prepared to explain additional responsibilities"],
+                "knowledge": ["has researched market salaries for similar roles"],
+                "emotionalState": "motivated but slightly anxious",
+            },
+            "language": "English",
+            "conversationStart": {
+                "speakerRoleId": "employee",
+                "initialPromptToUser": (
+                    "You scheduled this meeting to discuss your compensation. "
+                    "Start the conversation."
+                ),
+            },
+            "conversationRules": {
+                "stayInCharacter": True,
+                "allowNarration": False,
+                "coachingAllowed": False,
+                "tone": "natural professional conversation",
+            },
+            "conversationDynamics": {
+                "typicalBehaviors": ["ask the employee to explain expanded responsibilities"],
+                "possibleResponses": ["mention internal fairness across the team"],
+            },
+            "decisionConstraints": {
+                "maxRaiseWithoutHigherApprovalPercent": 8,
+                "alternativeOptions": ["one-time bonus"],
+            },
+            "conversationEndConditions": {
+                "possibleEndStates": ["raise approved", "discussion ends without agreement"],
+            },
+        },
+        "evaluationConfig": {
+            "learningObjectives": ["make a clear compensation request"],
+            "evaluationCriteria": [
+                {"id": "clear_request", "description": "Trainee makes a clear compensation request"},
+            ],
+            "skillsAssessed": ["clear_request", "negotiation"],
+            "scoring": {"scale": "1-5", "criteriaWeighting": {"clear_request": 1.0}},
+            "evaluationInstructionsForLLM": "Evaluate the trainee.",
+        },
     }
     data.update(overrides)
     return SimpleNamespace(**data)
 
 
-def test_build_payload_with_scenario_uses_dynamic_prompt():
+def test_build_payload_uses_nested_prompt_template():
+    """The dialog system_role must contain the new nested prompt template sections."""
     config = _make_config()
-    scenario = _make_scenario()
+    scenario = _make_nested_scenario()
     client_cfg: dict = {}
 
     payload = _build_start_session_payload(
@@ -55,11 +118,35 @@ def test_build_payload_with_scenario_uses_dynamic_prompt():
     )
 
     dialog = payload["dialog"]
-    assert "Salary Negotiation" in dialog["system_role"]
-    assert "Jordan" in dialog["system_role"]
-    assert "Practice asking for a raise." in dialog["system_role"]
-    assert dialog["bot_name"] == "Jordan"
-    assert dialog["dialog_id"] == "sess-123"
+    system_role = dialog["system_role"]
+
+    # New template section markers
+    assert system_role.startswith("You are running a conversation practice simulation.")
+    assert "## ROLE YOU ARE PLAYING" in system_role
+    assert "## TRAINEE ROLE (FOR CONTEXT ONLY)" in system_role
+    assert "## CONVERSATION STYLE" in system_role
+    assert "## START OF SIMULATION" in system_role
+    assert "Keep the following constraints in mind:" in system_role
+    assert "Jordan" in system_role
+    assert "Engineering Manager" in system_role
+
+    # Legacy markers must NOT appear
+    assert "Scenario title:" not in system_role
+    assert "Scenario description:" not in system_role
+    assert "## DECISION CONSTRAINTS" not in system_role
+
+
+def test_build_payload_bot_name_from_nested_ai_persona():
+    """bot_name must come from simulationConfig.ai.name."""
+    config = _make_config()
+    scenario = _make_nested_scenario()
+    client_cfg: dict = {}
+
+    payload = _build_start_session_payload(
+        config, "sess-123", client_cfg, scenario=scenario, language="en"
+    )
+
+    assert payload["dialog"]["bot_name"] == "Jordan"
 
 
 def test_build_payload_without_scenario_uses_fallback():
@@ -73,32 +160,62 @@ def test_build_payload_without_scenario_uses_fallback():
     assert dialog["bot_name"] == "Real Talk Coach"
 
 
-def test_resolve_opening_trainee_first():
-    scenario = _make_scenario()
+def test_resolve_opening_trainee_first_uses_initial_prompt():
+    """When speakerRoleId is 'employee', the opening must use initialPromptToUser."""
+    scenario = _make_nested_scenario()
     content, needs_llm = resolve_opening_content(scenario, "en", "trainee")
 
-    assert content == "Hey, what's up?"
+    assert content == (
+        "You scheduled this meeting to discuss your compensation. "
+        "Start the conversation."
+    )
     assert needs_llm is False
 
 
 def test_resolve_opening_ai_first():
-    scenario = _make_scenario()
+    scenario = _make_nested_scenario()
     content, needs_llm = resolve_opening_content(scenario, "en", "ai")
+
+    assert content == (
+        "You scheduled this meeting to discuss your compensation. "
+        "Start the conversation."
+    )
+    assert needs_llm is False
+
+
+def test_resolve_opening_ai_first_when_nested_start_is_ai():
+    scenario = _make_nested_scenario(
+        simulationConfig={
+            **_make_nested_scenario().simulationConfig,
+            "conversationStart": {
+                "speakerRoleId": "ai",
+                "initialPromptToUser": "",
+            },
+        }
+    )
+
+    content, needs_llm = resolve_opening_content(scenario, "en", "trainee")
 
     assert content == ""
     assert needs_llm is True
 
 
-def test_resolve_opening_chinese_trainee_first():
-    scenario = _make_scenario()
-    content, needs_llm = resolve_opening_content(scenario, "zh", "trainee")
+def test_resolve_opening_defaults_to_ai_when_nested_start_missing():
+    scenario = _make_nested_scenario(
+        simulationConfig={
+            **_make_nested_scenario().simulationConfig,
+            "conversationStart": {},
+        }
+    )
 
-    assert content == "\u563f\uff0c\u6709\u4ec0\u4e48\u4e8b\u5417\uff1f"
-    assert needs_llm is False
+    content, needs_llm = resolve_opening_content(scenario, "en", "trainee")
+
+    assert content == ""
+    assert needs_llm is True
 
 
-def test_bot_name_from_persona():
-    scenario = _make_scenario()
+def test_bot_name_from_nested_persona():
+    scenario = _make_nested_scenario()
     assert resolve_bot_name(scenario) == "Jordan"
 
 

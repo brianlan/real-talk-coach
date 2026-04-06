@@ -16,41 +16,25 @@ class ConflictError(Exception):
 @dataclass(frozen=True)
 class AdminScenarioRecord:
     id: str
-    category: str
-    title: str
-    description: str
-    objective: str
-    ai_persona: dict[str, Any]
-    trainee_persona: dict[str, Any]
-    end_criteria: list[str]
-    skills: list[str]
-    prompt: str
+    metadata: dict[str, Any]
+    context: dict[str, Any]
+    simulationConfig: dict[str, Any]
+    evaluationConfig: dict[str, Any]
     status: str
     record_status: str
-    idle_limit_seconds: int | None
-    duration_limit_seconds: int | None
     version: str | None
-    who_talks_first: str = "ai"
 
 
 def _from_doc(doc: dict[str, Any]) -> AdminScenarioRecord:
     return AdminScenarioRecord(
         id=str(doc.get("_id", "")),
-        category=doc.get("category", ""),
-        title=doc.get("title", ""),
-        description=doc.get("description", ""),
-        objective=doc.get("objective", ""),
-        ai_persona=doc.get("aiPersona", {}),
-        trainee_persona=doc.get("traineePersona", {}),
-        end_criteria=doc.get("endCriteria", []),
-        skills=doc.get("skills", []),
-        prompt=doc.get("prompt", ""),
+        metadata=doc.get("metadata", {}),
+        context=doc.get("context", {}),
+        simulationConfig=doc.get("simulationConfig", {}),
+        evaluationConfig=doc.get("evaluationConfig", {}),
         status=doc.get("status", "draft"),
         record_status=doc.get("recordStatus", doc.get("status", "active")),
-        idle_limit_seconds=doc.get("idleLimitSeconds"),
-        duration_limit_seconds=doc.get("durationLimitSeconds"),
         version=_version_from_doc(doc),
-        who_talks_first=doc.get("whoTalksFirst", "ai"),
     )
 
 

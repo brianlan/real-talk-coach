@@ -5,7 +5,6 @@ import base64
 import gzip
 import json
 import logging
-import random
 import uuid
 from array import array
 from dataclasses import dataclass
@@ -491,11 +490,10 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
             should_send_opening = True if send_opening_flag is None else bool(send_opening_flag)
             opening_content = ""
             if should_send_opening:
-                who_talks_first = getattr(scenario, "who_talks_first", "ai") if scenario is not None else "ai"
                 opening_content, needs_llm_generation = resolve_opening_content(
                     scenario,
                     language,
-                    who_talks_first,
+                    None,
                 )
                 if needs_llm_generation and scenario is not None:
                     try:
@@ -509,7 +507,7 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                             session_id,
                             exc,
                         )
-                        opening_content, _ = resolve_opening_content(None, language, who_talks_first)
+                        opening_content, _ = resolve_opening_content(None, language, None)
                 await upstream_ws.send(
                     _build_full_request(
                         EVENT_OPENING_REQUEST,

@@ -467,100 +467,230 @@ components:
       properties:
         id:
           type: string
-        category:
-          type: string
-        title:
-          type: string
-        description:
-          type: string
-        objective:
-          type: string
-        aiPersona:
-          $ref: "#/components/schemas/Persona"
-        traineePersona:
-          $ref: "#/components/schemas/Persona"
-        endCriteria:
-          type: array
-          items:
-            type: string
-        prompt:
-          type: string
-        skills:
-          type: array
-          items:
-            type: string
-        idleLimitSeconds:
-          type: integer
-          nullable: true
-        durationLimitSeconds:
-          type: integer
-          nullable: true
+        metadata:
+          type: object
+          properties:
+            title:
+              type: string
+            slug:
+              type: string
+            domain:
+              type: string
+            scenarioType:
+              type: string
+            difficulty:
+              type: string
+            conflictLevel:
+              type: string
+            estimatedDurationMinutes:
+              type: integer
+            tags:
+              type: array
+              items:
+                type: string
+        context:
+          type: object
+          properties:
+            situation:
+              type: string
+            background:
+              type: string
+            setting:
+              type: string
+        simulationConfig:
+          type: object
+          properties:
+            ai:
+              $ref: "#/components/schemas/Persona"
+            trainee:
+              $ref: "#/components/schemas/Persona"
+            language:
+              type: string
+            conversationStart:
+              type: object
+              properties:
+                speakerRoleId:
+                  type: string
+                initialPromptToUser:
+                  type: string
+            conversationRules:
+              type: object
+              properties:
+                stayInCharacter:
+                  type: boolean
+                allowNarration:
+                  type: boolean
+                coachingAllowed:
+                  type: boolean
+                tone:
+                  type: string
+            conversationDynamics:
+              type: object
+              properties:
+                typicalBehaviors:
+                  type: array
+                  items:
+                    type: string
+                possibleResponses:
+                  type: array
+                  items:
+                    type: string
+            decisionConstraints:
+              type: object
+              additionalProperties: true
+            conversationEndConditions:
+              type: object
+              properties:
+                possibleEndStates:
+                  type: array
+                  items:
+                    type: string
+        evaluationConfig:
+          type: object
+          properties:
+            learningObjectives:
+              type: array
+              items:
+                type: string
+            evaluationCriteria:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  description:
+                    type: string
+            skillsAssessed:
+              type: array
+              items:
+                type: string
+            scoring:
+              type: object
+              additionalProperties: true
+            evaluationInstructionsForLLM:
+              type: string
         status:
           type: string
+          enum: [draft, published]
         recordStatus:
           type: string
+          enum: [active, deleted]
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
-      required:
-        - id
-        - category
-        - title
-        - description
-        - objective
-        - aiPersona
-        - traineePersona
-        - endCriteria
-        - prompt
-        - skills
-        - status
-        - recordStatus
-        - createdAt
-        - updatedAt
     ScenarioInput:
       type: object
       properties:
-        category:
-          type: string
-        title:
-          type: string
-        description:
-          type: string
-        objective:
-          type: string
-        aiPersona:
-          $ref: "#/components/schemas/Persona"
-        traineePersona:
-          $ref: "#/components/schemas/Persona"
-        endCriteria:
-          type: array
-          items:
-            type: string
-        prompt:
-          type: string
-        skills:
-          type: array
-          items:
-            type: string
-        idleLimitSeconds:
-          type: integer
-        durationLimitSeconds:
-          type: integer
+        metadata:
+          type: object
+          properties:
+            title:
+              type: string
+            slug:
+              type: string
+            domain:
+              type: string
+            scenarioType:
+              type: string
+            difficulty:
+              type: string
+            conflictLevel:
+              type: string
+            estimatedDurationMinutes:
+              type: integer
+            tags:
+              type: array
+              items:
+                type: string
+        context:
+          type: object
+          properties:
+            situation:
+              type: string
+            background:
+              type: string
+            setting:
+              type: string
+        simulationConfig:
+          type: object
+          properties:
+            ai:
+              $ref: "#/components/schemas/Persona"
+            trainee:
+              $ref: "#/components/schemas/Persona"
+            language:
+              type: string
+            conversationStart:
+              type: object
+              properties:
+                speakerRoleId:
+                  type: string
+                initialPromptToUser:
+                  type: string
+            conversationRules:
+              type: object
+              properties:
+                stayInCharacter:
+                  type: boolean
+                allowNarration:
+                  type: boolean
+                coachingAllowed:
+                  type: boolean
+                tone:
+                  type: string
+            conversationDynamics:
+              type: object
+              properties:
+                typicalBehaviors:
+                  type: array
+                  items:
+                    type: string
+                possibleResponses:
+                  type: array
+                  items:
+                    type: string
+            decisionConstraints:
+              type: object
+              additionalProperties: true
+            conversationEndConditions:
+              type: object
+              properties:
+                possibleEndStates:
+                  type: array
+                  items:
+                    type: string
+        evaluationConfig:
+          type: object
+          properties:
+            learningObjectives:
+              type: array
+              items:
+                type: string
+            evaluationCriteria:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  description:
+                    type: string
+            skillsAssessed:
+              type: array
+              items:
+                type: string
+            scoring:
+              type: object
+              additionalProperties: true
+            evaluationInstructionsForLLM:
+              type: string
         status:
           type: string
-      required:
-        - category
-        - title
-        - description
-        - objective
-        - aiPersona
-        - traineePersona
-        - endCriteria
-        - prompt
-        - skills
+          enum: [draft, published]
     Persona:
       type: object
       properties:
@@ -568,9 +698,29 @@ components:
           type: string
         role:
           type: string
-        background:
+        personality:
+          type: array
+          items:
+            type: string
+        motivations:
+          type: array
+          items:
+            type: string
+        constraints:
+          type: array
+          items:
+            type: string
+        tendencies:
+          type: array
+          items:
+            type: string
+        knowledge:
+          type: array
+          items:
+            type: string
+        emotionalState:
           type: string
-      required: [name, role, background]
+
     SessionSummary:
       type: object
       properties:

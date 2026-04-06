@@ -35,18 +35,18 @@ Admins create, edit, and organize skills so scenarios can reference a consistent
 
 ---
 
-### User Story 2 - Manage scenarios and assign skills (Priority: P1)
+### User Story 2 - Manage scenario assessment criteria (Priority: P1)
 
-Admins create and publish scenarios by providing required details and assigning skills that will be scored later.
+Admins create and publish scenarios by providing required details and defining the skill labels that will be scored later.
 
 **Why this priority**: Scenarios drive the core practice experience and must be set up before trainees can use the product.
 
-**Independent Test**: Create a scenario, assign skills, publish it, and verify it appears in the catalog.
+**Independent Test**: Create a scenario, define assessment skills, publish it, and verify it appears in the catalog.
 
 **Acceptance Scenarios**:
 
-1. **Given** required scenario fields are completed, **When** the admin publishes the scenario, **Then** it becomes available to trainees and shows the assigned skills.
-2. **Given** a scenario is missing required details or skills, **When** the admin attempts to publish it, **Then** the system prevents publishing and shows specific validation errors.
+1. **Given** required scenario fields are completed, **When** the admin publishes the scenario, **Then** it becomes available to trainees and shows the assessment skills.
+2. **Given** a scenario is missing required details or skill labels, **When** the admin attempts to publish it, **Then** the system prevents publishing and shows specific validation errors.
 
 ---
 
@@ -67,7 +67,7 @@ Admins review practice sessions and evaluations to keep data clean and resolve i
 
 ### Edge Cases
 
-- Attempting to publish a scenario without end criteria or personas.
+- Attempting to publish a scenario without a conversation start or briefing.
 - Assigning duplicate skills to the same scenario.
 - Deleting a scenario that has associated sessions.
 - Editing a skill that is referenced by published scenarios.
@@ -85,9 +85,9 @@ before implementation, with mocks/stubs specified for any external services.
 - **FR-001**: System MUST restrict access to the admin management pages to authorized admins only, using a pre-shared admin token.
 - **FR-002**: Admins MUST be able to create, view, edit, and delete skills with name, category, and rubric details. Skill deletion MUST be soft-delete with restore capability.
 - **FR-003**: System MUST prevent deletion of any skill that is referenced by a published scenario and list the impacted scenarios.
-- **FR-004**: Admins MUST be able to create, view, edit, and delete scenarios including category, title, description, objective, personas, end criteria, prompt, and limits. Scenario deletion MUST be soft-delete with restore capability.
-- **FR-005**: Admins MUST be able to assign one or more skills to a scenario and define their display order.
-- **FR-006**: System MUST prevent publishing scenarios that are missing required fields or have no assigned skills, and MUST display validation errors per field.
+- **FR-004**: Admins MUST be able to create, view, edit, and delete scenarios including metadata (title, slug, domain, scenario type, difficulty, conflict level, estimated duration, tags), context (situation, background, setting), simulation config (ai/trainee, language, conversation start, rules, dynamics, decision constraints, end conditions), and evaluation config (learning objectives, evaluation criteria, skills assessed, scoring, LLM instructions). Scenario deletion MUST be soft-delete with restore capability.
+- **FR-005**: Admins MUST be able to define the set of embedded skill labels in a scenario's `evaluationConfig.skillsAssessed` list.
+- **FR-006**: System MUST prevent publishing scenarios that are missing required canonical fields or have no skill labels in the assessment list, and MUST display validation errors per field.
 - **FR-007**: Admins MUST be able to set a scenario’s status to draft or published.
 - **FR-008**: Admins MUST be able to search and filter skills and scenarios by name, category, and status.
 - **FR-009**: Admins MUST be able to list sessions with filters for date range, scenario, and completion status.
@@ -109,7 +109,7 @@ before implementation, with mocks/stubs specified for any external services.
 
 - **Admin User**: Authorized operator who can manage skills, scenarios, and session records.
 - **Skill**: A rubric-based competency with name, category, and description used for evaluations.
-- **Scenario**: A practice setup with objectives, personas, end criteria, and assigned skills.
+- **Scenario**: A practice setup with metadata, context, simulation configuration, and evaluation configuration.
 - **Practice Session**: A completed or active practice record tied to a scenario and its evaluation.
 - **Evaluation**: A scored outcome linked to a practice session and scenario skills.
 

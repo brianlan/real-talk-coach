@@ -1,3 +1,10 @@
+"""Red-phase contract tests for session and scenario endpoints.
+
+These tests encode the canonical nested scenario shape and assert that
+API responses use the new schema without legacy fields.  They are
+expected to FAIL until the production code is refactored.
+"""
+
 from __future__ import annotations
 
 import httpx
@@ -9,16 +16,99 @@ from datetime import datetime, timezone
 from app.api.routes import scenarios as scenarios_routes
 from app.api.routes import sessions as sessions_routes
 from app.main import app
-from app.repositories.scenario_repository import Scenario, Skill
 from app.repositories.session_repository import PracticeSessionRecord
 
+
+# ---------------------------------------------------------------------------
+# Canonical nested scenario fixture
+# ---------------------------------------------------------------------------
+
+def _make_nested_scenario_doc(**overrides):
+    """Minimal nested scenario doc matching the canonical shape."""
+    doc = {
+        "id": "scenario-1",
+        "metadata": {
+            "title": "Request a Salary Increase After Taking on Expanded Responsibilities",
+            "slug": "salary-raise-expanded-responsibilities",
+            "domain": "Workplace",
+            "scenarioType": "Negotiation",
+            "difficulty": "Medium",
+            "conflictLevel": "Medium",
+            "estimatedDurationMinutes": 8,
+            "tags": ["salary negotiation"],
+        },
+        "context": {
+            "situation": "An employee has taken on significant additional responsibilities.",
+            "background": "The company is currently facing moderate budget pressure.",
+            "setting": "A scheduled one-on-one meeting.",
+        },
+        "simulationConfig": {
+            "ai": {
+                "name": "Jordan",
+                "role": "Engineering Manager",
+                "personality": ["professional"],
+                "motivations": ["retain high-performing employees"],
+                "constraints": ["budget is tight"],
+                "tendencies": ["initially cautious"],
+                "knowledge": ["employee has taken on additional work"],
+                "emotionalState": "calm",
+            },
+            "trainee": {
+                "name": "Alex",
+                "role": "Software Engineer",
+                "personality": ["professional"],
+                "motivations": ["receive fair compensation"],
+                "constraints": ["avoid being confrontational"],
+                "tendencies": ["prepared to explain"],
+                "knowledge": ["has researched market salaries"],
+                "emotionalState": "motivated",
+            },
+            "language": "English",
+            "conversationStart": {
+                "speakerRoleId": "employee",
+                "initialPromptToUser": "Start the conversation.",
+            },
+            "conversationRules": {
+                "stayInCharacter": True,
+                "allowNarration": False,
+                "coachingAllowed": False,
+                "tone": "natural professional conversation",
+            },
+            "conversationDynamics": {
+                "typicalBehaviors": ["ask for examples"],
+                "possibleResponses": ["mention fairness"],
+            },
+            "decisionConstraints": {
+                "maxRaiseWithoutHigherApprovalPercent": 8,
+                "alternativeOptions": ["bonus"],
+            },
+            "conversationEndConditions": {
+                "possibleEndStates": ["raise approved"],
+            },
+        },
+        "evaluationConfig": {
+            "learningObjectives": ["make a clear request"],
+            "evaluationCriteria": [
+                {"id": "clear_request", "description": "Makes a clear request"},
+            ],
+            "skillsAssessed": ["clear_request", "negotiation"],
+            "scoring": {"scale": "1-5", "criteriaWeighting": {"clear_request": 1.0}},
+            "evaluationInstructionsForLLM": "Evaluate the trainee.",
+        },
+    }
+    doc.update(overrides)
+    return doc
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
 def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    # LeanCloud removed - using MongoDB
     monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
@@ -31,44 +121,18 @@ def _set_env(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _override_repo(monkeypatch):
-    async def _list_published(*args, **kwargs):
-        return [
-            Scenario(
-                id="scenario-1",
-                category="Feedback",
-                title="Sample",
-                description="Desc",
-                objective="Objective",
-                ai_persona={"name": "AI", "role": "Coach", "background": "Background"},
-                trainee_persona={"name": "You", "role": "Trainee", "background": "Background"},
-                end_criteria=["End"],
-                skills=["skill-1"],
-                skill_summaries=[{"skillId": "skill-1", "name": "Skill", "rubric": "Rubric"}],
-                idle_limit_seconds=8,
-                duration_limit_seconds=300,
-                prompt="Prompt",
-                status="published",
-            )
-        ]
+    nested_doc = _make_nested_scenario_doc()
 
-    async def _list_skills(*args, **kwargs):
-        return [
-            Skill(
-                id="skill-1",
-                external_id="skill_external",
-                name="Skill",
-                category="Category",
-                rubric="Rubric",
-                description=None,
-            )
-        ]
+    async def _list_published(*args, **kwargs):
+        # Return the nested doc wrapped in a namespace-like object
+        # that exposes nested fields as attributes
+        return [_NestedScenario(**nested_doc)]
 
     async def _get(*args, **kwargs):
         return None
 
     class FakeRepo:
         list_published = staticmethod(_list_published)
-        list_skills = staticmethod(_list_skills)
         get = staticmethod(_get)
 
     created_session: PracticeSessionRecord | None = None
@@ -172,24 +236,12 @@ def _override_repo(monkeypatch):
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):
-            return type(
-                "Scenario",
-                (),
-                {
-                    "ai_persona": {"name": "AI", "background": "Background"},
-                    "trainee_persona": {"name": "Trainee", "background": "Background"},
-                    "objective": "Objective",
-                    "end_criteria": ["End"],
-                    "prompt": "Hello",
-                    "status": "published",
-                    "idle_limit_seconds": 8,
-                    "duration_limit_seconds": 300,
-                },
-            )()
+            return _NestedScenario(**_make_nested_scenario_doc())
 
     app.dependency_overrides[scenarios_routes._repo] = lambda: FakeRepo()
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeSessionRepo()
     app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()
+
     async def _noop_initial_turn(*args, **kwargs):
         return None
     monkeypatch.setattr(
@@ -201,6 +253,28 @@ def _override_repo(monkeypatch):
     app.dependency_overrides.pop(sessions_routes._repo, None)
     app.dependency_overrides.pop(sessions_routes._scenario_repo, None)
 
+
+class _NestedScenario:
+    """Lightweight namespace that exposes the canonical nested shape as attributes.
+
+    Uses snake_case attribute names matching the production Scenario dataclass,
+    so the public _scenario_response serializer can read them correctly.
+    """
+
+    def __init__(self, **kwargs):
+        self.id = kwargs.get("id", "")
+        self.status = kwargs.get("status", "published")
+        self.metadata = kwargs.get("metadata", {})
+        self.context = kwargs.get("context", {})
+        self.simulation_config = kwargs.get("simulationConfig", {})
+        self.evaluation_config = kwargs.get("evaluationConfig", {})
+        self.idle_limit_seconds = kwargs.get("idle_limit_seconds")
+        self.duration_limit_seconds = kwargs.get("duration_limit_seconds")
+
+
+# ---------------------------------------------------------------------------
+# Contract tests
+# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_create_session_missing_timestamps_rejected():
@@ -214,7 +288,8 @@ async def test_create_session_missing_timestamps_rejected():
 
 
 @pytest.mark.asyncio
-async def test_list_scenarios_contract():
+async def test_list_scenarios_returns_nested_schema():
+    """GET /api/scenarios must return nested metadata/context/simulationConfig/evaluationConfig."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/scenarios", params={"historyStepCount": 1})
@@ -222,17 +297,54 @@ async def test_list_scenarios_contract():
     assert response.status_code == status.HTTP_200_OK
     payload = response.json()
     assert "items" in payload
+    items = payload["items"]
+    assert len(items) >= 1
+
+    item = items[0]
+
+    # New nested top-level keys must exist
+    assert "metadata" in item
+    assert "context" in item
+    assert "simulationConfig" in item
+    assert "evaluationConfig" in item
+
+    # metadata substructure
+    assert item["metadata"]["title"] == (
+        "Request a Salary Increase After Taking on Expanded Responsibilities"
+    )
+    assert item["metadata"]["domain"] == "Workplace"
+    assert item["metadata"]["scenarioType"] == "Negotiation"
+
+    # simulationConfig substructure
+    assert "ai" in item["simulationConfig"]
+    assert "trainee" in item["simulationConfig"]
+    assert "conversationStart" in item["simulationConfig"]
+    assert item["simulationConfig"]["ai"]["name"] == "Jordan"
+
+    # evaluationConfig substructure
+    assert "evaluationCriteria" in item["evaluationConfig"]
+    assert "skillsAssessed" in item["evaluationConfig"]
+
+    # Legacy keys must NOT exist
+    assert "skills" not in item
+    assert "skillSummaries" not in item
+    assert "category" not in item
+    assert "description" not in item
+    assert "objective" not in item
+    assert "aiPersona" not in item
+    assert "traineePersona" not in item
+    assert "endCriteria" not in item
+    assert "prompt" not in item
 
 
 @pytest.mark.asyncio
-async def test_list_skills_contract():
+async def test_skills_endpoint_removed():
+    """GET /api/skills must be gone after cutover (no Skill collection dependency)."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/skills")
 
-    assert response.status_code == status.HTTP_200_OK
-    payload = response.json()
-    assert "items" in payload
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
@@ -258,18 +370,31 @@ async def test_create_session_contract():
 @pytest.mark.asyncio
 async def test_create_session_rejects_incomplete_scenario():
     now = datetime.now(timezone.utc).isoformat()
-    payload = {
-        "scenarioId": "scenario-1",
-        "clientSessionStartedAt": now,
-        "personas": {},
-        "objectives": [],
-        "endCriteria": [],
-    }
+    payload = {"scenarioId": "scenario-1", "clientSessionStartedAt": now}
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/sessions", json=payload)
+    class BrokenScenarioRepo:
+        async def get(self, scenario_id: str):
+            return _NestedScenario(
+                **_make_nested_scenario_doc(
+                    context={},
+                    simulationConfig={
+                        "trainee": {
+                            "name": "Alex",
+                            "role": "Software Engineer",
+                        }
+                    },
+                )
+            )
+
+    app.dependency_overrides[sessions_routes._scenario_repo] = lambda: BrokenScenarioRepo()
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post("/api/sessions", json=payload)
+    finally:
+        app.dependency_overrides.pop(sessions_routes._scenario_repo, None)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     body = response.json()
-    assert "error" in body or "detail" in body
+    assert "detail" in body
+    assert "simulationConfig.ai" in body["detail"]

@@ -25,7 +25,7 @@ paths:
           name: search
           schema:
             type: string
-            description: case-insensitive substring search on title/objective
+            description: case-insensitive substring search on title/domain
         - in: query
           name: limit
           schema:
@@ -44,22 +44,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Scenario'
-  /api/skills:
-    get:
-      summary: List shared/global skills
-      tags: [Skills]
-      responses:
-        '200':
-          description: Skill catalog used by scenarios/evaluations
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Skill'
   /api/scenarios/{scenarioId}:
     get:
       summary: Fetch a specific scenario
@@ -80,6 +64,7 @@ paths:
         '404':
           description: Scenario not found or unpublished
   /api/sessions:
+
     get:
       summary: List trainee history
       tags: [Sessions]
@@ -300,59 +285,112 @@ components:
       properties:
         id:
           type: string
-        category:
+        status:
           type: string
-        title:
-          type: string
-        description:
-          type: string
-        objective:
-          type: string
-        aiPersona:
-          $ref: '#/components/schemas/Persona'
-        traineePersona:
-          $ref: '#/components/schemas/Persona'
-        endCriteria:
-          type: array
-          items:
-            type: string
-        skills:
-          type: array
-          items:
-            type: string
-        skillSummaries:
-          type: array
-          items:
-            type: object
-            properties:
-              skillId:
+          enum: [draft, published]
+        metadata:
+          type: object
+          properties:
+            title:
+              type: string
+            slug:
+              type: string
+            domain:
+              type: string
+            scenarioType:
+              type: string
+            difficulty:
+              type: string
+            conflictLevel:
+              type: string
+            estimatedDurationMinutes:
+              type: integer
+            tags:
+              type: array
+              items:
                 type: string
-              name:
+        context:
+          type: object
+          properties:
+            situation:
+              type: string
+            background:
+              type: string
+            setting:
+              type: string
+        simulationConfig:
+          type: object
+          properties:
+            ai:
+              $ref: '#/components/schemas/Persona'
+            trainee:
+              $ref: '#/components/schemas/Persona'
+            language:
+              type: string
+            conversationStart:
+              type: object
+              properties:
+                speakerRoleId:
+                  type: string
+                initialPromptToUser:
+                  type: string
+            conversationRules:
+              type: object
+              properties:
+                stayInCharacter:
+                  type: boolean
+                allowNarration:
+                  type: boolean
+                coachingAllowed:
+                  type: boolean
+                tone:
+                  type: string
+            conversationDynamics:
+              type: object
+              properties:
+                typicalBehaviors:
+                  type: array
+                  items:
+                    type: string
+                possibleResponses:
+                  type: array
+                  items:
+                    type: string
+            decisionConstraints:
+              type: object
+              additionalProperties: true
+            conversationEndConditions:
+              type: object
+              properties:
+                possibleEndStates:
+                  type: array
+                  items:
+                    type: string
+        evaluationConfig:
+          type: object
+          properties:
+            learningObjectives:
+              type: array
+              items:
                 type: string
-              rubric:
+            evaluationCriteria:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  description:
+                    type: string
+            skillsAssessed:
+              type: array
+              items:
                 type: string
-          description: convenience join between scenario skills and skill library for rendering
-        idleLimitSeconds:
-          type: integer
-        durationLimitSeconds:
-          type: integer
-        prompt:
-          type: string
-    Skill:
-      type: object
-      properties:
-        id:
-          type: string
-        externalId:
-          type: string
-        name:
-          type: string
-        category:
-          type: string
-        rubric:
-          type: string
-        description:
-          type: string
+            scoring:
+              type: object
+              additionalProperties: true
+            evaluationInstructionsForLLM:
+              type: string
     Persona:
       type: object
       properties:
@@ -360,7 +398,27 @@ components:
           type: string
         role:
           type: string
-        background:
+        personality:
+          type: array
+          items:
+            type: string
+        motivations:
+          type: array
+          items:
+            type: string
+        constraints:
+          type: array
+          items:
+            type: string
+        tendencies:
+          type: array
+          items:
+            type: string
+        knowledge:
+          type: array
+          items:
+            type: string
+        emotionalState:
           type: string
     PracticeSession:
       type: object

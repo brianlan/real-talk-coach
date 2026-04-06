@@ -157,8 +157,8 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
   status so UI can show pending transcripts.
 - Client-provided timing data is formalized: `/api/sessions` accepts `clientSessionStartedAt`, and
   every trainee turn includes `startedAt/endedAt` so the backend can compute drift and idle/total duration.
-- Roleplay prompts include personas and scenario context only; objectives/end criteria stay server-side
-  for objective-check + evaluation to avoid steering the roleplay.
+- Roleplay prompts include personas and scenario context only; simulation goal checks stay server-side
+  for goal-check + evaluation to avoid steering the roleplay.
 - If the admin prompt is empty, the backend auto-generates a short opener using personas, title, and
   description to start the roleplay naturally.
 - Turn handling module wraps the OpenAI Python AsyncClient for qwen (`stream=True`, `modalities=["text","audio"]`, `audio={"voice": …, "format": "wav"}`). The AsyncClient automatically handles Server-Sent Events (SSE) streaming format and accumulates text and audio chunks. **Implementation Note**: Qwen returns raw PCM audio data (16-bit signed integer, 24kHz, mono) without WAV headers. The backend detects audio format by checking for "RIFF" header bytes and converts raw PCM to MP3 using ffmpeg with appropriate flags (`-f s16le -ar 24000 -ac 1` for PCM, standard WAV handling for files with RIFF headers). The converted MP3 is uploaded to LeanCloud with references persisted alongside transcripts. The browser records low-bitrate WebM/Opus, and the backend transcodes it to MP3 before LeanCloud upload to satisfy the 128 KB LFile constraint. The practice room UI plays AI audio per turn and falls back to a manual play control when autoplay is blocked.
@@ -174,13 +174,13 @@ All Technical Context unknowns resolved (none remaining marked as NEEDS CLARIFIC
 Will break into incremental stories during `/speckit.tasks`, roughly:
 1. **Backend foundations**: scaffold FastAPI project, env loading, LeanCloud + qwen clients, health
    checks, baseline telemetry scaffolding (logs/metrics/traces hooks), pytest fixtures/mocks.
-2. **Session lifecycle**: scenario catalog endpoints (including `/api/skills` + scenario `skillSummaries`),
+2. **Session lifecycle**: scenario catalog endpoints (including scenario metadata),
    session start/manual stop/delete, immediate AI turn 0 kickoff, WebSocket hub, idle/duration enforcement,
    LeanCloud persistence + cascading deletes, <20 session cap with ≤5 pending queue enforcement, and production scenario/skill seed helpers.
 3. **Turn handling & media**: audio upload pipeline to LeanCloud, qwen generation via OpenAI SDK
    (streaming text+WAV audio) with WebSocket push plumbing, WAV→MP3 transcode, qwen ASR integration,
    retries + telemetry, history listing.
-4. **Objective checks, evaluation & ASR tasks**: implement synchronous Objective Check Model client +
+4. **Goal checks, evaluation & ASR tasks**: implement synchronous Goal Check Model client +
    enforcement (including `objectiveStatus`/`objectiveReason` persistence and drift-safe retries), FastAPI
    background task orchestration for ASR/evaluations, GPT-5 mini (chataiapi.com) client wrapper, state
    transitions, HTTP evaluation status endpoint, requeue hook, instrumentation, and the wiring that calls
@@ -190,7 +190,7 @@ Session lifecycle deliverables therefore include both the NFR-001 concurrency gu
 5. **Frontend**: Next.js app scaffolding, scenario browser (with skill metadata), practice room with audio
    capture + stream, history/evaluation screens (history APIs include required `historyStepCount` telemetry),
    WebSocket termination handling.
-6. **Testing/automation**: contract tests against OpenAPI (sessions/turns/skills/objective-check/history step hints),
+6. **Testing/automation**: contract tests against OpenAPI (sessions/turns/goal-check/history step hints),
    MSW mocks, Playwright happy-path practice + history flows, CI wiring.
 
 ## Constitution Check (Post-Design)

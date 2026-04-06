@@ -130,9 +130,20 @@ async def test_evaluation_runner_store_spans_include_session_id(monkeypatch):
                 "Scenario",
                 (),
                 {
-                    "title": "Scenario",
-                    "objective": "Objective",
-                    "skill_summaries": [],
+                    "metadata": {"title": "Scenario"},
+                    "context": {"situation": "A feedback conversation."},
+                    "evaluation_config": {
+                        "learningObjectives": ["Make a clear request."],
+                        "evaluationCriteria": [
+                            {
+                                "id": "criterion-1",
+                                "description": "Explains the request clearly.",
+                            }
+                        ],
+                        "skillsAssessed": ["criterion-1"],
+                        "scoring": {"scale": "1-5"},
+                        "evaluationInstructionsForLLM": "Use the criterion id as skillId.",
+                    },
                 },
             )()
 
@@ -217,9 +228,14 @@ async def test_evaluation_service_spans_include_session_id(monkeypatch):
     context = evaluation_service.EvaluationContext(
         session_id="session-1",
         scenario_title="Scenario",
-        objective="Objective",
-        end_criteria=["End the session after agreement."],
-        skill_summaries=[{"skillId": "skill-1", "name": "Skill", "rubric": "Rubric"}],
+        scenario_context={"situation": "A feedback conversation."},
+        learning_objectives=["Make a clear request."],
+        evaluation_criteria=[
+            {"id": "criterion-1", "description": "Explains the request clearly."}
+        ],
+        skills_assessed=["criterion-1"],
+        scoring={"scale": "1-5"},
+        evaluation_instructions="Use the criterion id as skillId.",
         turns=[{"speaker": "ai", "transcript": "Hi"}],
     )
     result = await evaluation_service.evaluate_session(context)

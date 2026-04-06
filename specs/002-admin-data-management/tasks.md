@@ -62,16 +62,16 @@
 
 ---
 
-## Phase 4: User Story 2 - Manage scenarios and assign skills (Priority: P1)
+## Phase 4: User Story 2 - Manage scenario assessment criteria (Priority: P1)
 
-**Goal**: Admins can create, edit, publish/unpublish, soft-delete/restore scenarios and assign ordered skills.
+**Goal**: Admins can create, edit, publish/unpublish, soft-delete/restore scenarios and define assessment skills.
 
-**Independent Test**: Create a scenario with skills, publish it, edit it, unpublish it, and verify validation and status rules.
+**Independent Test**: Create a scenario with skill labels, publish it, edit it, unpublish it, and verify validation and status rules.
 
 ### Tests for User Story 2 (write first)
 
 - [X] T030 [P] [US2] Contract tests for admin scenarios API (CRUD, publish/unpublish, soft delete/restore, delete blocks) in `backend/tests/contract/test_admin_scenarios.py`
-- [X] T031 [US2] Integration test for scenario validation (required fields, unique skills, publish/unpublish, delete blocked with sessions) in `backend/tests/integration/test_admin_scenarios_flow.py`
+- [X] T031 [US2] Integration test for scenario validation (required fields, skill labels, publish/unpublish, delete blocked with sessions) in `backend/tests/integration/test_admin_scenarios_flow.py`
 - [X] T032 [P] [US2] E2E test for admin scenarios UI (create/edit/publish/unpublish/delete/restore) in `frontend/tests/e2e/admin-scenarios.spec.ts`
 
 ### Implementation for User Story 2
