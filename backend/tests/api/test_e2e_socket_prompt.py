@@ -86,8 +86,11 @@ def _make_nested_scenario(**overrides):
                 "possibleResponses": ["mention internal fairness across the team"],
             },
             "decisionConstraints": {
-                "maxRaiseWithoutHigherApprovalPercent": 8,
-                "alternativeOptions": ["one-time bonus"],
+                "approvalPolicy": {
+                    "raiseCapPercent": 8,
+                    "requiresDirectorApproval": True,
+                },
+                "fallbackPaths": ["one-time bonus"],
             },
             "conversationEndConditions": {
                 "possibleEndStates": ["raise approved", "discussion ends without agreement"],
@@ -127,6 +130,11 @@ def test_build_payload_uses_nested_prompt_template():
     assert "## CONVERSATION STYLE" in system_role
     assert "## START OF SIMULATION" in system_role
     assert "Keep the following constraints in mind:" in system_role
+    assert "• approvalPolicy:" in system_role
+    assert "• raiseCapPercent: 8" in system_role
+    assert "• requiresDirectorApproval: true" in system_role
+    assert "• fallbackPaths:" in system_role
+    assert "• one-time bonus" in system_role
     assert "Jordan" in system_role
     assert "Engineering Manager" in system_role
 
@@ -134,6 +142,30 @@ def test_build_payload_uses_nested_prompt_template():
     assert "Scenario title:" not in system_role
     assert "Scenario description:" not in system_role
     assert "## DECISION CONSTRAINTS" not in system_role
+
+
+def test_build_payload_omits_constraints_block_when_decision_constraints_empty():
+    config = _make_config()
+    client_cfg: dict = {}
+    scenario = _make_nested_scenario(
+        simulationConfig={
+            **_make_nested_scenario().simulationConfig,
+            "decisionConstraints": {
+                "approvalPolicy": {},
+                "fallbackPaths": [],
+                "notes": "   ",
+            },
+        }
+    )
+
+    payload = _build_start_session_payload(
+        config, "sess-124", client_cfg, scenario=scenario, language="en"
+    )
+
+    system_role = payload["dialog"]["system_role"]
+    assert "Keep the following constraints in mind:" not in system_role
+    assert "approvalPolicy" not in system_role
+    assert "fallbackPaths" not in system_role
 
 
 def test_build_payload_bot_name_from_nested_ai_persona():

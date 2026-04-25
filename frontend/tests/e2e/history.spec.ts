@@ -81,10 +81,7 @@ test("browse history and practice again", async ({ page }) => {
           typicalBehaviors: ["fast talker"],
           possibleResponses: ["agrees", "disagrees"],
         },
-        decisionConstraints: {
-          maxRaiseWithoutHigherApprovalPercent: 10,
-          alternativeOptions: ["delay"],
-        },
+        decisionConstraints: {},
         conversationEndConditions: {
           possibleEndStates: ["End"],
         },
@@ -173,10 +170,7 @@ test("browse history and practice again", async ({ page }) => {
               typicalBehaviors: ["fast talker"],
               possibleResponses: ["agrees", "disagrees"],
             },
-            decisionConstraints: {
-              maxRaiseWithoutHigherApprovalPercent: 10,
-              alternativeOptions: ["delay"],
-            },
+            decisionConstraints: {},
             conversationEndConditions: {
               possibleEndStates: ["End"],
             },

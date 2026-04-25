@@ -56,10 +56,7 @@ async function mockPracticeApis(page: Page, sessionId: string) {
           typicalBehaviors: ["fast talker"],
           possibleResponses: ["agrees", "disagrees"],
         },
-        decisionConstraints: {
-          maxRaiseWithoutHigherApprovalPercent: 10,
-          alternativeOptions: ["delay"],
-        },
+        decisionConstraints: {},
         conversationEndConditions: {
           possibleEndStates: ["End"],
         },
@@ -166,10 +163,7 @@ test("start practice sends the selected scenario id", async ({ page }) => {
           typicalBehaviors: ["fast talker"],
           possibleResponses: ["agrees", "disagrees"],
         },
-        decisionConstraints: {
-          maxRaiseWithoutHigherApprovalPercent: 10,
-          alternativeOptions: ["delay"],
-        },
+        decisionConstraints: {},
         conversationEndConditions: {
           possibleEndStates: ["End"],
         },

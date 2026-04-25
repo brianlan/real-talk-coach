@@ -107,11 +107,13 @@ def _make_nested_scenario(**overrides):
                 ],
             },
             "decisionConstraints": {
-                "maxRaiseWithoutHigherApprovalPercent": 8,
-                "alternativeOptions": [
+                "approvalPolicy": {
+                    "raiseCapPercent": 8,
+                    "requiresDirectorApproval": True,
+                },
+                "fallbackPaths": [
                     "one-time bonus",
-                    "promotion pathway discussion",
-                    "title adjustment",
+                    {"path": "promotion review", "timelineDays": 60},
                 ],
             },
             "conversationEndConditions": {
@@ -296,16 +298,37 @@ def test_build_e2e_system_prompt_includes_conversation_dynamics():
         assert response in result
 
 
-def test_build_e2e_system_prompt_includes_decision_constraints():
-    """Decision constraints must appear in the prompt."""
+def test_build_e2e_system_prompt_includes_generic_decision_constraints_json():
     scenario = _make_nested_scenario()
     result = e2e_prompt_builder.build_e2e_system_prompt(scenario, "en")
 
     assert "Keep the following constraints in mind:" in result
     assert "## DECISION CONSTRAINTS" not in result
-    dc = scenario.simulationConfig["decisionConstraints"]
-    for option in dc["alternativeOptions"]:
-        assert option in result
+    assert "• approvalPolicy:" in result
+    assert "• raiseCapPercent: 8" in result
+    assert "• requiresDirectorApproval: true" in result
+    assert "• fallbackPaths:" in result
+    assert "• one-time bonus" in result
+    assert "• path: promotion review" in result
+    assert "• timelineDays: 60" in result
+
+
+def test_build_e2e_system_prompt_omits_decision_constraints_when_empty():
+    scenario = _make_nested_scenario(
+        simulationConfig={
+            **_make_nested_scenario().simulationConfig,
+            "decisionConstraints": {
+                "approvalPolicy": {},
+                "fallbackPaths": [],
+                "notes": "   ",
+            },
+        }
+    )
+    result = e2e_prompt_builder.build_e2e_system_prompt(scenario, "en")
+
+    assert "Keep the following constraints in mind:" not in result
+    assert "approvalPolicy" not in result
+    assert "fallbackPaths" not in result
 
 
 def test_build_e2e_system_prompt_includes_conversation_end_states():

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 FALLBACK_SYSTEM_PROMPT = (
@@ -67,13 +68,84 @@ def _format_list(items: Any, empty_text: str = "Not provided") -> list[str]:
     return [f"• {value}" for value in values]
 
 
-def _decision_constraint_lines(decision_constraints: dict[str, Any]) -> list[str]:
-    lines: list[str] = []
-    max_raise = decision_constraints.get("maxRaiseWithoutHigherApprovalPercent")
-    if max_raise is not None:
-        lines.append(f"• raises above about {max_raise}% usually require higher approval")
-    lines.extend(_format_list(decision_constraints.get("alternativeOptions"), empty_text=""))
-    return [line for line in lines if line]
+def _normalize_json_content(value: Any) -> Any | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    if isinstance(value, dict):
+        normalized = {
+            str(key).strip() or str(key): normalized_value
+            for key, item in value.items()
+            if (normalized_value := _normalize_json_content(item)) is not None
+        }
+        return normalized or None
+    if isinstance(value, list):
+        normalized = [
+            normalized_item
+            for item in value
+            if (normalized_item := _normalize_json_content(item)) is not None
+        ]
+        return normalized or None
+    return value
+
+
+def _json_scalar_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _json_bullet_lines(value: Any, *, indent: int = 0, label: str | None = None) -> list[str]:
+    prefix = "  " * indent
+    bullet = f"{prefix}•"
+
+    if isinstance(value, dict):
+        lines: list[str] = []
+        if label is not None:
+            lines.append(f"{bullet} {label}:")
+            indent += 1
+            prefix = "  " * indent
+            bullet = f"{prefix}•"
+        for key, item in value.items():
+            if isinstance(item, (dict, list)):
+                lines.extend(_json_bullet_lines(item, indent=indent, label=key))
+            else:
+                lines.append(f"{bullet} {key}: {_json_scalar_text(item)}")
+        return lines
+
+    if isinstance(value, list):
+        lines: list[str] = []
+        if label is not None:
+            lines.append(f"{bullet} {label}:")
+            indent += 1
+            prefix = "  " * indent
+            bullet = f"{prefix}•"
+        for item in value:
+            if isinstance(item, (dict, list)):
+                nested_lines = _json_bullet_lines(item, indent=indent)
+                if nested_lines:
+                    lines.extend(nested_lines)
+            else:
+                lines.append(f"{bullet} {_json_scalar_text(item)}")
+        return lines
+
+    text = _json_scalar_text(value)
+    if label is not None:
+        return [f"{bullet} {label}: {text}"]
+    return [f"{bullet} {text}"]
+
+
+def _decision_constraint_lines(decision_constraints: Any) -> list[str]:
+    normalized = _normalize_json_content(decision_constraints)
+    if normalized is None:
+        return []
+    return _json_bullet_lines(normalized)
 
 
 def _start_of_simulation_lines(conversation_start: dict[str, Any]) -> list[str]:
@@ -98,9 +170,38 @@ def build_e2e_system_prompt(scenario: Any, language: str) -> str:
     ai_persona = _as_dict(simulation_config.get("ai"))
     trainee_persona = _as_dict(simulation_config.get("trainee"))
     conversation_dynamics = _as_dict(simulation_config.get("conversationDynamics"))
-    decision_constraints = _as_dict(simulation_config.get("decisionConstraints"))
+    decision_constraints = simulation_config.get("decisionConstraints")
     end_conditions = _as_dict(simulation_config.get("conversationEndConditions"))
     conversation_start = _as_dict(simulation_config.get("conversationStart"))
+
+    decision_constraint_lines = _decision_constraint_lines(decision_constraints)
+
+    realistic_behavior_lines = [
+        "",
+        "Behave like a realistic person in this situation.",
+        "",
+        "Typical behaviors may include:",
+        *_format_list(conversation_dynamics.get("typicalBehaviors")),
+        "",
+        "Possible responses may include:",
+        *_format_list(conversation_dynamics.get("possibleResponses")),
+        "",
+    ]
+    if decision_constraint_lines:
+        realistic_behavior_lines.extend(
+            [
+                "Keep the following constraints in mind:",
+                *decision_constraint_lines,
+                "",
+            ]
+        )
+    realistic_behavior_lines.extend(
+        [
+            "Do NOT immediately agree with the trainee's request unless sufficient justification is provided.",
+            "",
+            "---",
+        ]
+    )
 
     sections = [
         "\n".join(
@@ -210,23 +311,7 @@ def build_e2e_system_prompt(scenario: Any, language: str) -> str:
         ),
         _section(
             "## REALISTIC BEHAVIOR",
-            [
-                "",
-                "Behave like a realistic person in this situation.",
-                "",
-                "Typical behaviors may include:",
-                *_format_list(conversation_dynamics.get("typicalBehaviors")),
-                "",
-                "Possible responses may include:",
-                *_format_list(conversation_dynamics.get("possibleResponses")),
-                "",
-                "Keep the following constraints in mind:",
-                *(_decision_constraint_lines(decision_constraints) or ["Not provided"]),
-                "",
-                "Do NOT immediately agree with the trainee's request unless sufficient justification is provided.",
-                "",
-                "---",
-            ],
+            realistic_behavior_lines,
         ),
         _section(
             "## CONVERSATION FLOW",

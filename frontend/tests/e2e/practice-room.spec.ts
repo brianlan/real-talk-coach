@@ -34,7 +34,7 @@ test.describe("Practice Room UI", () => {
           },
           conversationRules: { stayInCharacter: true, allowNarration: false, coachingAllowed: false, tone: "professional" },
           conversationDynamics: { typicalBehaviors: ["fast talker"], possibleResponses: ["agrees", "disagrees"] },
-          decisionConstraints: { maxRaiseWithoutHigherApprovalPercent: 10, alternativeOptions: ["delay"] },
+          decisionConstraints: {},
           conversationEndConditions: { possibleEndStates: ["End"] },
         },
         evaluationConfig: {

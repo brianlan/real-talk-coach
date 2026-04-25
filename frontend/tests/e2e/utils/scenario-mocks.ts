@@ -53,10 +53,7 @@ export type ScenarioMock = {
       typicalBehaviors: string[];
       possibleResponses: string[];
     };
-    decisionConstraints: {
-      maxRaiseWithoutHigherApprovalPercent?: number;
-      alternativeOptions: string[];
-    };
+    decisionConstraints?: Record<string, unknown>;
     conversationEndConditions: {
       possibleEndStates: string[];
     };

@@ -49,9 +49,6 @@ export function ScenarioForm({
         typicalBehaviors: [],
         possibleResponses: [],
       },
-      decisionConstraints: initialValues?.simulationConfig?.decisionConstraints ?? {
-        alternativeOptions: [],
-      },
       conversationEndConditions: initialValues?.simulationConfig?.conversationEndConditions ?? {
         possibleEndStates: [],
       },
@@ -64,6 +61,10 @@ export function ScenarioForm({
       evaluationInstructionsForLLM: initialValues?.evaluationConfig?.evaluationInstructionsForLLM ?? "",
     },
     status: initialValues?.status ?? "draft",
+  });
+  const [decisionConstraintsJson, setDecisionConstraintsJson] = useState(() => {
+    const dc = initialValues?.simulationConfig?.decisionConstraints;
+    return dc && Object.keys(dc).length > 0 ? JSON.stringify(dc, null, 2) : "";
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,28 +149,6 @@ export function ScenarioForm({
       }));
     };
 
-  const handleDecisionConstraintsOptionsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const items = e.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
-    setValues((prev) => ({
-      ...prev,
-      simulationConfig: {
-        ...prev.simulationConfig,
-        decisionConstraints: { ...prev.simulationConfig.decisionConstraints, alternativeOptions: items },
-      },
-    }));
-  };
-
-  const handleDecisionConstraintsMaxRaiseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value ? Number(e.target.value) : undefined;
-    setValues((prev) => ({
-      ...prev,
-      simulationConfig: {
-        ...prev.simulationConfig,
-        decisionConstraints: { ...prev.simulationConfig.decisionConstraints, maxRaiseWithoutHigherApprovalPercent: val },
-      },
-    }));
-  };
-
   const handleEndStatesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const items = e.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
     setValues((prev) => ({
@@ -220,13 +199,42 @@ export function ScenarioForm({
     setSaving(true);
     setError(null);
     setNotice(null);
+
+    let parsedDecisionConstraints: Record<string, unknown> | undefined = undefined;
+    const dcText = decisionConstraintsJson.trim();
+    if (dcText) {
+      try {
+        parsedDecisionConstraints = JSON.parse(dcText);
+        if (typeof parsedDecisionConstraints !== "object" || parsedDecisionConstraints === null || Array.isArray(parsedDecisionConstraints)) {
+          throw new Error("Must be a JSON object");
+        }
+      } catch (err: any) {
+        setError("Invalid JSON in Decision Constraints: " + err.message);
+        setSaving(false);
+        return;
+      }
+    }
+
+    const payload: ScenarioInput = {
+      ...values,
+      simulationConfig: {
+        ...values.simulationConfig,
+      },
+    };
+
+    if (parsedDecisionConstraints) {
+      payload.simulationConfig.decisionConstraints = parsedDecisionConstraints;
+    } else {
+      delete payload.simulationConfig.decisionConstraints;
+    }
+
     try {
       if (scenarioId) {
-        const result = await updateScenario(scenarioId, values, version ?? "");
+        const result = await updateScenario(scenarioId, payload, version ?? "");
         setNotice("Saved");
         onSaved?.(result.version);
       } else {
-        await createScenario(values);
+        await createScenario(payload);
         setNotice("Created");
       }
       onSaved?.();
@@ -367,12 +375,16 @@ export function ScenarioForm({
         </div>
 
         <div style={{ display: "grid", gap: 6, paddingLeft: 12, borderLeft: "2px solid #e4ddd4" }}>
-          <em>Decision Constraints</em>
+          <em>Decision Constraints (Optional JSON)</em>
           <label style={{ display: "grid", gap: 6 }}>
-            <span>Max Raise % without higher approval (Optional)</span>
-            <input type="number" placeholder="10" value={values.simulationConfig.decisionConstraints.maxRaiseWithoutHigherApprovalPercent ?? ""} onChange={handleDecisionConstraintsMaxRaiseChange} style={{ padding: 8, borderRadius: 8, border: "1px solid #d9d3cb" }} />
+            <span>Arbitrary JSON object defining bounds/constraints for this scenario.</span>
+            <textarea
+              placeholder='{\n  "maxRaiseWithoutHigherApprovalPercent": 10,\n  "alternativeOptions": ["delay"]\n}'
+              value={decisionConstraintsJson}
+              onChange={(e) => setDecisionConstraintsJson(e.target.value)}
+              style={{ padding: 8, borderRadius: 8, border: "1px solid #d9d3cb", minHeight: 80, fontFamily: "monospace" }}
+            />
           </label>
-          <textarea placeholder="Alternative Options (one per line)" value={values.simulationConfig.decisionConstraints.alternativeOptions.join("\n")} onChange={handleDecisionConstraintsOptionsChange} style={{ padding: 8, borderRadius: 8, border: "1px solid #d9d3cb", minHeight: 40 }} />
         </div>
 
         <label style={{ display: "grid", gap: 6 }}>
