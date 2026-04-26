@@ -7,7 +7,7 @@ import json
 import logging
 import uuid
 from array import array
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -66,6 +66,17 @@ class E2EConfig:
     resource_id: str
     app_key: str
     speaker: str | None
+
+
+@dataclass
+class _RealtimeTranscriptState:
+    next_user_sequence: int = 0
+    active_question_id: str | None = None
+    active_reply_id: str | None = None
+    user_turn_ids_by_question: dict[str, str] = field(default_factory=dict)
+    user_sequences_by_question: dict[str, int] = field(default_factory=dict)
+    ai_turn_ids_by_reply: dict[str, str] = field(default_factory=dict)
+    ai_sequences_by_reply: dict[str, int] = field(default_factory=dict)
 
 
 def _load_e2e_config() -> E2EConfig:
@@ -220,6 +231,331 @@ def _float32le_to_int16le(raw_audio: bytes) -> bytes:
             value = -1.0
         ints.append(int(value * 32767))
     return ints.tobytes()
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_identifier(value: Any) -> str | None:
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized or None
+    return None
+
+
+def _coerce_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def _user_turn_context(question_id: str | None) -> str:
+    if question_id:
+        return f"volcengine_e2e:user:{question_id}"
+    return "volcengine_e2e:user"
+
+
+def _ai_turn_context(question_id: str | None, reply_id: str | None) -> str:
+    parts = ["volcengine_e2e:ai"]
+    if reply_id:
+        parts.append(f"reply:{reply_id}")
+    if question_id:
+        parts.append(f"question:{question_id}")
+    return "|".join(parts)
+
+
+async def _build_transcript_state(
+    repo: SessionRepository | None,
+    session_id: str,
+) -> _RealtimeTranscriptState:
+    if repo is None or not session_id:
+        return _RealtimeTranscriptState()
+
+    turns = await repo.list_turns(session_id)
+    max_even_sequence = max(
+        (turn.sequence for turn in turns if turn.speaker == "trainee"),
+        default=-2,
+    )
+    return _RealtimeTranscriptState(next_user_sequence=max_even_sequence + 2)
+
+
+def _resolve_question_id_from_payload(
+    payload: dict[str, Any] | None,
+    state: _RealtimeTranscriptState,
+) -> str | None:
+    if not isinstance(payload, dict):
+        return state.active_question_id
+    return (
+        _normalize_identifier(payload.get("question_id"))
+        or _normalize_identifier(payload.get("questionId"))
+        or state.active_question_id
+    )
+
+
+def _resolve_reply_id_from_payload(
+    payload: dict[str, Any] | None,
+    state: _RealtimeTranscriptState,
+) -> str | None:
+    if not isinstance(payload, dict):
+        return state.active_reply_id
+    return (
+        _normalize_identifier(payload.get("reply_id"))
+        or _normalize_identifier(payload.get("replyId"))
+        or state.active_reply_id
+    )
+
+
+async def _ensure_user_turn(
+    repo: SessionRepository,
+    session_id: str,
+    state: _RealtimeTranscriptState,
+    *,
+    question_id: str | None,
+) -> tuple[str, int]:
+    if question_id and question_id in state.user_turn_ids_by_question:
+        return (
+            state.user_turn_ids_by_question[question_id],
+            state.user_sequences_by_question[question_id],
+        )
+
+    sequence = state.next_user_sequence
+    state.next_user_sequence += 2
+    created_turn = await repo.add_turn(
+        {
+            "sessionId": session_id,
+            "sequence": sequence,
+            "speaker": "trainee",
+            "transcript": None,
+            "audioFileId": "",
+            "audioUrl": None,
+            "asrStatus": "in_progress",
+            "startedAt": _utc_now_iso(),
+            "endedAt": None,
+            "context": _user_turn_context(question_id),
+            "latencyMs": None,
+        }
+    )
+    if question_id:
+        state.user_turn_ids_by_question[question_id] = created_turn.id
+        state.user_sequences_by_question[question_id] = sequence
+    state.active_question_id = question_id
+    return created_turn.id, sequence
+
+
+async def _ensure_ai_turn(
+    repo: SessionRepository,
+    session_id: str,
+    state: _RealtimeTranscriptState,
+    *,
+    question_id: str | None,
+    reply_id: str | None,
+) -> tuple[str, int]:
+    if reply_id and reply_id in state.ai_turn_ids_by_reply:
+        turn_id = state.ai_turn_ids_by_reply[reply_id]
+        sequence = state.ai_sequences_by_reply.get(reply_id)
+        if sequence is not None:
+            return turn_id, sequence
+
+    if question_id and question_id in state.user_sequences_by_question:
+        sequence = state.user_sequences_by_question[question_id] + 1
+    else:
+        sequence = state.next_user_sequence + 1
+
+    created_turn = await repo.add_turn(
+        {
+            "sessionId": session_id,
+            "sequence": sequence,
+            "speaker": "ai",
+            "transcript": None,
+            "audioFileId": "",
+            "audioUrl": None,
+            "asrStatus": None,
+            "startedAt": _utc_now_iso(),
+            "endedAt": None,
+            "context": _ai_turn_context(question_id, reply_id),
+            "latencyMs": None,
+        }
+    )
+    if reply_id:
+        state.ai_turn_ids_by_reply[reply_id] = created_turn.id
+        state.ai_sequences_by_reply[reply_id] = sequence
+    state.active_question_id = question_id or state.active_question_id
+    state.active_reply_id = reply_id
+    return created_turn.id, sequence
+
+
+async def _persist_user_transcript(
+    repo: SessionRepository | None,
+    session_id: str,
+    state: _RealtimeTranscriptState,
+    *,
+    question_id: str | None,
+    transcript: str,
+    is_final: bool,
+) -> None:
+    if repo is None or not session_id:
+        return
+
+    normalized = transcript.strip()
+    if not normalized:
+        return
+
+    turn_id, _ = await _ensure_user_turn(repo, session_id, state, question_id=question_id)
+    payload: dict[str, Any] = {
+        "transcript": normalized,
+        "asrStatus": "completed" if is_final else "in_progress",
+    }
+    if is_final:
+        payload["endedAt"] = _utc_now_iso()
+    await repo.update_turn(turn_id, payload)
+    state.active_question_id = question_id or state.active_question_id
+
+
+async def _finalize_user_transcript(
+    repo: SessionRepository | None,
+    state: _RealtimeTranscriptState,
+    *,
+    question_id: str | None,
+) -> None:
+    if repo is None:
+        return
+
+    target_question_id = question_id or state.active_question_id
+    if not target_question_id:
+        return
+    turn_id = state.user_turn_ids_by_question.get(target_question_id)
+    if not turn_id:
+        return
+    await repo.update_turn(
+        turn_id,
+        {
+            "asrStatus": "completed",
+            "endedAt": _utc_now_iso(),
+        },
+    )
+    state.active_question_id = target_question_id
+
+
+async def _persist_ai_transcript(
+    repo: SessionRepository | None,
+    session_id: str,
+    state: _RealtimeTranscriptState,
+    *,
+    question_id: str | None,
+    reply_id: str | None,
+    transcript: str,
+    is_final: bool,
+) -> None:
+    if repo is None or not session_id:
+        return
+
+    normalized = transcript.strip()
+    if not normalized:
+        return
+
+    turn_id, _ = await _ensure_ai_turn(
+        repo,
+        session_id,
+        state,
+        question_id=question_id,
+        reply_id=reply_id,
+    )
+    payload: dict[str, Any] = {"transcript": normalized}
+    if is_final:
+        payload["endedAt"] = _utc_now_iso()
+    await repo.update_turn(turn_id, payload)
+    state.active_question_id = question_id or state.active_question_id
+    state.active_reply_id = reply_id or state.active_reply_id
+
+
+async def _finalize_ai_transcript(
+    repo: SessionRepository | None,
+    state: _RealtimeTranscriptState,
+    *,
+    reply_id: str | None,
+) -> None:
+    if repo is None:
+        return
+    target_reply_id = reply_id or state.active_reply_id
+    if not target_reply_id:
+        return
+    turn_id = state.ai_turn_ids_by_reply.get(target_reply_id)
+    if not turn_id:
+        return
+    await repo.update_turn(turn_id, {"endedAt": _utc_now_iso()})
+    state.active_reply_id = target_reply_id
+
+
+async def _persist_upstream_transcript_event(
+    repo: SessionRepository | None,
+    session_id: str,
+    state: _RealtimeTranscriptState,
+    event: int | None,
+    payload: Any,
+) -> None:
+    if repo is None or not session_id or not isinstance(payload, dict):
+        return
+
+    if event == 450:
+        state.active_question_id = _resolve_question_id_from_payload(payload, state)
+        return
+
+    if event == 451:
+        question_id = _resolve_question_id_from_payload(payload, state)
+        results = payload.get("results")
+        if not isinstance(results, list):
+            return
+        latest_text = ""
+        latest_final = False
+        for result in results:
+            if not isinstance(result, dict):
+                continue
+            text = result.get("text")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            latest_text = text.strip()
+            latest_final = _coerce_bool(result.get("is_interim")) is False
+        if latest_text:
+            await _persist_user_transcript(
+                repo,
+                session_id,
+                state,
+                question_id=question_id,
+                transcript=latest_text,
+                is_final=latest_final,
+            )
+        return
+
+    if event == 459:
+        await _finalize_user_transcript(
+            repo,
+            state,
+            question_id=_resolve_question_id_from_payload(payload, state),
+        )
+        return
+
+    if event == EVENT_LLM_TEXT:
+        content = payload.get("content")
+        if not isinstance(content, str) or not content.strip():
+            return
+        await _persist_ai_transcript(
+            repo,
+            session_id,
+            state,
+            question_id=_resolve_question_id_from_payload(payload, state),
+            reply_id=_resolve_reply_id_from_payload(payload, state),
+            transcript=content,
+            is_final=False,
+        )
+        return
+
+    if event == EVENT_LLM_TEXT_END:
+        await _finalize_ai_transcript(
+            repo,
+            state,
+            reply_id=_resolve_reply_id_from_payload(payload, state),
+        )
 
 
 async def _recv_client_config(client_ws: WebSocket) -> dict[str, Any]:
@@ -384,13 +720,27 @@ async def _finalize_realtime_session(
     await finalize_session(repo, session_id, payload)
 
 
-async def _pipe_upstream_events(client_ws: WebSocket, upstream_ws) -> None:
+async def _pipe_upstream_events(
+    client_ws: WebSocket,
+    upstream_ws,
+    repo: SessionRepository | None,
+    session_id: str,
+) -> None:
+    transcript_state = await _build_transcript_state(repo, session_id)
     async for packet in upstream_ws:
         if isinstance(packet, str):
             continue
         parsed = _parse_upstream_packet(packet)
         event = parsed.get("event")
         payload = parsed.get("payload")
+
+        await _persist_upstream_transcript_event(
+            repo,
+            session_id,
+            transcript_state,
+            event,
+            payload,
+        )
 
         if parsed.get("message_type") == SERVER_ERROR_RESPONSE:
             await client_ws.send_json(
@@ -607,7 +957,14 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
             )
 
             to_upstream = asyncio.create_task(_pipe_client_audio(websocket, upstream_ws, runtime_session_id))
-            to_client = asyncio.create_task(_pipe_upstream_events(websocket, upstream_ws))
+            to_client = asyncio.create_task(
+                _pipe_upstream_events(
+                    websocket,
+                    upstream_ws,
+                    session_repository,
+                    session_id,
+                )
+            )
 
             termination_reason: str | None = None
             done, pending = await asyncio.wait(

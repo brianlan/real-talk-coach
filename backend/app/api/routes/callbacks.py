@@ -33,6 +33,10 @@ class TranscriptItem(BaseModel):
     text: str | None = None
     sequence: int | None = Field(default=None, ge=0)
     turnId: str | None = None
+    question_id: str | None = None
+    questionId: str | None = None
+    reply_id: str | None = None
+    replyId: str | None = None
 
 
 class DoubaoCallbackPayload(BaseModel):
@@ -61,6 +65,10 @@ class DoubaoCallbackPayload(BaseModel):
     turnId: str | None = None
     signature: str | None = None
     transcripts: list[TranscriptItem] = Field(default_factory=list)
+    question_id: str | None = None
+    questionId: str | None = None
+    reply_id: str | None = None
+    replyId: str | None = None
 
 
 def _repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> SessionRepository:
@@ -204,6 +212,35 @@ def _candidate_transcripts(payload: DoubaoCallbackPayload) -> list[TranscriptIte
     return [entry for entry in entries if (entry.transcript or entry.text or "").strip()]
 
 
+def _normalized_context_identifier(prefix: str, identifier: str | None) -> str | None:
+    value = (identifier or "").strip()
+    if not value:
+        return None
+    return f"{prefix}{value}"
+
+
+def _find_turn_by_context_identifier(
+    turns: list[TurnRecord],
+    *,
+    speaker: str,
+    identifier: str | None,
+    prefix: str,
+) -> TurnRecord | None:
+    needle = _normalized_context_identifier(prefix, identifier)
+    if not needle:
+        return None
+    return next(
+        (
+            turn
+            for turn in turns
+            if turn.speaker == speaker
+            and isinstance(turn.context, str)
+            and needle in turn.context
+        ),
+        None,
+    )
+
+
 async def _upsert_transcript_turns(
     payload: DoubaoCallbackPayload,
     session_id: str,
@@ -223,6 +260,8 @@ async def _upsert_transcript_turns(
         if not transcript:
             continue
         speaker = _normalize_speaker(entry.speaker)
+        question_id = (entry.question_id or entry.questionId or payload.question_id or payload.questionId)
+        reply_id = (entry.reply_id or entry.replyId or payload.reply_id or payload.replyId)
 
         target_turn: TurnRecord | None = None
         if entry.turnId:
@@ -235,6 +274,20 @@ async def _upsert_transcript_turns(
                     if turn.sequence == entry.sequence and turn.speaker == speaker
                 ),
                 None,
+            )
+        if target_turn is None and speaker == "trainee":
+            target_turn = _find_turn_by_context_identifier(
+                turns,
+                speaker="trainee",
+                identifier=question_id,
+                prefix="volcengine_e2e:user:",
+            )
+        if target_turn is None and speaker == "ai":
+            target_turn = _find_turn_by_context_identifier(
+                turns,
+                speaker="ai",
+                identifier=reply_id,
+                prefix="reply:",
             )
 
         if target_turn:
