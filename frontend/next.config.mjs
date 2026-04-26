@@ -14,11 +14,6 @@ const nextConfig = {
         destination: '/practice',
         permanent: true,
       },
-      {
-        source: '/history',
-        destination: '/practice',
-        permanent: true,
-      },
     ];
   },
 };
