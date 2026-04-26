@@ -2,7 +2,7 @@
 
 import PracticeSidebar from "@/components/PracticeSidebar";
 
-export default function PracticeLayout({
+export default function HistoryLayout({
   children,
 }: {
   children: React.ReactNode;
