@@ -8,7 +8,6 @@ from app.api.routes.history import router as history_router
 from app.api.routes.realtime import router as realtime_router
 from app.api.routes.scenarios import router as scenarios_router
 from app.api.routes.sessions import router as sessions_router
-from app.api.routes.turns import router as turns_router
 from app.api.routes.users import router as users_router
 
 api_router = APIRouter()
@@ -20,7 +19,6 @@ api_router.include_router(history_router)
 api_router.include_router(realtime_router)
 api_router.include_router(scenarios_router)
 api_router.include_router(sessions_router)
-api_router.include_router(turns_router)
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 
 

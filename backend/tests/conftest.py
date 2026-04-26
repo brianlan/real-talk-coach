@@ -2,7 +2,7 @@ import httpx
 import mongomock
 import pytest
 
-from app.clients.llm import EvaluatorClient, QwenClient
+from app.clients.llm import EvaluatorClient
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +31,6 @@ def _set_default_env(monkeypatch):
     monkeypatch.setenv("MINIO_ACCESS_KEY", "minioadmin")
     monkeypatch.setenv("MINIO_SECRET_KEY", "minioadmin")
     monkeypatch.setenv("MINIO_BUCKET", "audio")
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
@@ -111,23 +110,6 @@ def mongomock_client_fixture():
             self._client.close()
     
     yield MockMongoDBClient(client)
-
-
-@pytest.fixture
-async def qwen_client():
-    async def handler(request):
-        if request.url.path.endswith("/chat/completions"):
-            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
-        return httpx.Response(200, json={"text": "ok"})
-
-    transport = httpx.MockTransport(handler)
-    client = QwenClient(
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        api_key="secret",
-        transport=transport,
-    )
-    yield client
-    await client.close()
 
 
 @pytest.fixture

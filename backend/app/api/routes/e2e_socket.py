@@ -8,6 +8,7 @@ import logging
 import uuid
 from array import array
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -18,6 +19,7 @@ from app.config import SettingsError, load_settings
 from app.repositories.scenario_repository import ScenarioRepository
 from app.repositories.session_repository import SessionRepository
 from app.services import opening_prompt_service
+from app.services.session_service import finalize_session
 from app.services.e2e_prompt_builder import (
     build_e2e_system_prompt,
     resolve_bot_name,
@@ -296,11 +298,11 @@ def _build_session_ready_payload(
     return payload
 
 
-async def _pipe_client_audio(client_ws: WebSocket, upstream_ws, session_id: str) -> None:
+async def _pipe_client_audio(client_ws: WebSocket, upstream_ws, session_id: str) -> str | None:
     while True:
         message = await client_ws.receive()
         if message.get("type") == "websocket.disconnect":
-            return
+            return None
         text = message.get("text")
         if text is None:
             continue
@@ -318,6 +320,7 @@ async def _pipe_client_audio(client_ws: WebSocket, upstream_ws, session_id: str)
             await upstream_ws.send(_build_full_request(EVENT_TASK_COMMIT, {}, session_id=session_id))
         elif event_type == "finish_session":
             await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=session_id))
+            return "manual"
 
 
 async def _safe_send_json(websocket: WebSocket, payload: dict[str, Any]) -> None:
@@ -325,6 +328,60 @@ async def _safe_send_json(websocket: WebSocket, payload: dict[str, Any]) -> None
         await websocket.send_json(payload)
     except RuntimeError:
         return
+
+
+async def _persist_callback_session_correlation(
+    repo: SessionRepository,
+    session_id: str,
+    runtime_session_id: str,
+) -> None:
+    if not session_id or not runtime_session_id:
+        return
+
+    await repo.update_session(
+        session_id,
+        {
+            "mode": "realtime",
+            "rtcRoomId": runtime_session_id,
+            "realtimeState": "connecting",
+        },
+    )
+
+
+async def _persist_opening_prompt(
+    repo: SessionRepository,
+    session_id: str,
+    opening_content: str,
+) -> None:
+    persisted_opening = opening_content.strip()
+    if not session_id or not persisted_opening:
+        return
+
+    await repo.update_session(
+        session_id,
+        {
+            "openingPrompt": persisted_opening,
+        },
+    )
+
+
+async def _finalize_realtime_session(
+    repo: SessionRepository | None,
+    session_id: str,
+    *,
+    termination_reason: str | None,
+) -> None:
+    if repo is None or not session_id:
+        return
+
+    payload: dict[str, Any] = {
+        "status": "ended",
+        "realtimeState": "ended",
+        "endedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if termination_reason:
+        payload["terminationReason"] = termination_reason
+    await finalize_session(repo, session_id, payload)
 
 
 async def _pipe_upstream_events(client_ws: WebSocket, upstream_ws) -> None:
@@ -398,6 +455,8 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
     send_debug_prompts = bool(client_session_cfg.get("debug_prompts"))
 
     scenario = None
+    session_repository: SessionRepository | None = None
+    session_record = None
     language = "en"
     try:
         mongodb = websocket.app.state.mongodb
@@ -427,6 +486,13 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
         )
         scenario = None
         language = "en"
+
+    if session_repository is not None and session_record is not None:
+        await _persist_callback_session_correlation(
+            session_repository,
+            session_id,
+            runtime_session_id,
+        )
 
     headers = {
         "X-Api-App-ID": config.app_id,
@@ -486,6 +552,15 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                 await websocket.close(code=1011)
                 return
 
+            if session_repository is not None and session_record is not None:
+                await session_repository.update_session(
+                    session_id,
+                    {
+                        "mode": "realtime",
+                        "realtimeState": "active",
+                    },
+                )
+
             send_opening_flag = client_session_cfg.get("send_opening")
             should_send_opening = True if send_opening_flag is None else bool(send_opening_flag)
             opening_content = ""
@@ -515,6 +590,12 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                         session_id=runtime_session_id,
                     )
                 )
+                if session_repository is not None and session_record is not None:
+                    await _persist_opening_prompt(
+                        session_repository,
+                        session_id,
+                        opening_content,
+                    )
 
             await _safe_send_json(
                 websocket,
@@ -528,30 +609,55 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
             to_upstream = asyncio.create_task(_pipe_client_audio(websocket, upstream_ws, runtime_session_id))
             to_client = asyncio.create_task(_pipe_upstream_events(websocket, upstream_ws))
 
-            done, pending = await asyncio.wait({to_upstream, to_client}, return_when=asyncio.FIRST_EXCEPTION)
+            termination_reason: str | None = None
+            done, pending = await asyncio.wait(
+                {to_upstream, to_client},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
             for task in pending:
                 task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
             for task in done:
+                if task.cancelled():
+                    continue
                 exc = task.exception()
                 if exc is not None:
                     raise exc
+
+            if to_upstream in done:
+                termination_reason = to_upstream.result()
+            elif to_client in done:
+                termination_reason = "upstream_finish"
 
             try:
                 await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=runtime_session_id))
                 await upstream_ws.send(_build_full_request(EVENT_FINISH_CONNECTION, {}))
             except WebSocketException:
                 pass
-    except WebSocketDisconnect:
-        return
+            await _finalize_realtime_session(
+                session_repository,
+                session_id,
+                termination_reason=termination_reason,
+            )
     except WebSocketException as exc:
         await _safe_send_json(websocket, {"type": "error", "message": f"Upstream websocket error: {exc}"})
         try:
             await websocket.close(code=1011)
         except RuntimeError:
             return
+        await _finalize_realtime_session(
+            session_repository,
+            session_id,
+            termination_reason=None,
+        )
     except Exception as exc:
         await _safe_send_json(websocket, {"type": "error", "message": f"Voice gateway error: {exc}"})
         try:
             await websocket.close(code=1011)
         except RuntimeError:
             return
+        await _finalize_realtime_session(
+            session_repository,
+            session_id,
+            termination_reason=None,
+        )

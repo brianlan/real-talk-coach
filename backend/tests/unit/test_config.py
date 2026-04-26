@@ -11,7 +11,6 @@ def _set_required_envs(monkeypatch):
     monkeypatch.setenv("MINIO_ACCESS_KEY", "minioadmin")
     monkeypatch.setenv("MINIO_SECRET_KEY", "minioadmin")
     monkeypatch.setenv("MINIO_BUCKET", "audio")
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
@@ -27,7 +26,6 @@ def test_missing_required_envs_raise_actionable_error(monkeypatch):
         "MONGO_HOST",
         "MONGO_PORT",
         "MONGO_DB",
-        "DASHSCOPE_API_KEY",
         "OPENAI_COMPATIBLE_API_BASE",
         "OPENAI_COMPATIBLE_API_KEY",
         "OPENAI_COMPATIBLE_API_MODEL",
@@ -44,7 +42,7 @@ def test_missing_required_envs_raise_actionable_error(monkeypatch):
 
     message = str(exc.value)
     assert "Missing required environment variable" in message
-    assert "DASHSCOPE_API_KEY" in message
+    assert "OPENAI_COMPATIBLE_API_BASE" in message
 
 
 def test_invalid_urls_are_rejected(monkeypatch):

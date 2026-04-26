@@ -22,39 +22,52 @@ async function capture(page: Page, testInfo: TestInfo, name: string): Promise<vo
   await page.screenshot({ path: path.join(targetDir, `${name}.png`), fullPage: true });
 }
 
-test("complete realtime conversation flow and view transcript in history", async ({ page }) => {
-  test.skip(
-    process.env.RTC_E2E_ENABLED !== "1",
-    "Set RTC_E2E_ENABLED=1 with valid Volcengine credentials to run live RTC flow."
-  );
+test.describe("Realtime Conversation Flow", () => {
+  test.setTimeout(120_000); // Enforce 2 minutes max to respect user cost guardrails
 
-  await page.goto("/");
-  await capture(page, test.info(), "01-home");
+  test.afterEach(async ({ page }) => {
+    // Explicitly hang up the call as a guardrail in case of test failure
+    const endCallBtn = page.getByRole("button", { name: "End call" });
+    if (await endCallBtn.isVisible().catch(() => false)) {
+      await endCallBtn.click().catch(() => {});
+    }
+  });
 
-  await page.getByRole("button", { name: "Start Practice" }).click();
-  await expect(page).toHaveURL(/\/practice/);
-  await capture(page, test.info(), "02-practice-list");
+  test("complete realtime conversation flow and view transcript in history", async ({ page }) => {
+    test.skip(
+      process.env.RTC_E2E_ENABLED !== "1",
+      "Set RTC_E2E_ENABLED=1 with valid Volcengine credentials to run live RTC flow."
+    );
 
-  const startButtons = page.getByRole("button", { name: "Start Practice", exact: true });
-  await expect(startButtons.first()).toBeVisible();
-  await startButtons.first().click();
+    await page.goto("/");
+    await capture(page, test.info(), "01-home");
 
-  await expect(page).toHaveURL(/\/practice\/[^/]+$/);
-  const realtimeUrl = page.url();
-  const sessionId = realtimeUrl.split("/").pop() ?? "";
-  expect(sessionId).not.toEqual("");
-  await capture(page, test.info(), "03-phone-call-room-entered");
+    await page.getByRole("button", { name: "Start Practice" }).click();
+    await expect(page).toHaveURL(/\/practice/);
+    await capture(page, test.info(), "02-practice-list");
 
-  await expect(page.getByText("Transcript")).toHaveCount(0);
-  await expect(page.getByText("Connected")).toBeVisible({ timeout: 45_000 });
-  await capture(page, test.info(), "04-rtc-connected");
+    const startButtons = page.getByRole("button", { name: "Start Practice", exact: true });
+    await expect(startButtons.first()).toBeVisible();
+    await startButtons.first().click();
 
-  await page.getByRole("button", { name: "End call" }).click();
-  await expect(page).toHaveURL("/");
-  await capture(page, test.info(), "05-call-ended-home");
+    await expect(page).toHaveURL(/\/practice\/[^/]+$/);
+    const realtimeUrl = page.url();
+    const sessionId = realtimeUrl.split("/").pop() ?? "";
+    expect(sessionId).not.toEqual("");
+    await capture(page, test.info(), "03-phone-call-room-entered");
 
-  await page.goto(`/history/${sessionId}`);
-  await expect(page.getByRole("heading", { name: "Transcript" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "End call" })).toHaveCount(0);
-  await capture(page, test.info(), "06-history-transcript");
+    await expect(page.getByText("Transcript")).toHaveCount(0);
+    await expect(page.getByText("Connected")).toBeVisible({ timeout: 45_000 });
+    await capture(page, test.info(), "04-rtc-connected");
+
+    await page.getByRole("button", { name: "End call" }).click();
+    await expect(page).toHaveURL("/");
+    await capture(page, test.info(), "05-call-ended-home");
+
+    await page.goto(`/history/${sessionId}`);
+    await expect(page.getByRole("heading", { name: "Transcript" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "End call" })).toHaveCount(0);
+    await capture(page, test.info(), "06-history-transcript");
+  });
 });
+

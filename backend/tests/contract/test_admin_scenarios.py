@@ -161,7 +161,6 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")

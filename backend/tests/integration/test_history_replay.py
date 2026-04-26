@@ -18,7 +18,6 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
@@ -193,14 +192,6 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
         
         async def get_signed_url(self, url, expires=900):
             return f"{url}?signed=1"
-
-    async def _noop_initial_turn(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(
-        "app.services.turn_pipeline.generate_initial_ai_turn",
-        _noop_initial_turn,
-    )
 
     app.dependency_overrides[history_routes._session_repo] = lambda: FakeSessionRepo()
     app.dependency_overrides[history_routes._scenario_repo] = lambda: FakeScenarioRepo()

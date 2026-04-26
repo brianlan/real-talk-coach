@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from fastapi import BackgroundTasks
 
 import pytest
 
 from app.api.routes import sessions as sessions_routes
+from app.services import session_service
 from app.repositories.session_repository import PracticeSessionRecord, TurnRecord
 
 
@@ -34,6 +36,7 @@ async def test_session_created_emits_event(monkeypatch):
             objective_reason=payload["objectiveReason"],
             termination_reason=payload["terminationReason"],
             evaluation_id=payload["evaluationId"],
+            mode=payload.get("mode", "turn_based"),
         )
 
     async def _update_session(session_id, payload):
@@ -55,6 +58,7 @@ async def test_session_created_emits_event(monkeypatch):
             objective_reason=payload.get("objectiveReason"),
             termination_reason=payload.get("terminationReason"),
             evaluation_id=payload.get("evaluationId"),
+            mode=payload.get("mode", "realtime"),
         )
 
     class FakeRepo:
@@ -89,11 +93,11 @@ async def test_session_created_emits_event(monkeypatch):
                 "Scenario",
                 (),
                 {
-                    "ai_persona": {"name": "AI", "background": "Background"},
-                    "trainee_persona": {"name": "Trainee", "background": "Background"},
-                    "objective": "Objective",
-                    "end_criteria": ["End"],
-                    "prompt": "Hello",
+                    "context": {"situation": "A coaching call"},
+                    "simulation_config": {
+                        "ai": {"name": "AI", "background": "Background"},
+                        "trainee": {"name": "Trainee", "background": "Background"},
+                    },
                     "status": "published",
                     "idle_limit_seconds": 8,
                     "duration_limit_seconds": 300,
@@ -104,7 +108,6 @@ async def test_session_created_emits_event(monkeypatch):
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
@@ -114,12 +117,6 @@ async def test_session_created_emits_event(monkeypatch):
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
 
     monkeypatch.setattr(sessions_routes, "emit_event", fake_emit_event)
-    async def _noop_initial_turn(*args, **kwargs):
-        return None
-    monkeypatch.setattr(
-        "app.services.turn_pipeline.generate_initial_ai_turn",
-        _noop_initial_turn,
-    )
 
     payload = sessions_routes.PracticeSessionCreate(
         scenarioId="scenario-1",
@@ -135,3 +132,42 @@ async def test_session_created_emits_event(monkeypatch):
 
     assert calls
     assert calls[0][0] == "session.created"
+
+
+@pytest.mark.asyncio
+async def test_initiate_session_keeps_realtime_startup_side_effect_free():
+    update_calls = []
+
+    class FakeRepo:
+        async def update_session(self, session_id, payload):
+            update_calls.append((session_id, payload))
+            return PracticeSessionRecord(
+                id=session_id,
+                scenario_id="scenario-1",
+                stub_user_id="pilot-user",
+                language="en",
+                opening_prompt=None,
+                status=payload.get("status", "active"),
+                client_session_started_at="2025-01-01T00:00:00Z",
+                started_at=payload.get("startedAt"),
+                ended_at=None,
+                total_duration_seconds=None,
+                idle_limit_seconds=8,
+                duration_limit_seconds=300,
+                ws_channel=f"/ws/sessions/{session_id}",
+                objective_status="unknown",
+                objective_reason=None,
+                termination_reason=None,
+                evaluation_id=None,
+                mode="realtime",
+            )
+
+    await session_service.initiate_session(
+        FakeRepo(),  # pyright: ignore[reportArgumentType]
+        "session-realtime",
+        scenario=SimpleNamespace(id="scenario-1"),
+        language="en",
+    )
+
+    assert update_calls
+    assert update_calls[0][1]["status"] == "active"

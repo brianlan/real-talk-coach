@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
 
 from app.main import app
-from app.api.routes import turns as turns_routes
-from app.api.routes.session_socket import hub
 from app.repositories.scenario_repository import Scenario
 from app.repositories.session_repository import PracticeSessionRecord, SessionRepository, TurnRecord
+from app.services import session_service
 
 
 @pytest.fixture(autouse=True)
@@ -18,7 +18,6 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
@@ -26,6 +25,14 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
+
+
+@pytest.fixture(autouse=True)
+def _reset_session_service_state(monkeypatch):
+    session_service._FINALIZE_LOCKS.clear()
+    session_service._PENDING_EVALUATION_TASKS.clear()
+    session_service._EVALUATION_ENQUEUED.clear()
+    monkeypatch.setattr(session_service, "_REALTIME_EVALUATION_GRACE_SECONDS", 0.0)
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +49,7 @@ def _stub_repositories(monkeypatch):
             "id": record.id,
             "scenario_id": record.scenario_id,
             "stub_user_id": record.stub_user_id,
+            "user_id": record.user_id,
             "language": record.language,
             "opening_prompt": record.opening_prompt,
             "status": record.status,
@@ -56,10 +64,15 @@ def _stub_repositories(monkeypatch):
             "objective_reason": record.objective_reason,
             "termination_reason": record.termination_reason,
             "evaluation_id": record.evaluation_id,
+            "mode": record.mode,
+            "rtc_room_id": record.rtc_room_id,
+            "rtc_task_id": record.rtc_task_id,
+            "realtime_state": record.realtime_state,
         }
         mapping = {
             "scenarioId": "scenario_id",
             "stubUserId": "stub_user_id",
+            "userId": "user_id",
             "language": "language",
             "openingPrompt": "opening_prompt",
             "clientSessionStartedAt": "client_session_started_at",
@@ -74,6 +87,10 @@ def _stub_repositories(monkeypatch):
             "terminationReason": "termination_reason",
             "evaluationId": "evaluation_id",
             "status": "status",
+            "mode": "mode",
+            "rtcRoomId": "rtc_room_id",
+            "rtcTaskId": "rtc_task_id",
+            "realtimeState": "realtime_state",
         }
         for key, value in payload.items():
             field = mapping.get(key)
@@ -142,6 +159,7 @@ def _stub_repositories(monkeypatch):
             id=session_id,
             scenario_id=payload.get("scenarioId", ""),
             stub_user_id=payload.get("stubUserId", ""),
+            user_id=payload.get("userId"),
             language=payload.get("language", "en"),
             opening_prompt=payload.get("openingPrompt", "Hello"),
             status=payload.get("status", "pending"),
@@ -156,6 +174,10 @@ def _stub_repositories(monkeypatch):
             objective_reason=payload.get("objectiveReason"),
             termination_reason=payload.get("terminationReason"),
             evaluation_id=payload.get("evaluationId"),
+            mode=payload.get("mode", "turn_based"),
+            rtc_room_id=payload.get("rtcRoomId"),
+            rtc_task_id=payload.get("rtcTaskId"),
+            realtime_state=payload.get("realtimeState"),
         )
         sessions[session_id] = record
         return record
@@ -261,35 +283,7 @@ def _stub_repositories(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _stub_pipeline(monkeypatch):
-    async def _noop_pipeline(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(turns_routes, "enqueue_turn_pipeline", _noop_pipeline)
-
-    async def _noop_initial_turn(*, session_id: str, scenario, opening_prompt=None, language=None):
-        repo = SessionRepository(object())  # pyright: ignore[reportArgumentType]
-        await repo.add_turn(
-            {
-                "sessionId": session_id,
-                "sequence": 0,
-                "speaker": "ai",
-                "transcript": "Hello",
-                "audioFileId": "pending",
-                "audioUrl": "",
-                "asrStatus": "not_applicable",
-                "startedAt": None,
-                "endedAt": None,
-                "context": "",
-                "latencyMs": None,
-            }
-        )
-
-    monkeypatch.setattr(
-        "app.services.turn_pipeline.generate_initial_ai_turn",
-        _noop_initial_turn,
-    )
-
+def _stub_runtime(monkeypatch):
     async def fake_broadcast(session_id, payload):
         return None
 
@@ -325,20 +319,6 @@ async def test_practice_flow_turns_and_termination():
         assert response.status_code == 201
         session = response.json()
 
-        turn_start = datetime.now(timezone.utc)
-        turn_response = await client.post(
-            f"/api/sessions/{session['id']}/turns",
-            json={
-                "sequence": 1,
-                "audioBase64": "YQ==",
-                "startedAt": turn_start.isoformat(),
-                "endedAt": (turn_start + timedelta(seconds=1)).isoformat(),
-            },
-        )
-        assert turn_response.status_code == 202
-        turn_receipt = turn_response.json()
-        assert turn_receipt["sessionId"] == session["id"]
-
         stop_response = await client.post(
             f"/api/sessions/{session['id']}/manual-stop",
             json={"reason": "manual"},
@@ -347,7 +327,7 @@ async def test_practice_flow_turns_and_termination():
 
 
 @pytest.mark.asyncio
-async def test_objective_check_outcomes_trigger_session_end():
+async def test_manual_stop_supports_qa_error_reason():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
@@ -359,63 +339,6 @@ async def test_objective_check_outcomes_trigger_session_end():
         )
         assert response.status_code == 201
         session = response.json()
-
-        turn_one_start = datetime.now(timezone.utc)
-        await client.post(
-            f"/api/sessions/{session['id']}/turns",
-            json={
-                "sequence": 1,
-                "audioBase64": "YQ==",
-                "startedAt": turn_one_start.isoformat(),
-                "endedAt": (turn_one_start + timedelta(seconds=1)).isoformat(),
-            },
-        )
-
-        turn_two_start = datetime.now(timezone.utc)
-        await client.post(
-            f"/api/sessions/{session['id']}/turns",
-            json={
-                "sequence": 2,
-                "audioBase64": "YQ==",
-                "startedAt": turn_two_start.isoformat(),
-                "endedAt": (turn_two_start + timedelta(seconds=1)).isoformat(),
-                "context": "objective-check=pass",
-            },
-        )
-
-        stop_response = await client.post(
-            f"/api/sessions/{session['id']}/manual-stop",
-            json={"reason": "manual"},
-        )
-        assert stop_response.status_code == 202
-
-
-@pytest.mark.asyncio
-async def test_qwen_outage_graceful_termination():
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/api/sessions",
-            json={
-                "scenarioId": "scenario-1",
-                "clientSessionStartedAt": _timestamp(),
-            },
-        )
-        assert response.status_code == 201
-        session = response.json()
-
-        turn_start = datetime.now(timezone.utc)
-        turn_response = await client.post(
-            f"/api/sessions/{session['id']}/turns",
-            json={
-                "sequence": 1,
-                "audioBase64": "YQ==",
-                "startedAt": turn_start.isoformat(),
-                "endedAt": (turn_start + timedelta(seconds=1)).isoformat(),
-                "context": "force-qwen-outage",
-            },
-        )
-        assert turn_response.status_code == 202
 
         stop_response = await client.post(
             f"/api/sessions/{session['id']}/manual-stop",
@@ -451,11 +374,101 @@ async def test_session_completion_enqueues_evaluation(monkeypatch):
         )
         assert stop_response.status_code == 202
 
+    await asyncio.sleep(0)
+
     assert calls["count"] == 1
 
 
 @pytest.mark.asyncio
-async def test_ai_turn_zero_emitted_on_session_create(monkeypatch):
+async def test_manual_stop_finalizes_realtime_session_cleanly(monkeypatch):
+    enqueue_calls: list[str] = []
+
+    def fake_enqueue(session_id: str) -> None:
+        enqueue_calls.append(session_id)
+
+    monkeypatch.setattr("app.services.session_service.enqueue", fake_enqueue)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/sessions",
+            json={
+                "scenarioId": "scenario-1",
+                "clientSessionStartedAt": _timestamp(),
+            },
+        )
+        assert response.status_code == 201
+        session = response.json()
+
+        stop_response = await client.post(
+            f"/api/sessions/{session['id']}/manual-stop",
+            json={"reason": "manual"},
+        )
+        assert stop_response.status_code == 202
+
+    await asyncio.sleep(0)
+    repo = SessionRepository(object())  # pyright: ignore[reportArgumentType]
+    final_session = await repo.get_session(session["id"])
+
+    assert final_session is not None
+    assert final_session.status == "ended"
+    assert final_session.termination_reason == "manual"
+    assert final_session.realtime_state == "ended"
+    assert final_session.ended_at is not None
+    assert enqueue_calls == [session["id"]]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_terminal_updates_enqueue_evaluation_once(monkeypatch):
+    enqueue_calls: list[str] = []
+
+    def fake_enqueue(session_id: str) -> None:
+        enqueue_calls.append(session_id)
+
+    monkeypatch.setattr("app.services.session_service.enqueue", fake_enqueue)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/sessions",
+            json={
+                "scenarioId": "scenario-1",
+                "clientSessionStartedAt": _timestamp(),
+            },
+        )
+        assert response.status_code == 201
+        session = response.json()
+
+        stop_response = await client.post(
+            f"/api/sessions/{session['id']}/manual-stop",
+            json={"reason": "manual"},
+        )
+        assert stop_response.status_code == 202
+
+        from app.api.routes.callbacks import DoubaoCallbackPayload, _mark_conversation_ended
+        from app.repositories.session_repository import SessionRepository
+
+        repo = SessionRepository(app.state.mongodb)
+        processed = await _mark_conversation_ended(
+            session["id"],
+            repo,
+            DoubaoCallbackPayload(event="conversation_end", RunStage="taskStop"),
+        )
+
+    await asyncio.sleep(0)
+    repo = SessionRepository(object())  # pyright: ignore[reportArgumentType]
+    final_session = await repo.get_session(session["id"])
+
+    assert processed is True
+    assert final_session is not None
+    assert final_session.status == "ended"
+    assert final_session.termination_reason == "manual"
+    assert final_session.realtime_state == "ended"
+    assert enqueue_calls == [session["id"]]
+
+
+@pytest.mark.asyncio
+async def test_realtime_session_create_does_not_emit_ai_turn_zero(monkeypatch):
     events = []
 
     async def fake_broadcast(session_id, payload):
@@ -465,34 +478,6 @@ async def test_ai_turn_zero_emitted_on_session_create(monkeypatch):
         "app.api.routes.session_socket.hub.broadcast",
         fake_broadcast,
     )
-    async def fake_initial_turn(*, session_id: str, scenario, opening_prompt=None, language=None):
-        await hub.broadcast(
-            session_id,
-            {
-                "type": "ai_turn",
-                "turn": {
-                    "id": "turn-0",
-                    "sessionId": session_id,
-                    "sequence": 0,
-                    "speaker": "ai",
-                    "transcript": "Hello",
-                    "audioFileId": "pending",
-                    "audioUrl": "",
-                    "asrStatus": "not_applicable",
-                    "createdAt": None,
-                    "startedAt": None,
-                    "endedAt": None,
-                    "context": "",
-                    "latencyMs": None,
-                },
-            },
-        )
-
-    monkeypatch.setattr(
-        "app.services.turn_pipeline.generate_initial_ai_turn",
-        fake_initial_turn,
-    )
-
     now = datetime.now(timezone.utc).isoformat()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
@@ -504,7 +489,4 @@ async def test_ai_turn_zero_emitted_on_session_create(monkeypatch):
         )
         assert response.status_code == 201
 
-    assert any(
-        payload.get("type") == "ai_turn" and payload.get("turn", {}).get("sequence") == 0
-        for _, payload in events
-    )
+    assert events == []

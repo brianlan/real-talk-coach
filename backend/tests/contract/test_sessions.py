@@ -19,6 +19,9 @@ from app.main import app
 from app.repositories.session_repository import PracticeSessionRecord
 
 
+created_session_payload: dict | None = None
+
+
 # ---------------------------------------------------------------------------
 # Canonical nested scenario fixture
 # ---------------------------------------------------------------------------
@@ -109,7 +112,6 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_ID", "app")
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
@@ -121,6 +123,7 @@ def _set_env(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _override_repo(monkeypatch):
+    global created_session_payload
     nested_doc = _make_nested_scenario_doc()
 
     async def _list_published(*args, **kwargs):
@@ -141,7 +144,9 @@ def _override_repo(monkeypatch):
         return []
 
     async def _create_session(payload):
+        global created_session_payload
         nonlocal created_session
+        created_session_payload = dict(payload)
         created_session = PracticeSessionRecord(
             id="session-1",
             scenario_id=payload["scenarioId"],
@@ -160,6 +165,7 @@ def _override_repo(monkeypatch):
             objective_reason=payload["objectiveReason"],
             termination_reason=payload["terminationReason"],
             evaluation_id=payload["evaluationId"],
+            mode=payload.get("mode", "turn_based"),
         )
         return created_session
 
@@ -186,6 +192,7 @@ def _override_repo(monkeypatch):
                     "terminationReason", created_session.termination_reason
                 ),
                 evaluation_id=created_session.evaluation_id,
+                mode=payload.get("mode", created_session.mode),
             )
         return PracticeSessionRecord(
             id=session_id,
@@ -205,34 +212,13 @@ def _override_repo(monkeypatch):
             objective_reason=payload.get("objectiveReason"),
             termination_reason=payload.get("terminationReason"),
             evaluation_id=payload.get("evaluationId"),
+            mode=payload.get("mode", "turn_based"),
         )
-
-    async def _add_turn(payload):
-        return type(
-            "Turn",
-            (),
-            {
-                "id": "turn-0",
-                "session_id": payload["sessionId"],
-                "sequence": payload["sequence"],
-                "speaker": payload["speaker"],
-                "transcript": payload["transcript"],
-                "audio_file_id": payload["audioFileId"],
-                "audio_url": payload["audioUrl"],
-                "asr_status": payload["asrStatus"],
-                "created_at": payload.get("createdAt"),
-                "started_at": payload["startedAt"],
-                "ended_at": payload["endedAt"],
-                "context": payload.get("context"),
-                "latency_ms": payload.get("latencyMs"),
-            },
-        )()
 
     class FakeSessionRepo:
         list_sessions = staticmethod(_list_sessions)
         create_session = staticmethod(_create_session)
         update_session = staticmethod(_update_session)
-        add_turn = staticmethod(_add_turn)
 
     class FakeScenarioRepo:
         async def get(self, scenario_id: str):
@@ -242,13 +228,8 @@ def _override_repo(monkeypatch):
     app.dependency_overrides[sessions_routes._repo] = lambda: FakeSessionRepo()
     app.dependency_overrides[sessions_routes._scenario_repo] = lambda: FakeScenarioRepo()
 
-    async def _noop_initial_turn(*args, **kwargs):
-        return None
-    monkeypatch.setattr(
-        "app.services.turn_pipeline.generate_initial_ai_turn",
-        _noop_initial_turn,
-    )
     yield
+    created_session_payload = None
     app.dependency_overrides.pop(scenarios_routes._repo, None)
     app.dependency_overrides.pop(sessions_routes._repo, None)
     app.dependency_overrides.pop(sessions_routes._scenario_repo, None)
@@ -365,6 +346,23 @@ async def test_create_session_contract():
     assert body["clientSessionStartedAt"] == payload["clientSessionStartedAt"]
     assert "id" in body
     assert "wsChannel" in body
+
+
+@pytest.mark.asyncio
+async def test_create_session_realtime_mode_is_persisted():
+    now = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "scenarioId": "scenario-1",
+        "clientSessionStartedAt": now,
+    }
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/sessions", json=payload)
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert created_session_payload is not None
+    assert created_session_payload["mode"] == "realtime"
 
 
 @pytest.mark.asyncio

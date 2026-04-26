@@ -153,6 +153,7 @@ async def create_session(
                 "scenarioId": payload.scenarioId,
                 "stubUserId": settings.stub_user_id,
                 "userId": resolved_user_id,
+                "mode": "realtime",
                 "language": language,
                 "openingPrompt": None,
                 "status": "pending",
@@ -236,15 +237,9 @@ async def manual_stop(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     ended_at = datetime.now(timezone.utc).isoformat()
-    update_payload = {
-        "status": "ended",
-        "terminationReason": reason,
-        "endedAt": ended_at,
-    }
-    record = await repo.update_session(session_id, update_payload)
+    record = await terminate_session(repo, session_id, reason, ended_at)
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    await terminate_session(repo, session_id, reason, ended_at)
     emit_event(
         "session.terminated",
         session_id=session_id,

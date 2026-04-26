@@ -56,6 +56,11 @@ def create_mock_turn(turn_id: str, sequence: int = 1, speaker: str = "trainee"):
 def mock_repo():
     """Create a mock SessionRepository."""
     repo = MagicMock()
+    repo.get_session = AsyncMock(
+        side_effect=lambda session_id: create_mock_session(session_id)
+        if session_id == TEST_SESSION_ID
+        else None
+    )
     repo.get_session_by_rtc_task_id = AsyncMock(return_value=create_mock_session())
     repo.get_session_by_rtc_room_id = AsyncMock(return_value=create_mock_session())
     repo.list_turns = AsyncMock(return_value=[])
@@ -182,8 +187,10 @@ class TestSignatureVerification:
 class TestTranscriptCallback:
     """Tests for transcript callback processing."""
 
-    def test_transcript_callback_creates_turn(self, client, callback_url, mock_repo, monkeypatch):
-        """Transcript callback should create a new turn."""
+    def test_realtime_transcript_update_creates_trainee_turn(
+        self, client, callback_url, mock_repo, monkeypatch
+    ):
+        """Transcript callback should create a trainee turn with stable realtime fields."""
         monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
 
         mock_repo.list_turns = AsyncMock(return_value=[])
@@ -212,6 +219,11 @@ class TestTranscriptCallback:
         assert data["processed"] is True
         assert data["turnsCreated"] == 1
         mock_repo.add_turn.assert_called_once()
+        payload = mock_repo.add_turn.call_args[0][0]
+        assert payload["speaker"] == "trainee"
+        assert payload["sequence"] == 2
+        assert payload["transcript"] == "Hello, this is the trainee speaking."
+        assert payload["asrStatus"] == "completed"
 
     def test_transcript_callback_updates_existing_turn(
         self, client, callback_url, mock_repo, monkeypatch
@@ -219,7 +231,7 @@ class TestTranscriptCallback:
         """Transcript callback should update existing turn with same sequence."""
         monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
 
-        existing_turn = create_mock_turn("existing-turn-123", sequence=1, speaker="trainee")
+        existing_turn = create_mock_turn("existing-turn-123", sequence=2, speaker="trainee")
         mock_repo.list_turns = AsyncMock(return_value=[existing_turn])
 
         payload = {
@@ -245,6 +257,41 @@ class TestTranscriptCallback:
         data = response.json()
         assert data["turnsUpdated"] == 1
         mock_repo.update_turn.assert_called_once()
+
+    def test_realtime_transcript_update_creates_ai_turn(
+        self, client, callback_url, mock_repo, monkeypatch
+    ):
+        """Transcript callback should create an AI turn with stable realtime sequence."""
+        monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
+        mock_repo.list_turns = AsyncMock(return_value=[])
+
+        payload = {
+            "event": "transcript_update",
+            "sessionId": TEST_SESSION_ID,
+            "aiTranscript": "AI response here.",
+            "RoundID": 1,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = generate_signature(TEST_CALLBACK_SECRET, body)
+
+        response = client.post(
+            callback_url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Signature": signature,
+            },
+        )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["turnsCreated"] == 1
+        mock_repo.add_turn.assert_called_once()
+        payload = mock_repo.add_turn.call_args[0][0]
+        assert payload["speaker"] == "ai"
+        assert payload["sequence"] == 3
+        assert payload["transcript"] == "AI response here."
+        assert payload["asrStatus"] is None
 
     def test_user_and_ai_transcript_callback(self, client, callback_url, mock_repo, monkeypatch):
         """Callback with both user and AI transcripts should create two turns."""
@@ -273,6 +320,174 @@ class TestTranscriptCallback:
         assert response.status_code == 202
         data = response.json()
         assert data["turnsCreated"] == 2
+        add_calls = [call.args[0] for call in mock_repo.add_turn.call_args_list]
+        assert add_calls[0]["speaker"] == "trainee"
+        assert add_calls[0]["sequence"] == 2
+        assert add_calls[1]["speaker"] == "ai"
+        assert add_calls[1]["sequence"] == 3
+
+    def test_realtime_duplicate_transcript_update_updates_in_place(
+        self, client, callback_url, mock_repo, monkeypatch
+    ):
+        """Duplicate realtime transcript callbacks should update the same turn in place."""
+        monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
+
+        existing_turn = create_mock_turn("existing-turn-123", sequence=3, speaker="ai")
+        mock_repo.list_turns = AsyncMock(return_value=[existing_turn])
+
+        payload = {
+            "event": "transcript_update",
+            "sessionId": TEST_SESSION_ID,
+            "aiTranscript": "Refined AI transcript.",
+            "RoundID": 1,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = generate_signature(TEST_CALLBACK_SECRET, body)
+
+        response = client.post(
+            callback_url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Signature": signature,
+            },
+        )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["turnsCreated"] == 0
+        assert data["turnsUpdated"] == 1
+        mock_repo.add_turn.assert_not_called()
+        mock_repo.update_turn.assert_called_once()
+        assert mock_repo.update_turn.call_args[0][0] == "existing-turn-123"
+        update_payload = mock_repo.update_turn.call_args[0][1]
+        assert update_payload["transcript"] == "Refined AI transcript."
+        assert "asrStatus" in update_payload
+
+    def test_late_transcript_requeues_failed_empty_turn_evaluation(
+        self, client, callback_url, mock_repo, monkeypatch
+    ):
+        monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
+
+        ended_session = create_mock_session()
+        ended_session.status = "ended"
+        ended_session.mode = "realtime"
+        mock_repo.get_session = AsyncMock(return_value=ended_session)
+        mock_repo.list_turns = AsyncMock(return_value=[])
+
+        from app.api.routes import callbacks
+
+        evaluation_repo = MagicMock()
+        evaluation_repo.get_by_session = AsyncMock(
+            return_value=type(
+                "Eval",
+                (),
+                {
+                    "id": "eval-1",
+                    "status": "failed",
+                    "attempts": 1,
+                    "last_error": "Cannot evaluate session: no persisted turns found",
+                },
+            )()
+        )
+        evaluation_repo.update_evaluation = AsyncMock(return_value=object())
+        app.dependency_overrides[callbacks._evaluation_repo] = lambda: evaluation_repo
+
+        enqueue_calls: list[str] = []
+        monkeypatch.setattr(callbacks, "enqueue", lambda session_id: enqueue_calls.append(session_id))
+
+        payload = {
+            "event": "transcript_update",
+            "sessionId": TEST_SESSION_ID,
+            "subtitleText": "Late transcript arrived.",
+            "fromUserId": "user1",
+            "RoundID": 1,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = generate_signature(TEST_CALLBACK_SECRET, body)
+
+        try:
+            response = client.post(
+                callback_url,
+                content=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Signature": signature,
+                },
+            )
+        finally:
+            app.dependency_overrides.pop(callbacks._evaluation_repo, None)
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["evaluationRequeued"] is True
+        evaluation_repo.update_evaluation.assert_awaited_once()
+        update_payload = evaluation_repo.update_evaluation.await_args.args[1]
+        assert update_payload["status"] == "pending"
+        assert update_payload["attempts"] == 2
+        assert update_payload["lastError"] is None
+        assert update_payload["completedAt"] is None
+        assert enqueue_calls == [TEST_SESSION_ID]
+
+    def test_transcript_callback_does_not_requeue_completed_evaluation(
+        self, client, callback_url, mock_repo, monkeypatch
+    ):
+        monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
+
+        ended_session = create_mock_session()
+        ended_session.status = "ended"
+        ended_session.mode = "realtime"
+        mock_repo.get_session = AsyncMock(return_value=ended_session)
+        mock_repo.list_turns = AsyncMock(return_value=[])
+
+        from app.api.routes import callbacks
+
+        evaluation_repo = MagicMock()
+        evaluation_repo.get_by_session = AsyncMock(
+            return_value=type(
+                "Eval",
+                (),
+                {
+                    "id": "eval-1",
+                    "status": "completed",
+                    "attempts": 1,
+                    "last_error": None,
+                },
+            )()
+        )
+        evaluation_repo.update_evaluation = AsyncMock(return_value=object())
+        app.dependency_overrides[callbacks._evaluation_repo] = lambda: evaluation_repo
+
+        enqueue_calls: list[str] = []
+        monkeypatch.setattr(callbacks, "enqueue", lambda session_id: enqueue_calls.append(session_id))
+
+        payload = {
+            "event": "transcript_update",
+            "sessionId": TEST_SESSION_ID,
+            "subtitleText": "Transcript after completion.",
+            "fromUserId": "user1",
+            "RoundID": 1,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = generate_signature(TEST_CALLBACK_SECRET, body)
+
+        try:
+            response = client.post(
+                callback_url,
+                content=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Signature": signature,
+                },
+            )
+        finally:
+            app.dependency_overrides.pop(callbacks._evaluation_repo, None)
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["evaluationRequeued"] is False
+        evaluation_repo.update_evaluation.assert_not_awaited()
+        assert enqueue_calls == []
 
 
 class TestInterruptCallback:
@@ -431,7 +646,41 @@ class TestSessionResolution:
         )
 
         assert response.status_code == 202
+        assert mock_repo.get_session.await_args_list[0].args == (TEST_SESSION_ID,)
         # Should not try to resolve via task_id or room_id
+        mock_repo.get_session_by_rtc_task_id.assert_not_called()
+        mock_repo.get_session_by_rtc_room_id.assert_not_called()
+
+    def test_resolves_session_from_dialog_id(self, client, callback_url, mock_repo, monkeypatch):
+        """Session should be resolved from direct dialog_id echo in E2E callbacks."""
+        monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
+
+        payload = {
+            "event": "transcript_update",
+            "dialog_id": TEST_SESSION_ID,
+            "transcripts": [
+                {
+                    "speaker": "assistant",
+                    "text": "How can I help today?",
+                    "sequence": 0,
+                }
+            ],
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = generate_signature(TEST_CALLBACK_SECRET, body)
+
+        response = client.post(
+            callback_url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Signature": signature,
+            },
+        )
+
+        assert response.status_code == 202
+        assert response.json()["sessionId"] == TEST_SESSION_ID
+        assert mock_repo.get_session.await_args_list[0].args == (TEST_SESSION_ID,)
         mock_repo.get_session_by_rtc_task_id.assert_not_called()
         mock_repo.get_session_by_rtc_room_id.assert_not_called()
 
@@ -439,6 +688,7 @@ class TestSessionResolution:
         """Session should be resolved from taskId when sessionId is missing."""
         monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
 
+        mock_repo.get_session = AsyncMock(return_value=None)
         mock_repo.get_session_by_rtc_task_id = AsyncMock(
             return_value=create_mock_session()
         )
@@ -467,6 +717,7 @@ class TestSessionResolution:
         """Session should be resolved from roomId when sessionId and taskId are missing."""
         monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
 
+        mock_repo.get_session = AsyncMock(return_value=None)
         mock_repo.get_session_by_rtc_task_id = AsyncMock(return_value=None)
         mock_repo.get_session_by_rtc_room_id = AsyncMock(
             return_value=create_mock_session()
@@ -491,3 +742,80 @@ class TestSessionResolution:
 
         assert response.status_code == 202
         mock_repo.get_session_by_rtc_room_id.assert_called_once_with(TEST_ROOM_ID)
+
+    def test_falls_back_to_room_id_when_direct_dialog_id_is_invalid(
+        self, client, callback_url, mock_repo, monkeypatch
+    ):
+        """Invalid direct dialog_id should not block fallback resolution."""
+        monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
+
+        mock_repo.get_session = AsyncMock(return_value=None)
+        mock_repo.get_session_by_rtc_task_id = AsyncMock(return_value=None)
+        mock_repo.get_session_by_rtc_room_id = AsyncMock(return_value=create_mock_session())
+
+        payload = {
+            "event": "transcript_update",
+            "dialog_id": "not-a-session-id",
+            "RoomId": TEST_ROOM_ID,
+            "transcripts": [
+                {
+                    "speaker": "user",
+                    "transcript": "I need help with a refund.",
+                    "sequence": 1,
+                }
+            ],
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = generate_signature(TEST_CALLBACK_SECRET, body)
+
+        response = client.post(
+            callback_url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Signature": signature,
+            },
+        )
+
+        assert response.status_code == 202
+        assert response.json()["sessionId"] == TEST_SESSION_ID
+        assert mock_repo.get_session.await_args_list[0].args == ("not-a-session-id",)
+        mock_repo.get_session_by_rtc_room_id.assert_called_once_with(TEST_ROOM_ID)
+
+    def test_rejects_unknown_direct_identifier_without_fallback(
+        self, client, callback_url, mock_repo, monkeypatch
+    ):
+        """Unknown direct identifiers must not create turns for a non-existent session."""
+        monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", TEST_CALLBACK_SECRET)
+
+        mock_repo.get_session = AsyncMock(return_value=None)
+        mock_repo.get_session_by_rtc_task_id = AsyncMock(return_value=None)
+        mock_repo.get_session_by_rtc_room_id = AsyncMock(return_value=None)
+
+        payload = {
+            "event": "transcript_update",
+            "dialog_id": "unknown-session-id",
+            "transcripts": [
+                {
+                    "speaker": "assistant",
+                    "text": "This callback should be rejected.",
+                    "sequence": 3,
+                }
+            ],
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = generate_signature(TEST_CALLBACK_SECRET, body)
+
+        response = client.post(
+            callback_url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Signature": signature,
+            },
+        )
+
+        assert response.status_code == 422
+        assert "Missing session identity" in response.json()["detail"]
+        mock_repo.add_turn.assert_not_called()
+        mock_repo.update_turn.assert_not_called()

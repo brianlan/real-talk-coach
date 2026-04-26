@@ -4,7 +4,7 @@
 - Python 3.11 + pipx or uv
 - Node.js 20 LTS + pnpm 9
 - Volcengine account with 端到端实时语音大模型 (SC2.0) credentials
-- qwen3-omni-flash + evaluator model API keys (DashScope OpenAI-compatible SDK >=1.52.0)
+- evaluator/opening-prompt model API keys
 - GPT-5 mini secretKey (https://api.chataiapi.com)
 
 ## Realtime Voice Conversation
@@ -47,9 +47,6 @@ Create `.env` files in both apps (never commit secrets). Use the examples below 
 ```bash
 cd backend
 uv sync  # or pip install -r requirements.txt
-# ensure qwen helpers are installed (inside uv/virtualenv):
-# uv pip install "openai>=1.52.0" numpy soundfile pydub ffmpeg-python
-
 cd ../frontend
 corepack enable  # ensures pnpm is available
 pnpm install
@@ -125,8 +122,8 @@ Recommended options:
 ## Practice session language & opening prompt
 - The scenario detail page includes a **language selector** (中文 / English) before starting practice.
 - The selected language is sent when creating a session (`language: "zh" | "en"`).
-- The backend generates an **LLM-based opening prompt** using `CHATAI_API_*`, stores it on the
-  session as `openingPrompt`, and uses it to seed the first AI turn.
+- The backend may generate an **LLM-based opening prompt** for realtime startup metadata and stores it on the
+  session as `openingPrompt` for downstream reads/debugging.
 
 ### Admin usage
 

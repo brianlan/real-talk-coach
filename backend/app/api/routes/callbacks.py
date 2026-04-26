@@ -13,7 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.clients.mongodb import MongoDBClient
 from app.dependencies import get_mongodb_client
+from app.repositories.evaluation_repository import EvaluationRepository
 from app.repositories.session_repository import SessionRepository, TurnRecord
+from app.services.session_service import finalize_session
+from app.tasks.evaluation_runner import enqueue, failed_due_to_missing_turns
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,6 +46,7 @@ class DoubaoCallbackPayload(BaseModel):
     EventTime: int | None = None
     sessionId: str | None = None
     session_id: str | None = None
+    dialog_id: str | None = None
     taskId: str | None = None
     TaskId: str | None = None
     RoomId: str | None = None
@@ -61,6 +65,12 @@ class DoubaoCallbackPayload(BaseModel):
 
 def _repo(mongodb: MongoDBClient = Depends(get_mongodb_client)) -> SessionRepository:
     return SessionRepository(mongodb)
+
+
+def _evaluation_repo(
+    mongodb: MongoDBClient = Depends(get_mongodb_client),
+) -> EvaluationRepository:
+    return EvaluationRepository(mongodb)
 
 
 def _extract_signature(payload: DoubaoCallbackPayload, request: Request) -> str:
@@ -104,6 +114,15 @@ def _normalize_speaker(raw: str | None) -> Literal["trainee", "ai"]:
     return "trainee"
 
 
+def _round_sequence(round_id: int | None, speaker: str | None) -> int | None:
+    if round_id is None:
+        return None
+    base_sequence = round_id * 2
+    if _normalize_speaker(speaker) == "ai":
+        return base_sequence + 1
+    return base_sequence
+
+
 def _resolve_event_type(payload: DoubaoCallbackPayload) -> str:
     for candidate in (payload.event, payload.event_type, payload.type):
         value = (candidate or "").strip().lower()
@@ -124,9 +143,14 @@ def _resolve_event_type(payload: DoubaoCallbackPayload) -> str:
 
 
 async def _resolve_session_id(payload: DoubaoCallbackPayload, repo: SessionRepository) -> str | None:
-    direct = (payload.sessionId or payload.session_id or "").strip()
-    if direct:
-        return direct
+    for candidate in (payload.sessionId, payload.session_id, payload.dialog_id):
+        direct = (candidate or "").strip()
+        if not direct:
+            continue
+
+        session = await repo.get_session(direct)
+        if session:
+            return session.id
 
     task_id = (payload.taskId or payload.TaskId or "").strip()
     if task_id:
@@ -150,7 +174,7 @@ def _candidate_transcripts(payload: DoubaoCallbackPayload) -> list[TranscriptIte
             TranscriptItem(
                 speaker=payload.fromUserId,
                 transcript=payload.subtitleText,
-                sequence=payload.RoundID,
+                sequence=_round_sequence(payload.RoundID, payload.fromUserId),
             )
         )
     if payload.transcript or payload.text:
@@ -158,7 +182,7 @@ def _candidate_transcripts(payload: DoubaoCallbackPayload) -> list[TranscriptIte
             TranscriptItem(
                 speaker=payload.fromUserId,
                 transcript=payload.transcript or payload.text,
-                sequence=payload.RoundID,
+                sequence=_round_sequence(payload.RoundID, payload.fromUserId),
             )
         )
     if payload.userTranscript:
@@ -166,17 +190,15 @@ def _candidate_transcripts(payload: DoubaoCallbackPayload) -> list[TranscriptIte
             TranscriptItem(
                 speaker="trainee",
                 transcript=payload.userTranscript,
-                sequence=payload.RoundID,
+                sequence=_round_sequence(payload.RoundID, "trainee"),
             )
         )
     if payload.aiTranscript:
-        base_sequence = payload.RoundID * 2 if payload.RoundID is not None else None
-        ai_sequence = (base_sequence + 1) if base_sequence is not None else None
         entries.append(
             TranscriptItem(
                 speaker="ai",
                 transcript=payload.aiTranscript,
-                sequence=ai_sequence,
+                sequence=_round_sequence(payload.RoundID, "ai"),
             )
         )
     return [entry for entry in entries if (entry.transcript or entry.text or "").strip()]
@@ -242,7 +264,7 @@ async def _upsert_transcript_turns(
                 "sequence": sequence,
                 "speaker": speaker,
                 "transcript": transcript,
-                "audioFileId": "callback",
+                "audioFileId": "",
                 "audioUrl": None,
                 "asrStatus": "completed" if speaker == "trainee" else None,
                 "startedAt": datetime.now(timezone.utc).isoformat(),
@@ -257,6 +279,42 @@ async def _upsert_transcript_turns(
     return {"created": created, "updated": updated}
 
 
+async def _recover_failed_realtime_evaluation_if_needed(
+    session_id: str,
+    repo: SessionRepository,
+    evaluation_repo: EvaluationRepository,
+    *,
+    persisted_turns: int,
+) -> bool:
+    if persisted_turns <= 0:
+        return False
+
+    session = await repo.get_session(session_id)
+    if not session or session.status != "ended" or session.mode != "realtime":
+        return False
+
+    evaluation = await evaluation_repo.get_by_session(session_id)
+    if not failed_due_to_missing_turns(evaluation):
+        return False
+
+    queued_at = datetime.now(timezone.utc).isoformat()
+    updated = await evaluation_repo.update_evaluation(
+        evaluation.id,
+        {
+            "status": "pending",
+            "attempts": evaluation.attempts + 1,
+            "lastError": None,
+            "queuedAt": queued_at,
+            "completedAt": None,
+        },
+    )
+    if not updated:
+        return False
+
+    enqueue(session_id)
+    return True
+
+
 async def _mark_conversation_ended(
     session_id: str,
     repo: SessionRepository,
@@ -266,7 +324,8 @@ async def _mark_conversation_ended(
     termination_reason = (
         payload.model_extra.get("reason") if payload.model_extra else None
     ) or "conversation_end"
-    updated = await repo.update_session(
+    updated = await finalize_session(
+        repo,
         session_id,
         {
             "status": "ended",
@@ -309,6 +368,7 @@ async def _mark_interrupt(
 async def receive_doubao_callback(
     request: Request,
     repo: SessionRepository = Depends(_repo),
+    evaluation_repo: EvaluationRepository = Depends(_evaluation_repo),
 ):
     raw_body = await request.body()
     try:
@@ -348,7 +408,20 @@ async def receive_doubao_callback(
     try:
         if event_type == "transcript_update" and session_id:
             counts = await _upsert_transcript_turns(payload, session_id, repo)
-            response.update({"processed": True, "turnsCreated": counts["created"], "turnsUpdated": counts["updated"]})
+            recovered = await _recover_failed_realtime_evaluation_if_needed(
+                session_id,
+                repo,
+                evaluation_repo,
+                persisted_turns=counts["created"] + counts["updated"],
+            )
+            response.update(
+                {
+                    "processed": True,
+                    "turnsCreated": counts["created"],
+                    "turnsUpdated": counts["updated"],
+                    "evaluationRequeued": recovered,
+                }
+            )
         elif event_type == "conversation_end" and session_id:
             response["processed"] = await _mark_conversation_ended(session_id, repo, payload)
         elif event_type == "interrupt" and session_id:
