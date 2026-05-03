@@ -594,7 +594,7 @@ def _build_start_session_payload(
         speaker = maybe_speaker.strip()
 
     payload: dict[str, Any] = {
-        "asr": {"extra": {"end_smooth_window_ms": 500}},
+        "asr": {"extra": {"enable_custom_vad": True, "end_smooth_window_ms": 2000}},
         "tts": {
             "audio_config": {
                 "channel": 1,

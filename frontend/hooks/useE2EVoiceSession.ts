@@ -17,8 +17,8 @@ type UseE2EVoiceSession = {
 const TARGET_SAMPLE_RATE = 16000;
 const PLAYBACK_SAMPLE_RATE = 24000;
 const VAD_THRESHOLD = 0.01;
-const COMMIT_SILENCE_MS = 700;
-const FORCE_COMMIT_MS = 1200;
+const COMMIT_SILENCE_MS = 2000;
+const FORCE_COMMIT_MS = 2500;
 const MAX_RECONNECT_DELAY_MS = 20000;
 
 function isDebugPromptsEnabled(): boolean {
