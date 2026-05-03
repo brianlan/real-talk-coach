@@ -77,6 +77,7 @@ class _RealtimeTranscriptState:
     user_sequences_by_question: dict[str, int] = field(default_factory=dict)
     ai_turn_ids_by_reply: dict[str, str] = field(default_factory=dict)
     ai_sequences_by_reply: dict[str, int] = field(default_factory=dict)
+    ai_accumulated_text_by_reply: dict[str, str] = field(default_factory=dict)
 
 
 def _load_e2e_config() -> E2EConfig:
@@ -537,24 +538,34 @@ async def _persist_upstream_transcript_event(
 
     if event == EVENT_LLM_TEXT:
         content = payload.get("content")
-        if not isinstance(content, str) or not content.strip():
+        if not isinstance(content, str):
             return
-        await _persist_ai_transcript(
-            repo,
-            session_id,
-            state,
-            question_id=_resolve_question_id_from_payload(payload, state),
-            reply_id=_resolve_reply_id_from_payload(payload, state),
-            transcript=content,
-            is_final=False,
-        )
+        reply_id = _resolve_reply_id_from_payload(payload, state)
+        target = reply_id or state.active_reply_id
+        if target:
+            state.ai_accumulated_text_by_reply[target] = (
+                state.ai_accumulated_text_by_reply.get(target, "") + content
+            )
         return
 
     if event == EVENT_LLM_TEXT_END:
+        reply_id = _resolve_reply_id_from_payload(payload, state)
+        target = reply_id or state.active_reply_id
+        accumulated = state.ai_accumulated_text_by_reply.pop(target, "") if target else ""
+        if accumulated.strip():
+            await _persist_ai_transcript(
+                repo,
+                session_id,
+                state,
+                question_id=_resolve_question_id_from_payload(payload, state),
+                reply_id=reply_id,
+                transcript=accumulated,
+                is_final=True,
+            )
         await _finalize_ai_transcript(
             repo,
             state,
-            reply_id=_resolve_reply_id_from_payload(payload, state),
+            reply_id=reply_id,
         )
 
 

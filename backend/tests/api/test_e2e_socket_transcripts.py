@@ -166,6 +166,52 @@ async def test_upstream_transcript_events_persist_user_and_ai_turns() -> None:
 
 
 @pytest.mark.asyncio
+async def test_streaming_llm_text_accumulates_across_tokens() -> None:
+    repo = FakeSessionRepo()
+    state = _RealtimeTranscriptState()
+    session_id = "session-1"
+
+    # User speaks
+    await _persist_upstream_transcript_event(
+        cast(Any, repo), session_id, state,
+        450, {"question_id": "question-1"},
+    )
+    await _persist_upstream_transcript_event(
+        cast(Any, repo), session_id, state,
+        451, {"question_id": "question-1", "results": [{"text": "Hello", "is_interim": False}]},
+    )
+    await _persist_upstream_transcript_event(
+        cast(Any, repo), session_id, state,
+        459, {"question_id": "question-1"},
+    )
+
+    # AI streams token-by-token via event 550
+    for token in ["I ", "understand ", "your ", "concern", "."]:
+        await _persist_upstream_transcript_event(
+            cast(Any, repo), session_id, state,
+            550, {"question_id": "question-1", "reply_id": "reply-1", "content": token},
+        )
+
+    # Before LLM_TEXT_END, DB should NOT have the AI turn yet
+    turns_before = await repo.list_turns(session_id)
+    assert all(t.speaker != "ai" for t in turns_before)
+
+    # Final event triggers persistence of accumulated text
+    await _persist_upstream_transcript_event(
+        cast(Any, repo), session_id, state,
+        559, {"question_id": "question-1", "reply_id": "reply-1"},
+    )
+
+    turns = sorted(await repo.list_turns(session_id), key=lambda t: t.sequence)
+    assert len(turns) == 2
+
+    ai_turn = turns[1]
+    assert ai_turn.speaker == "ai"
+    assert ai_turn.transcript == "I understand your concern."
+    assert ai_turn.ended_at is not None
+
+
+@pytest.mark.asyncio
 async def test_callback_transcript_update_reuses_socket_persisted_turn_by_context_identifier() -> None:
     repo = FakeSessionRepo()
     existing = await repo.add_turn(
