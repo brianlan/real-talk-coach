@@ -215,6 +215,9 @@ async def _run_attempts(
                     session_id,
                     message,
                 )
+                if attempt_index < len(backoff_seconds):
+                    await asyncio.sleep(backoff_seconds[attempt_index])
+                    continue
             except Exception as exc:
                 status_code = getattr(exc, "status_code", None)
                 body = getattr(exc, "body", None)

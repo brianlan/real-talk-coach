@@ -1269,6 +1269,6 @@ async def test_late_transcript_failed_realtime_evaluation_can_recover(monkeypatc
 
     assert evaluation_record.status == "completed"
     assert evaluation_record.summary == "Recovered after transcript arrived"
-    assert evaluation_record.attempts == 2
+    assert evaluation_record.attempts == 4
     assert evaluation_record.last_error is None
     assert evaluation_record.scores[0]["skillId"] == "clear_request"
