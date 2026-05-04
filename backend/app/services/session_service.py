@@ -140,6 +140,8 @@ async def finalize_session(
     repo: SessionRepository,
     session_id: str,
     payload: dict[str, Any],
+    *,
+    realtime_source: bool = False,
 ) -> PracticeSessionRecord | None:
     async with _session_lock(session_id):
         existing = await repo.get_session(session_id)
@@ -167,6 +169,12 @@ async def finalize_session(
         session = await repo.update_session(session_id, update_payload)
         if not session:
             return None
+
+        # For realtime sessions, only the e2e socket path triggers evaluation.
+        # manual_stop and callback paths skip it to avoid races with
+        # in-flight transcript persistence.
+        if session.mode == "realtime" and not realtime_source:
+            return session
 
         await _maybe_enqueue_terminal_evaluation(repo, session)
 

@@ -728,7 +728,7 @@ async def _finalize_realtime_session(
     }
     if termination_reason:
         payload["terminationReason"] = termination_reason
-    await finalize_session(repo, session_id, payload)
+    await finalize_session(repo, session_id, payload, realtime_source=True)
 
 
 async def _pipe_upstream_events(
@@ -982,9 +982,6 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
                 {to_upstream, to_client},
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            for task in pending:
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
             for task in done:
                 if task.cancelled():
                     continue
@@ -994,14 +991,38 @@ async def e2e_voice_socket(websocket: WebSocket, session_id: str):
 
             if to_upstream in done:
                 termination_reason = to_upstream.result()
+
+                # Client pipe finished (user ended call). Drain upstream
+                # gracefully so in-flight transcript events are persisted.
+                if to_client in pending:
+                    try:
+                        await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=runtime_session_id))
+                        await upstream_ws.send(_build_full_request(EVENT_FINISH_CONNECTION, {}))
+                    except WebSocketException:
+                        pass
+                    try:
+                        await asyncio.wait_for(to_client, timeout=3.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Timed out draining upstream for session %s", session_id)
+                        to_client.cancel()
+                        try:
+                            await to_client
+                        except (asyncio.CancelledError, Exception):
+                            pass
             elif to_client in done:
                 termination_reason = "upstream_finish"
+                if to_upstream in pending:
+                    to_upstream.cancel()
+                    try:
+                        await to_upstream
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                try:
+                    await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=runtime_session_id))
+                    await upstream_ws.send(_build_full_request(EVENT_FINISH_CONNECTION, {}))
+                except WebSocketException:
+                    pass
 
-            try:
-                await upstream_ws.send(_build_full_request(EVENT_FINISH_SESSION, {}, session_id=runtime_session_id))
-                await upstream_ws.send(_build_full_request(EVENT_FINISH_CONNECTION, {}))
-            except WebSocketException:
-                pass
             await _finalize_realtime_session(
                 session_repository,
                 session_id,

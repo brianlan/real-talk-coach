@@ -469,7 +469,7 @@ async def test_realtime_session_history_and_evaluation_use_existing_turn_contrac
             )
             evaluation_response = await client.get(f"/api/sessions/{session_id}/evaluation")
 
-        assert enqueue_calls == [session_id]
+        assert enqueue_calls == []  # realtime eval deferred to e2e socket
         assert captured_context is not None
         assert [turn["speaker"] for turn in captured_context.turns] == ["trainee", "ai"]
         assert [turn["transcript"] for turn in captured_context.turns] == [

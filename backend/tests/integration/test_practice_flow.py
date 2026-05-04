@@ -376,7 +376,7 @@ async def test_session_completion_enqueues_evaluation(monkeypatch):
 
     await asyncio.sleep(0)
 
-    assert calls["count"] == 1
+    assert calls["count"] == 0  # realtime sessions defer eval to e2e socket
 
 
 @pytest.mark.asyncio
@@ -415,7 +415,7 @@ async def test_manual_stop_finalizes_realtime_session_cleanly(monkeypatch):
     assert final_session.termination_reason == "manual"
     assert final_session.realtime_state == "ended"
     assert final_session.ended_at is not None
-    assert enqueue_calls == [session["id"]]
+    assert enqueue_calls == []  # realtime eval deferred to e2e socket
 
 
 @pytest.mark.asyncio
@@ -464,7 +464,7 @@ async def test_duplicate_terminal_updates_enqueue_evaluation_once(monkeypatch):
     assert final_session.status == "ended"
     assert final_session.termination_reason == "manual"
     assert final_session.realtime_state == "ended"
-    assert enqueue_calls == [session["id"]]
+    assert enqueue_calls == []  # realtime eval deferred to e2e socket
 
 
 @pytest.mark.asyncio
