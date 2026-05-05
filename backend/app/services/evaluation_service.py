@@ -119,8 +119,9 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
             {
                 "role": "system",
                 "content": (
-                    "You evaluate trainee performance. Use the tool call to return JSON "
-                    "with scores and summary. Do not include extra text."
+                    "You evaluate trainee performance. "
+                    "You MUST call the evaluation_result function to return your evaluation. "
+                    "Do not respond with plain text."
                 ),
             },
             {
@@ -169,7 +170,7 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
                 },
             }
         ],
-        "tool_choice": {"type": "function", "function": {"name": "evaluation_result"}},
+        "tool_choice": "auto",
     }
     try:
         with start_span(
@@ -190,8 +191,13 @@ async def evaluate_session(context: EvaluationContext) -> EvaluationResult:
                     fallback_messages[0][
                         "content"
                     ] = (
-                        "Return only JSON with keys 'scores' and 'summary'. "
-                        "Do not include extra text."
+                        "Return only JSON matching this exact schema. "
+                        "Do not include any other text.\n"
+                        '{"scores": [{"skillId": "...", "rating": N, "note": "..."}], '
+                        '"summary": "..."}\n'
+                        "scores MUST be an array of objects. "
+                        "Each object has skillId (string), rating (integer 1-5), "
+                        "and note (string). summary MUST be a string."
                     )
                     fallback_payload["messages"] = fallback_messages
                     response = await client.evaluate(fallback_payload)
