@@ -15,9 +15,9 @@ async def test_history_list_span_attributes(monkeypatch):
     def fake_start_span(name, attributes=None):
         spans.append((name, attributes))
         class Dummy:
-            def __enter__(self_inner):
+            def __enter__(self):
                 return None
-            def __exit__(self_inner, exc_type, exc, tb):
+            def __exit__(self, exc_type, exc, tb):
                 return False
         return Dummy()
 
@@ -44,6 +44,11 @@ async def test_history_list_span_attributes(monkeypatch):
                 objective_reason=None,
                 termination_reason="manual",
                 evaluation_id=None,
+                user_id=None,
+                mode="turn_based",
+                rtc_room_id=None,
+                rtc_task_id=None,
+                realtime_state=None,
             )
         ]
 
@@ -56,9 +61,12 @@ async def test_history_list_span_attributes(monkeypatch):
                 "Scenario",
                 (),
                 {
-                    "category": "Feedback",
-                    "title": "Growth",
-                    "objective": "Grow",
+                    "id": scenario_id,
+                    "metadata": {"domain": "Feedback", "title": "Growth"},
+                    "context": {"situation": "Growth conversation"},
+                    "simulation_config": {},
+                    "evaluation_config": {},
+                    "status": "published",
                 },
             )()
 
@@ -69,10 +77,9 @@ async def test_history_list_span_attributes(monkeypatch):
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")

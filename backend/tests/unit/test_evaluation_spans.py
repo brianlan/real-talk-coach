@@ -17,10 +17,9 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
@@ -130,9 +129,20 @@ async def test_evaluation_runner_store_spans_include_session_id(monkeypatch):
                 "Scenario",
                 (),
                 {
-                    "title": "Scenario",
-                    "objective": "Objective",
-                    "skill_summaries": [],
+                    "metadata": {"title": "Scenario"},
+                    "context": {"situation": "A feedback conversation."},
+                    "evaluation_config": {
+                        "learningObjectives": ["Make a clear request."],
+                        "evaluationCriteria": [
+                            {
+                                "id": "criterion-1",
+                                "description": "Explains the request clearly.",
+                            }
+                        ],
+                        "skillsAssessed": ["criterion-1"],
+                        "scoring": {"scale": "1-5"},
+                        "evaluationInstructionsForLLM": "Use the criterion id as skillId.",
+                    },
                 },
             )()
 
@@ -162,7 +172,7 @@ async def test_evaluation_runner_store_spans_include_session_id(monkeypatch):
 
     await evaluation_runner._run_attempts(
         "session-1",
-        FakeRepos(
+        FakeRepos(  # pyright: ignore[reportArgumentType]
             session_repo=FakeSessionRepo(),
             scenario_repo=FakeScenarioRepo(),
             evaluation_repo=FakeEvaluationRepo(),
@@ -217,9 +227,14 @@ async def test_evaluation_service_spans_include_session_id(monkeypatch):
     context = evaluation_service.EvaluationContext(
         session_id="session-1",
         scenario_title="Scenario",
-        objective="Objective",
-        end_criteria=["End the session after agreement."],
-        skill_summaries=[{"skillId": "skill-1", "name": "Skill", "rubric": "Rubric"}],
+        scenario_context={"situation": "A feedback conversation."},
+        learning_objectives=["Make a clear request."],
+        evaluation_criteria=[
+            {"id": "criterion-1", "description": "Explains the request clearly."}
+        ],
+        skills_assessed=["criterion-1"],
+        scoring={"scale": "1-5"},
+        evaluation_instructions="Use the criterion id as skillId.",
         turns=[{"speaker": "ai", "transcript": "Hi"}],
     )
     result = await evaluation_service.evaluate_session(context)

@@ -37,40 +37,45 @@ def _admin_id(token: str | None) -> str:
 
 
 def _validate_required(data: dict[str, Any]) -> None:
-    required = [
-        "category",
-        "title",
-        "description",
-        "objective",
-        "aiPersona",
-        "traineePersona",
-        "endCriteria",
-        "skills",
-    ]
-    missing = [field for field in required if not data.get(field)]
+    top_level = ["metadata", "context", "simulationConfig", "evaluationConfig"]
+    missing = [field for field in top_level if not data.get(field)]
     if missing:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Missing required fields: {', '.join(missing)}",
         )
-    if not isinstance(data.get("skills"), list) or len(data.get("skills", [])) == 0:
+    sim = data.get("simulationConfig", {})
+    _require_nested(sim, "ai", "simulationConfig.ai")
+    _require_nested(sim, "trainee", "simulationConfig.trainee")
+    _require_nested(sim, "conversationStart", "simulationConfig.conversationStart")
+    ev = data.get("evaluationConfig", {})
+    _require_list(ev, "evaluationCriteria", "evaluationConfig.evaluationCriteria")
+    _require_list(ev, "skillsAssessed", "evaluationConfig.skillsAssessed")
+
+
+def _require_nested(parent: dict, key: str, path: str) -> None:
+    if not parent.get(key):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="At least one skill is required",
+            detail=f"Missing required field: {path}",
+        )
+
+
+def _require_list(parent: dict, key: str, path: str) -> None:
+    val = parent.get(key)
+    if not isinstance(val, list) or len(val) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Missing or empty required field: {path}",
         )
 
 
 def _record_to_payload(record: AdminScenarioRecord) -> dict[str, Any]:
     return {
-        "category": record.category,
-        "title": record.title,
-        "description": record.description,
-        "objective": record.objective,
-        "aiPersona": record.ai_persona,
-        "traineePersona": record.trainee_persona,
-        "endCriteria": record.end_criteria,
-        "skills": record.skills,
-        "prompt": record.prompt,
+        "metadata": record.metadata,
+        "context": record.context,
+        "simulationConfig": record.simulationConfig,
+        "evaluationConfig": record.evaluationConfig,
         "status": record.status,
     }
 
@@ -102,7 +107,7 @@ class AdminScenariosService:
                 action="create",
                 entity_type="scenario",
                 entity_id=record.id,
-                details=f"Created scenario {record.title}",
+                details=f"Created scenario {record.metadata.get('title', record.id)}",
             )
             return record
         except Exception as exc:

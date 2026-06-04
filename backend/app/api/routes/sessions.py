@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import re
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, status
 
@@ -60,34 +60,33 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
 
 
 
+def _scenario_dict(scenario: Any, snake_name: str, camel_name: str) -> dict[str, Any]:
+    value = getattr(scenario, snake_name, None) or getattr(scenario, camel_name, None)
+    return value if isinstance(value, dict) else {}
+
+
 def _validate_scenario_for_practice(scenario) -> None:
     missing: list[str] = []
 
-    ai_persona = getattr(scenario, "ai_persona", None)
-    trainee_persona = getattr(scenario, "trainee_persona", None)
-    objective = getattr(scenario, "objective", "") or ""
-    end_criteria = getattr(scenario, "end_criteria", None) or []
+    context = _scenario_dict(scenario, "context", "context")
+    simulation_config = _scenario_dict(scenario, "simulation_config", "simulationConfig")
+    ai_persona = simulation_config.get("ai") if isinstance(simulation_config.get("ai"), dict) else None
+    trainee_persona = simulation_config.get("trainee") if isinstance(simulation_config.get("trainee"), dict) else None
 
     if not ai_persona:
-        missing.append("aiPersona")
+        missing.append("simulationConfig.ai")
     else:
         if not ai_persona.get("name"):
-            missing.append("aiPersona.name")
-        if not ai_persona.get("background"):
-            missing.append("aiPersona.background")
+            missing.append("simulationConfig.ai.name")
 
     if not trainee_persona:
-        missing.append("traineePersona")
+        missing.append("simulationConfig.trainee")
     else:
         if not trainee_persona.get("name"):
-            missing.append("traineePersona.name")
-        if not trainee_persona.get("background"):
-            missing.append("traineePersona.background")
+            missing.append("simulationConfig.trainee.name")
 
-    if not objective:
-        missing.append("objective")
-    if not end_criteria:
-        missing.append("endCriteria")
+    if not context:
+        missing.append("context")
 
     if missing:
         raise HTTPException(
@@ -97,10 +96,13 @@ def _validate_scenario_for_practice(scenario) -> None:
 
 
 def _detect_language(scenario) -> str:
+    metadata = _scenario_dict(scenario, "metadata", "metadata")
+    context = _scenario_dict(scenario, "context", "context")
     text_bits = [
-        getattr(scenario, "title", "") or "",
-        getattr(scenario, "description", "") or "",
-        getattr(scenario, "objective", "") or "",
+        metadata.get("title", "") or "",
+        context.get("situation", "") or "",
+        context.get("background", "") or "",
+        context.get("setting", "") or "",
     ]
     text = " ".join(bit for bit in text_bits if bit)
     if re.search(r"[\u4e00-\u9fff]", text):
@@ -145,11 +147,13 @@ async def create_session(
                 detail=str(exc),
             ) from exc
         now = datetime.now(timezone.utc).isoformat()
+        scenario_any = cast(Any, scenario)
         record = await repo.create_session(
             {
                 "scenarioId": payload.scenarioId,
                 "stubUserId": settings.stub_user_id,
                 "userId": resolved_user_id,
+                "mode": "realtime",
                 "language": language,
                 "openingPrompt": None,
                 "status": "pending",
@@ -157,8 +161,8 @@ async def create_session(
                 "startedAt": now,
                 "endedAt": None,
                 "totalDurationSeconds": None,
-                "idleLimitSeconds": scenario.idle_limit_seconds,
-                "durationLimitSeconds": scenario.duration_limit_seconds,
+                "idleLimitSeconds": getattr(scenario_any, "idle_limit_seconds", None),
+                "durationLimitSeconds": getattr(scenario_any, "duration_limit_seconds", None),
                 "wsChannel": "/ws/sessions/pending",
                 "objectiveStatus": "unknown",
                 "objectiveReason": None,
@@ -233,15 +237,9 @@ async def manual_stop(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     ended_at = datetime.now(timezone.utc).isoformat()
-    update_payload = {
-        "status": "ended",
-        "terminationReason": reason,
-        "endedAt": ended_at,
-    }
-    record = await repo.update_session(session_id, update_payload)
+    record = await terminate_session(repo, session_id, reason, ended_at)
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    await terminate_session(repo, session_id, reason, ended_at)
     emit_event(
         "session.terminated",
         session_id=session_id,

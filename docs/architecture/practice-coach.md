@@ -2,13 +2,13 @@
 
 ## Architecture Summary
 - **Backend**: FastAPI + Uvicorn with async HTTP/WebSocket handlers and in-process background tasks.
-- **Frontend**: Next.js 15 App Router; practice room uses Web Audio + WebSocket streams.
+- **Frontend**: Next.js 15 App Router; practice uses realtime phone-call UI over Web Audio + WebSocket streams.
 - **Storage**: LeanCloud LObject/LFile via REST; no additional DB.
-- **LLMs**: qwen3-omni-flash for audio generation/ASR; GPT-5 mini for objective checks + evaluations.
+- **LLMs**: realtime voice model for live conversation; text-only models for opening prompts, objective checks, and evaluations.
 
 ## API Surface (Primary)
 - `GET /api/scenarios` / `GET /api/skills` for catalog metadata.
-- `POST /api/sessions` to start sessions; `POST /api/sessions/{id}/turns` for audio turns.
+- `POST /api/sessions` to start sessions.
 - `GET /api/sessions` / `GET /api/sessions/{id}` for history list/detail (requires `historyStepCount`).
 - `POST /api/sessions/{id}/manual-stop` and `DELETE /api/sessions/{id}` for lifecycle control.
 - `GET/POST /api/sessions/{id}/evaluation` for evaluation status + requeue.
@@ -19,10 +19,9 @@
 ### Session Lifecycle
 1. Client starts session (`POST /api/sessions`) with `clientSessionStartedAt`.
 2. Server enforces drift and capacity caps; persists `PracticeSession`.
-3. Session initializes AI turn 0 via `turn_pipeline`, emits WebSocket `ai_turn`.
-4. Trainee turns are uploaded; server stores audio in LeanCloud, triggers qwen generation + ASR.
-5. Objective checks run after AI replies; terminal status sets `terminationReason`.
-6. Terminal state enqueues evaluation runner; WebSocket emits `evaluation_ready` when complete.
+3. Realtime websocket startup and callbacks own transcript and lifecycle updates.
+4. Objective checks/evaluation run from persisted realtime turn history.
+5. Terminal state enqueues evaluation runner; WebSocket emits `evaluation_ready` when complete.
 
 ### Evaluation Flow
 1. `evaluation_runner.enqueue()` creates/updates Evaluation record with `pending` status.
@@ -56,7 +55,7 @@
 
 ### Mitigation Options
 - **Short-term**: Manually end stale sessions that are stuck in `pending` or `active`.
-- **Operational**: Increase session cap only if CPU/memory headroom and qwen rate limits allow.
+- **Operational**: Increase session cap only if CPU/memory headroom and realtime provider limits allow.
 - **Product**: Queue users in the UI and retry automatically with exponential backoff.
 
 ### Follow-up

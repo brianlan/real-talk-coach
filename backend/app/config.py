@@ -19,11 +19,9 @@ class Settings:
     minio_secret_key: str
     minio_bucket: str
     minio_public_endpoint: str | None
-    dashscope_api_key: str
-    qwen_voice_id: str | None
-    chatai_api_base: str
-    chatai_api_key: str
-    chatai_api_model: str
+    openai_compatible_api_base: str
+    openai_compatible_api_key: str
+    openai_compatible_api_model: str
     evaluator_model: str
     objective_check_api_base: str
     objective_check_api_key: str
@@ -32,6 +30,22 @@ class Settings:
     admin_access_token: str
     admin_audit_admin_id: str | None
     admin_auth_disabled: bool
+    volcengine_access_key_id: str | None
+    volcengine_secret_access_key: str | None
+    volcengine_rtc_app_id: str | None
+    volcengine_rtc_app_key: str | None
+    volcengine_voice_chat_endpoint: str | None
+    volcengine_voice_model_id: str | None
+    volcengine_e2e_ws_url: str | None
+    volcengine_e2e_api_key: str | None
+    volcengine_e2e_model: str | None
+    volcengine_e2e_app_id: str | None
+    volcengine_e2e_resource_id: str | None
+    volcengine_e2e_speaker: str | None
+    volcengine_e2e_app_key: str | None
+    realtime_voice_model_app_id: str | None
+    realtime_voice_model_access_token: str | None
+    realtime_voice_model_secret_key: str | None
 
 
 def _require_env(name: str) -> str:
@@ -84,13 +98,15 @@ def load_settings() -> Settings:
     minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin").strip()
     minio_bucket = os.getenv("MINIO_BUCKET", "audio").strip()
     minio_public_endpoint = _optional_env("MINIO_PUBLIC_ENDPOINT")
-    dashscope_api_key = _require_env("DASHSCOPE_API_KEY")
-    qwen_voice_id = _optional_env("QWEN_VOICE_ID")
-    chatai_api_base = _require_url("CHATAI_API_BASE", _require_env("CHATAI_API_BASE"))
-    chatai_api_key = _require_env("CHATAI_API_KEY")
-    chatai_api_model = _require_env("CHATAI_API_MODEL")
+    openai_compatible_api_base = _require_url(
+        "OPENAI_COMPATIBLE_API_BASE", _require_env("OPENAI_COMPATIBLE_API_BASE")
+    )
+    openai_compatible_api_key = _require_env("OPENAI_COMPATIBLE_API_KEY")
+    openai_compatible_api_model = _require_env("OPENAI_COMPATIBLE_API_MODEL")
     evaluator_model = _require_env("EVALUATOR_MODEL")
-    objective_check_api_base = _optional_env("OBJECTIVE_CHECK_API_BASE") or chatai_api_base
+    objective_check_api_base = (
+        _optional_env("OBJECTIVE_CHECK_API_BASE") or openai_compatible_api_base
+    )
     objective_check_api_base = _require_url(
         "OBJECTIVE_CHECK_API_BASE", objective_check_api_base
     )
@@ -100,6 +116,22 @@ def load_settings() -> Settings:
     admin_access_token = _require_env("ADMIN_ACCESS_TOKEN")
     admin_audit_admin_id = _optional_env("ADMIN_AUDIT_ADMIN_ID")
     admin_auth_disabled = _optional_bool("ADMIN_AUTH_DISABLED", default=False)
+    volcengine_access_key_id = _optional_env("VOLCENGINE_ACCESS_KEY_ID")
+    volcengine_secret_access_key = _optional_env("VOLCENGINE_SECRET_ACCESS_KEY")
+    volcengine_rtc_app_id = _optional_env("VOLCENGINE_RTC_APP_ID")
+    volcengine_rtc_app_key = _optional_env("VOLCENGINE_RTC_APP_KEY")
+    volcengine_voice_chat_endpoint = _optional_env("VOLCENGINE_VOICE_CHAT_ENDPOINT")
+    volcengine_voice_model_id = _optional_env("VOLCENGINE_VOICE_MODEL_ID")
+    volcengine_e2e_ws_url = _optional_env("VOLCENGINE_E2E_WS_URL")
+    volcengine_e2e_api_key = _optional_env("VOLCENGINE_E2E_API_KEY")
+    volcengine_e2e_model = _optional_env("VOLCENGINE_E2E_MODEL")
+    volcengine_e2e_app_id = _optional_env("VOLCENGINE_E2E_APP_ID")
+    volcengine_e2e_resource_id = _optional_env("VOLCENGINE_E2E_RESOURCE_ID")
+    volcengine_e2e_speaker = _optional_env("VOLCENGINE_E2E_SPEAKER")
+    volcengine_e2e_app_key = _optional_env("VOLCENGINE_E2E_APP_KEY")
+    realtime_voice_model_app_id = _optional_env("REALTIME_VOICE_MODEL_APP_ID")
+    realtime_voice_model_access_token = _optional_env("REALTIME_VOICE_MODEL_ACCESS_TOKEN")
+    realtime_voice_model_secret_key = _optional_env("REALTIME_VOICE_MODEL_SECRET_KEY")
 
     return Settings(
         mongo_host=mongo_host,
@@ -110,11 +142,9 @@ def load_settings() -> Settings:
         minio_secret_key=minio_secret_key,
         minio_bucket=minio_bucket,
         minio_public_endpoint=minio_public_endpoint,
-        dashscope_api_key=dashscope_api_key,
-        qwen_voice_id=qwen_voice_id,
-        chatai_api_base=chatai_api_base,
-        chatai_api_key=chatai_api_key,
-        chatai_api_model=chatai_api_model,
+        openai_compatible_api_base=openai_compatible_api_base,
+        openai_compatible_api_key=openai_compatible_api_key,
+        openai_compatible_api_model=openai_compatible_api_model,
         evaluator_model=evaluator_model,
         objective_check_api_base=objective_check_api_base,
         objective_check_api_key=objective_check_api_key,
@@ -123,4 +153,20 @@ def load_settings() -> Settings:
         admin_access_token=admin_access_token,
         admin_audit_admin_id=admin_audit_admin_id,
         admin_auth_disabled=admin_auth_disabled,
+        volcengine_access_key_id=volcengine_access_key_id,
+        volcengine_secret_access_key=volcengine_secret_access_key,
+        volcengine_rtc_app_id=volcengine_rtc_app_id,
+        volcengine_rtc_app_key=volcengine_rtc_app_key,
+        volcengine_voice_chat_endpoint=volcengine_voice_chat_endpoint,
+        volcengine_voice_model_id=volcengine_voice_model_id,
+        volcengine_e2e_ws_url=volcengine_e2e_ws_url,
+        volcengine_e2e_api_key=volcengine_e2e_api_key,
+        volcengine_e2e_model=volcengine_e2e_model,
+        volcengine_e2e_app_id=volcengine_e2e_app_id,
+        volcengine_e2e_resource_id=volcengine_e2e_resource_id,
+        volcengine_e2e_speaker=volcengine_e2e_speaker,
+        volcengine_e2e_app_key=volcengine_e2e_app_key,
+        realtime_voice_model_app_id=realtime_voice_model_app_id,
+        realtime_voice_model_access_token=realtime_voice_model_access_token,
+        realtime_voice_model_secret_key=realtime_voice_model_secret_key,
     )

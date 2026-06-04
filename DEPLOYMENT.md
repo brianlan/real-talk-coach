@@ -14,7 +14,7 @@ Copy the example environment file and fill in the required credentials:
 cp backend/.env.example backend/.env
 ```
 
-Edit `backend/.env` with your MongoDB, MinIO, DashScope API key, and other required configuration.
+Edit `backend/.env` with your MongoDB, MinIO, realtime, and evaluator/opening-prompt configuration.
 
 #### Nginx Reverse Proxy Configuration
 When deploying behind the included Nginx proxy:

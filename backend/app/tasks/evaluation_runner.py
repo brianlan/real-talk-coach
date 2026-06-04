@@ -20,6 +20,24 @@ logger = logging.getLogger(__name__)
 
 _IN_FLIGHT: set[str] = set()
 _LOCK = asyncio.Lock()
+_TRACKING_CLEARER: Any | None = None
+
+
+class _EmptyTurnsError(Exception):
+    pass
+
+
+def _scenario_section(scenario: Any, snake_name: str, camel_name: str) -> dict[str, Any]:
+    value = getattr(scenario, snake_name, None)
+    if value is None:
+        value = getattr(scenario, camel_name, None)
+    return value if isinstance(value, dict) else {}
+
+
+def _scenario_title(scenario: Any) -> str:
+    metadata = _scenario_section(scenario, "metadata", "metadata")
+    title = metadata.get("title")
+    return title if isinstance(title, str) else ""
 
 
 @dataclass(frozen=True)
@@ -58,6 +76,17 @@ def enqueue(session_id: str) -> None:
     loop.create_task(_run_evaluation(session_id))
 
 
+def set_tracking_clearer(clearer) -> None:
+    global _TRACKING_CLEARER
+    _TRACKING_CLEARER = clearer
+
+
+def _clear_tracking_if_configured(session_id: str) -> None:
+    if _TRACKING_CLEARER is None:
+        return
+    _TRACKING_CLEARER(session_id)
+
+
 async def _run_evaluation(session_id: str) -> None:
     async with _LOCK:
         if session_id in _IN_FLIGHT:
@@ -72,6 +101,14 @@ async def _run_evaluation(session_id: str) -> None:
     finally:
         async with _LOCK:
             _IN_FLIGHT.discard(session_id)
+        _clear_tracking_if_configured(session_id)
+
+
+def failed_due_to_missing_turns(evaluation: EvaluationRecord | None) -> bool:
+    if not evaluation or evaluation.status != "failed":
+        return False
+    last_error = (evaluation.last_error or "").lower()
+    return "no persisted turns" in last_error
 
 
 async def _evaluate_with_retries(session_id: str, repos: _Repos) -> None:
@@ -171,6 +208,16 @@ async def _run_attempts(
                     },
                 )
                 return
+            except _EmptyTurnsError as exc:
+                message = str(exc)
+                logger.warning(
+                    "Evaluation skipped session_id=%s error=%s",
+                    session_id,
+                    message,
+                )
+                if attempt_index < len(backoff_seconds):
+                    await asyncio.sleep(backoff_seconds[attempt_index])
+                    continue
             except Exception as exc:
                 status_code = getattr(exc, "status_code", None)
                 body = getattr(exc, "body", None)
@@ -225,12 +272,26 @@ async def _evaluate_once(session_id: str, repos: _Repos):
     if not scenario:
         raise ValueError("scenario missing")
     turns = await repos.session_repo.list_turns(session_id)
+    turns.sort(key=lambda turn: turn.sequence)
+    if not turns:
+        raise _EmptyTurnsError(
+            "Cannot evaluate session: no persisted turns found"
+        )
+    evaluation_config = _scenario_section(
+        scenario, "evaluation_config", "evaluationConfig"
+    )
+    scenario_context = _scenario_section(scenario, "context", "context")
     context = EvaluationContext(
         session_id=session_id,
-        scenario_title=scenario.title,
-        objective=scenario.objective,
-        end_criteria=scenario.end_criteria,
-        skill_summaries=scenario.skill_summaries,
+        scenario_title=_scenario_title(scenario),
+        scenario_context=scenario_context,
+        learning_objectives=evaluation_config.get("learningObjectives", []),
+        evaluation_criteria=evaluation_config.get("evaluationCriteria", []),
+        skills_assessed=evaluation_config.get("skillsAssessed", []),
+        scoring=evaluation_config.get("scoring", {}),
+        evaluation_instructions=evaluation_config.get(
+            "evaluationInstructionsForLLM", ""
+        ),
         turns=[
             {"speaker": turn.speaker, "transcript": turn.transcript}
             for turn in turns

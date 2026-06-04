@@ -53,24 +53,20 @@ def _session_response(session: PracticeSessionRecord) -> dict[str, Any]:
         "objectiveStatus": session.objective_status,
         "objectiveReason": session.objective_reason,
         "evaluationId": session.evaluation_id,
+        "mode": session.mode,
+        "rtcRoomId": session.rtc_room_id,
+        "rtcTaskId": session.rtc_task_id,
+        "realtimeState": session.realtime_state,
     }
 
 
 def _scenario_response(scenario) -> dict[str, Any]:
     return {
         "id": scenario.id,
-        "category": scenario.category,
-        "title": scenario.title,
-        "description": scenario.description,
-        "objective": scenario.objective,
-        "aiPersona": scenario.ai_persona,
-        "traineePersona": scenario.trainee_persona,
-        "endCriteria": scenario.end_criteria,
-        "skills": scenario.skills,
-        "skillSummaries": scenario.skill_summaries,
-        "idleLimitSeconds": scenario.idle_limit_seconds,
-        "durationLimitSeconds": scenario.duration_limit_seconds,
-        "prompt": scenario.prompt,
+        "metadata": scenario.metadata,
+        "context": scenario.context,
+        "simulationConfig": scenario.simulation_config,
+        "evaluationConfig": scenario.evaluation_config,
     }
 
 
@@ -89,6 +85,8 @@ def _turn_response(turn: TurnRecord, signed_url: str | None) -> dict[str, Any]:
         "endedAt": turn.ended_at,
         "context": turn.context,
         "latencyMs": turn.latency_ms,
+        "isInterrupted": turn.is_interrupted,
+        "interruptedAtMs": turn.interrupted_at_ms,
     }
 
 
@@ -165,10 +163,13 @@ async def list_history(
                 scenario = scenario_map.get(session.scenario_id)
                 if not scenario:
                     continue
-                if category and scenario.category != category:
+                scenario_category = scenario.metadata.get("domain")
+                if category and scenario_category != category:
                     continue
                 if search:
-                    haystack = f"{scenario.title} {scenario.objective}".lower()
+                    title = scenario.metadata.get("title", "")
+                    situation = scenario.context.get("situation", "")
+                    haystack = f"{title} {situation}".lower()
                     if search.lower() not in haystack:
                         continue
                 filtered.append(session)

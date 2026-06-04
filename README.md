@@ -3,9 +3,39 @@
 ## Prerequisites
 - Python 3.11 + pipx or uv
 - Node.js 20 LTS + pnpm 9
-- LeanCloud single-tenant credentials (appId, appKey, masterKey)
-- qwen3-omni-flash + evaluator model API keys (DashScope OpenAI-compatible SDK >=1.52.0)
+- Volcengine account with 端到端实时语音大模型 (SC2.0) credentials
+- evaluator/opening-prompt model API keys
 - GPT-5 mini secretKey (https://api.chataiapi.com)
+
+## Realtime Voice Conversation
+Real Talk Coach supports **real-time voice conversation** with AI using Volcengine 6561 end-to-end voice model over WebSocket.
+
+### Features
+- Real-time bidirectional audio streaming between user and AI
+- Voice activity detection (VAD)
+- Low-latency speech synthesis
+- Automatic turn-taking based on voice activity
+
+### Volcengine Environment Variables
+Create a Volcengine 6561 application and configure these variables:
+
+```bash
+# Upstream websocket endpoint from 6561 docs
+VOLCENGINE_E2E_WS_URL=wss://your-upstream-websocket
+# Optional model id when required by endpoint
+VOLCENGINE_E2E_MODEL=
+
+# Credentials from realtime voice model console
+REALTIME_VOICE_MODEL_APP_ID=your_app_id
+REALTIME_VOICE_MODEL_ACCESS_TOKEN=your_access_token
+REALTIME_VOICE_MODEL_SECRET_KEY=your_secret_key
+```
+
+### Usage
+1. Start a practice session as usual
+2. Click the "📞 Call" button to join the realtime voice room
+3. Speak with the AI in real-time - the AI responds automatically when you stop speaking
+4. Click "End Call" to leave the room and return to text chat
 
 ## Environment
 Create `.env` files in both apps (never commit secrets). Use the examples below as a starting point:
@@ -17,9 +47,6 @@ Create `.env` files in both apps (never commit secrets). Use the examples below 
 ```bash
 cd backend
 uv sync  # or pip install -r requirements.txt
-# ensure qwen helpers are installed (inside uv/virtualenv):
-# uv pip install "openai>=1.52.0" numpy soundfile pydub ffmpeg-python
-
 cd ../frontend
 corepack enable  # ensures pnpm is available
 pnpm install
@@ -80,7 +107,7 @@ certificate warning.
 Notes:
 - `NODE_TLS_REJECT_UNAUTHORIZED=0` is **dev-only** to allow Next.js server-side fetches
   against the self-signed backend cert.
-- If you don’t want to disable TLS verification, use a trusted certificate instead (see below).
+- If you don't want to disable TLS verification, use a trusted certificate instead (see below).
 
 ## Certificates (dev)
 The HTTPS proxy and backend TLS use `frontend/.certs/cert.pem` and `frontend/.certs/key.pem`.
@@ -95,8 +122,8 @@ Recommended options:
 ## Practice session language & opening prompt
 - The scenario detail page includes a **language selector** (中文 / English) before starting practice.
 - The selected language is sent when creating a session (`language: "zh" | "en"`).
-- The backend generates an **LLM-based opening prompt** using `CHATAI_API_*`, stores it on the
-  session as `openingPrompt`, and uses it to seed the first AI turn.
+- The backend may generate an **LLM-based opening prompt** for realtime startup metadata and stores it on the
+  session as `openingPrompt` for downstream reads/debugging.
 
 ### Admin usage
 

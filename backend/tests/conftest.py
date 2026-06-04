@@ -2,8 +2,7 @@ import httpx
 import mongomock
 import pytest
 
-from app.clients.llm import EvaluatorClient, QwenClient
-from app.clients.mongodb import MongoDBClient
+from app.clients.llm import EvaluatorClient
 
 
 @pytest.fixture(autouse=True)
@@ -32,15 +31,23 @@ def _set_default_env(monkeypatch):
     monkeypatch.setenv("MINIO_ACCESS_KEY", "minioadmin")
     monkeypatch.setenv("MINIO_SECRET_KEY", "minioadmin")
     monkeypatch.setenv("MINIO_BUCKET", "audio")
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
     monkeypatch.setenv("ADMIN_ACCESS_TOKEN", "admin-token")
+    # Volcengine RTC env vars
+    monkeypatch.setenv("VOLCENGINE_ACCESS_KEY_ID", "ak-test")
+    monkeypatch.setenv("VOLCENGINE_SECRET_ACCESS_KEY", "sk-test")
+    monkeypatch.setenv("VOLCENGINE_RTC_APP_ID", "app-test")
+    monkeypatch.setenv("VOLCENGINE_RTC_APP_KEY", "app-key-test")
+    monkeypatch.setenv("VOLCENGINE_VOICE_CHAT_ENDPOINT", "https://rtc.volcengineapi.com")
+    monkeypatch.setenv("VOLCENGINE_VOICE_MODEL_ID", "doubao-voice-realtime")
+    monkeypatch.setenv("VOLCENGINE_CALLBACK_SIGNATURE", "test-callback-secret-key")
+    monkeypatch.setenv("VOLCENGINE_VOICE_MODEL_ID", "doubao-voice-realtime")
 
 
 @pytest.fixture
@@ -79,7 +86,7 @@ def mongomock_db(mongomock_client):
 def mongomock_client_fixture():
     """Provide an async-compatible MongoDB mock client for tests.
     
-    This fixture creates a mock MongoDB client that can be used in tests
+    This fixture creates a that can be used mock MongoDB client in tests
     instead of requiring a real MongoDB instance.
     
     Yields:
@@ -103,23 +110,6 @@ def mongomock_client_fixture():
             self._client.close()
     
     yield MockMongoDBClient(client)
-
-
-@pytest.fixture
-async def qwen_client():
-    async def handler(request):
-        if request.url.path.endswith("/chat/completions"):
-            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
-        return httpx.Response(200, json={"text": "ok"})
-
-    transport = httpx.MockTransport(handler)
-    client = QwenClient(
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        api_key="secret",
-        transport=transport,
-    )
-    yield client
-    await client.close()
 
 
 @pytest.fixture

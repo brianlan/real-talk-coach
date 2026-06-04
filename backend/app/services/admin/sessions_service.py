@@ -66,9 +66,9 @@ class AdminSessionsService:
         )
         title_map: dict[str, str] = {}
         for record in results:
-            if isinstance(record, Exception) or record is None:
+            if isinstance(record, BaseException) or record is None:
                 continue
-            title = record.title
+            title = record.metadata.get("title")
             if record.id and title:
                 title_map[record.id] = title
         return title_map
@@ -85,7 +85,7 @@ class AdminSessionsService:
         scenario = None
         if session.scenario_id:
             scenario = await self.scenario_repo.get(session.scenario_id)
-        return _response(session, scenario.title if scenario else None)
+        return _response(session, scenario.metadata.get("title") if scenario else None)
 
     async def delete_session(self, session_id: str, *, admin_token: str | None) -> None:
         try:

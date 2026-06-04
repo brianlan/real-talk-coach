@@ -22,29 +22,10 @@ def _repo() -> ScenarioRepository:
 def _scenario_response(item):
     return {
         "id": item.id,
-        "category": item.category,
-        "title": item.title,
-        "description": item.description,
-        "objective": item.objective,
-        "aiPersona": item.ai_persona,
-        "traineePersona": item.trainee_persona,
-        "endCriteria": item.end_criteria,
-        "skills": item.skills,
-        "skillSummaries": item.skill_summaries,
-        "idleLimitSeconds": item.idle_limit_seconds,
-        "durationLimitSeconds": item.duration_limit_seconds,
-        "prompt": item.prompt,
-    }
-
-
-def _skill_response(item):
-    return {
-        "id": item.id,
-        "externalId": item.external_id,
-        "name": item.name,
-        "category": item.category,
-        "rubric": item.rubric,
-        "description": item.description,
+        "metadata": item.metadata,
+        "context": item.context,
+        "simulationConfig": item.simulation_config,
+        "evaluationConfig": item.evaluation_config,
     }
 
 
@@ -57,12 +38,6 @@ async def list_scenarios(
 ):
     items = await repo.list_published(category=category, search=search, limit=limit)
     return {"items": [_scenario_response(item) for item in items]}
-
-
-@router.get("/skills")
-async def list_skills(repo: ScenarioRepository = Depends(_repo)):
-    items = await repo.list_skills()
-    return {"items": [_skill_response(item) for item in items]}
 
 
 @router.get("/scenarios/{scenario_id}")

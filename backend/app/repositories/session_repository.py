@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal, Optional
 
 from bson.objectid import ObjectId
 
@@ -29,6 +29,10 @@ class PracticeSessionRecord:
     termination_reason: str | None
     evaluation_id: str | None
     user_id: str | None = None
+    mode: Literal["turn_based", "realtime"] = "turn_based"
+    rtc_room_id: Optional[str] = None
+    rtc_task_id: Optional[str] = None
+    realtime_state: Optional[Literal["connecting", "active", "ended"]] = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,8 @@ class TurnRecord:
     ended_at: str | None
     context: str | None
     latency_ms: int | None
+    is_interrupted: bool = False
+    interrupted_at_ms: Optional[int] = None
 
 
 def _normalize_termination_reason(raw: Any) -> str | None:
@@ -101,6 +107,10 @@ def _session_from_doc(doc: dict[str, Any]) -> PracticeSessionRecord:
         objective_reason=doc.get("objectiveReason"),
         termination_reason=_normalize_termination_reason(doc.get("terminationReason")),
         evaluation_id=_normalize_evaluation_id(doc.get("evaluationId")),
+        mode=doc.get("mode", "turn_based"),
+        rtc_room_id=doc.get("rtcRoomId"),
+        rtc_task_id=doc.get("rtcTaskId"),
+        realtime_state=doc.get("realtimeState"),
     )
 
 
@@ -119,6 +129,8 @@ def _turn_from_doc(doc: dict[str, Any]) -> TurnRecord:
         ended_at=_normalize_date(doc.get("endedAt")),
         context=doc.get("context"),
         latency_ms=doc.get("latencyMs"),
+        is_interrupted=doc.get("isInterrupted", False),
+        interrupted_at_ms=doc.get("interruptedAtMs"),
     )
 
 
@@ -164,6 +176,36 @@ class SessionRepository:
         try:
             collection = await self._sessions_collection()
             doc = await collection.find_one({"_id": ObjectId(session_id)})
+            if doc is None:
+                return None
+            return _session_from_doc(doc)
+        except Exception:
+            return None
+
+    async def get_session_by_rtc_task_id(self, rtc_task_id: str) -> PracticeSessionRecord | None:
+        if not rtc_task_id:
+            return None
+        try:
+            collection = await self._sessions_collection()
+            doc = await collection.find_one(
+                {"rtcTaskId": rtc_task_id},
+                sort=[("startedAt", -1)],
+            )
+            if doc is None:
+                return None
+            return _session_from_doc(doc)
+        except Exception:
+            return None
+
+    async def get_session_by_rtc_room_id(self, rtc_room_id: str) -> PracticeSessionRecord | None:
+        if not rtc_room_id:
+            return None
+        try:
+            collection = await self._sessions_collection()
+            doc = await collection.find_one(
+                {"rtcRoomId": rtc_room_id},
+                sort=[("startedAt", -1)],
+            )
             if doc is None:
                 return None
             return _session_from_doc(doc)

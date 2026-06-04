@@ -3,17 +3,75 @@ import { adminApiBase, adminHeaders } from "./client";
 const apiBase = adminApiBase();
 
 export type ScenarioInput = {
-  category: string;
-  title: string;
-  description: string;
-  objective: string;
-  aiPersona: { name: string; role: string; background: string };
-  traineePersona: { name: string; role: string; background: string };
-  endCriteria: string[];
-  skills: string[];
-  prompt?: string;
-  idleLimitSeconds?: number;
-  durationLimitSeconds?: number;
+  metadata: {
+    title: string;
+    slug?: string;
+    domain: string;
+    scenarioType: string;
+    difficulty: string;
+    conflictLevel: string;
+    estimatedDurationMinutes: number;
+    tags: string[];
+  };
+  context: {
+    situation: string;
+    background: string;
+    setting: string;
+  };
+  simulationConfig: {
+    ai: {
+      name: string;
+      role: string;
+      personality: string[];
+      motivations: string[];
+      constraints: string[];
+      tendencies: string[];
+      knowledge: string[];
+      emotionalState: string;
+    };
+    trainee: {
+      name: string;
+      role: string;
+      personality: string[];
+      motivations: string[];
+      constraints: string[];
+      tendencies: string[];
+      knowledge: string[];
+      emotionalState: string;
+    };
+    language: string;
+    conversationStart: {
+      speakerRoleId: "ai" | "trainee";
+      initialPromptToUser: string;
+    };
+    conversationRules: {
+      stayInCharacter: boolean;
+      allowNarration: boolean;
+      coachingAllowed: boolean;
+      tone: string;
+    };
+    conversationDynamics: {
+      typicalBehaviors: string[];
+      possibleResponses: string[];
+    };
+    decisionConstraints?: Record<string, unknown>;
+    conversationEndConditions: {
+      possibleEndStates: string[];
+    };
+  };
+  evaluationConfig: {
+    learningObjectives: string[];
+    evaluationCriteria: {
+      id: string;
+      description: string;
+    }[];
+    skillsAssessed: string[];
+    scoring: {
+      scale: string;
+      criteriaWeighting: Record<string, number>;
+    };
+    evaluationInstructionsForLLM: string;
+  };
   status?: string;
 };
 

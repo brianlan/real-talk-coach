@@ -15,24 +15,13 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
     monkeypatch.setenv("STUB_USER_ID", "pilot-user")
-
-
-@pytest.fixture(autouse=True)
-def _stub_initial_turn(monkeypatch):
-    async def _noop_initial_turn(*args, **kwargs):
-        return None
-    monkeypatch.setattr(
-        "app.services.turn_pipeline.generate_initial_ai_turn",
-        _noop_initial_turn,
-    )
 
 
 def _session(status_value: str) -> PracticeSessionRecord:
@@ -54,6 +43,11 @@ def _session(status_value: str) -> PracticeSessionRecord:
         objective_reason=None,
         termination_reason=None,
         evaluation_id=None,
+        user_id=None,
+        mode="turn_based",
+        rtc_room_id=None,
+        rtc_task_id=None,
+        realtime_state=None,
     )
 
 
@@ -73,11 +67,14 @@ async def test_capacity_limit_returns_429(monkeypatch):
                 "Scenario",
                 (),
                 {
-                    "ai_persona": {"name": "AI", "background": "Background"},
-                    "trainee_persona": {"name": "Trainee", "background": "Background"},
-                    "objective": "Objective",
-                    "end_criteria": ["End"],
-                    "prompt": "Hello",
+                    "id": scenario_id,
+                    "metadata": {"title": "Capacity Scenario"},
+                    "context": {"situation": "Capacity check"},
+                    "simulation_config": {
+                        "ai": {"name": "AI", "background": "Background"},
+                        "trainee": {"name": "Trainee", "background": "Background"},
+                    },
+                    "evaluation_config": {},
                     "status": "published",
                     "idle_limit_seconds": 8,
                     "duration_limit_seconds": 300,
@@ -121,11 +118,14 @@ async def test_pending_limit_returns_429(monkeypatch):
                 "Scenario",
                 (),
                 {
-                    "ai_persona": {"name": "AI", "background": "Background"},
-                    "trainee_persona": {"name": "Trainee", "background": "Background"},
-                    "objective": "Objective",
-                    "end_criteria": ["End"],
-                    "prompt": "Hello",
+                    "id": scenario_id,
+                    "metadata": {"title": "Pending Capacity Scenario"},
+                    "context": {"situation": "Pending capacity check"},
+                    "simulation_config": {
+                        "ai": {"name": "AI", "background": "Background"},
+                        "trainee": {"name": "Trainee", "background": "Background"},
+                    },
+                    "evaluation_config": {},
                     "status": "published",
                     "idle_limit_seconds": 8,
                     "duration_limit_seconds": 300,

@@ -9,17 +9,41 @@ test.describe("Practice Room UI", () => {
     await mockScenarioApi(page, [
       {
         id: "scenario-1",
-        category: "Leadership",
-        title: "Team Conflict Resolution",
-        description: "Handle a dispute between two team members.",
-        objective: "Resolve the conflict",
-        aiPersona: { name: "Alex", role: "Employee", background: "N/A" },
-        traineePersona: { name: "Manager", role: "Lead", background: "N/A" },
-        endCriteria: [],
-        skills: [],
-        idleLimitSeconds: 60,
-        durationLimitSeconds: 600,
-        prompt: "Start",
+        metadata: {
+          domain: "Leadership",
+          title: "Team Conflict Resolution",
+          slug: "team-conflict",
+          scenarioType: "practice",
+          difficulty: "medium",
+          conflictLevel: "medium",
+          estimatedDurationMinutes: 10,
+          tags: [],
+        },
+        context: {
+          situation: "Handle a dispute between two team members.",
+          background: "N/A",
+          setting: "Office",
+        },
+        simulationConfig: {
+          ai: { name: "Alex", role: "Employee", personality: ["direct"], motivations: ["launch fast"], constraints: ["budget"], tendencies: ["interrupts"], knowledge: ["project details"], emotionalState: "stressed" },
+          trainee: { name: "Manager", role: "Lead", personality: ["calm"], motivations: ["quality"], constraints: ["time"], tendencies: ["listens"], knowledge: ["tech"], emotionalState: "neutral" },
+          language: "en",
+          conversationStart: {
+            speakerRoleId: "ai",
+            initialPromptToUser: "Hello",
+          },
+          conversationRules: { stayInCharacter: true, allowNarration: false, coachingAllowed: false, tone: "professional" },
+          conversationDynamics: { typicalBehaviors: ["fast talker"], possibleResponses: ["agrees", "disagrees"] },
+          decisionConstraints: {},
+          conversationEndConditions: { possibleEndStates: ["End"] },
+        },
+        evaluationConfig: {
+          learningObjectives: [],
+          evaluationCriteria: [],
+          skillsAssessed: [],
+          scoring: { scale: "1-5", criteriaWeighting: {} },
+          evaluationInstructionsForLLM: "Evaluate",
+        },
       },
     ]);
 

@@ -8,6 +8,7 @@ import pytest
 from app.api.routes import history as history_routes
 from app.api.routes import sessions as sessions_routes
 from app.main import app
+from app.repositories.evaluation_repository import EvaluationRecord
 from app.repositories.session_repository import PracticeSessionRecord, TurnRecord
 
 
@@ -17,10 +18,9 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
     monkeypatch.setenv("LEAN_APP_KEY", "key")
     monkeypatch.setenv("LEAN_MASTER_KEY", "master")
     # LeanCloud removed - using MongoDB
-    monkeypatch.setenv("DASHSCOPE_API_KEY", "dash")
-    monkeypatch.setenv("CHATAI_API_BASE", "https://api.chataiapi.com/v1")
-    monkeypatch.setenv("CHATAI_API_KEY", "secret")
-    monkeypatch.setenv("CHATAI_API_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://api.chataiapi.com/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_MODEL", "gpt-5-mini")
     monkeypatch.setenv("EVALUATOR_MODEL", "gpt-5-mini")
     monkeypatch.setenv("OBJECTIVE_CHECK_API_KEY", "secret")
     monkeypatch.setenv("OBJECTIVE_CHECK_MODEL", "gpt-5-mini")
@@ -138,25 +138,53 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
                 (),
                 {
                     "id": scenario_id,
-                    "category": "Feedback",
-                    "title": "Scenario",
-                    "description": "desc",
-                    "objective": "Objective",
-                    "ai_persona": {"name": "AI", "background": "Background"},
-                    "trainee_persona": {"name": "Trainee", "background": "Background"},
-                    "end_criteria": ["done"],
-                    "skills": [],
-                    "skill_summaries": [],
-                    "idle_limit_seconds": 8,
-                    "duration_limit_seconds": 300,
-                    "prompt": "Prompt",
+                    "metadata": {
+                        "title": "Scenario",
+                        "domain": "Feedback",
+                        "scenarioType": "Coaching",
+                    },
+                    "context": {
+                        "situation": "A difficult feedback conversation.",
+                        "background": "Recent performance review.",
+                        "setting": "Office meeting room.",
+                    },
+                    "simulation_config": {
+                        "ai": {"name": "AI", "role": "Manager"},
+                        "trainee": {"name": "Trainee", "role": "Employee"},
+                        "conversationStart": {
+                            "speakerRoleId": "ai",
+                            "initialPromptToUser": "Let's talk.",
+                        },
+                    },
+                    "evaluation_config": {
+                        "evaluationCriteria": [
+                            {
+                                "id": "clear_request",
+                                "description": "Makes the ask clearly.",
+                            }
+                        ],
+                        "skillsAssessed": ["clear_request"],
+                    },
                     "status": "published",
                 },
             )()
 
     class FakeEvaluationRepo:
         async def get_by_session(self, session_id: str):
-            return None
+            return EvaluationRecord(
+                id="eval-1",
+                session_id=session_id,
+                status="completed",
+                scores=[
+                    {"skillId": "clear_request", "rating": 4, "note": "Clear ask."}
+                ],
+                summary="Good overall.",
+                evaluator_model="gpt-5-mini",
+                attempts=1,
+                last_error=None,
+                queued_at="2025-01-01T00:00:00+00:00",
+                completed_at="2025-01-01T00:00:05+00:00",
+            )
 
     class FakeSigningClient:
         async def create_signed_urls(self, urls, ttl_seconds=900):
@@ -164,14 +192,6 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
         
         async def get_signed_url(self, url, expires=900):
             return f"{url}?signed=1"
-
-    async def _noop_initial_turn(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(
-        "app.services.turn_pipeline.generate_initial_ai_turn",
-        _noop_initial_turn,
-    )
 
     app.dependency_overrides[history_routes._session_repo] = lambda: FakeSessionRepo()
     app.dependency_overrides[history_routes._scenario_repo] = lambda: FakeScenarioRepo()
@@ -188,6 +208,11 @@ async def test_history_detail_and_practice_again_emit_step_metric(monkeypatch):
         assert response.status_code == 200
         detail = response.json()
         assert detail["turns"][0]["audioUrl"].endswith("?signed=1")
+        assert detail["scenario"]["metadata"]["title"] == "Scenario"
+        assert detail["scenario"]["evaluationConfig"]["evaluationCriteria"][0]["id"] == "clear_request"
+        assert "skills" not in detail["scenario"]
+        assert "skillSummaries" not in detail["scenario"]
+        assert detail["evaluation"]["scores"][0]["skillId"] == "clear_request"
 
         response = await client.post(
             "/api/sessions/session-1/practice-again",

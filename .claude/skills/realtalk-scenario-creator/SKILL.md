@@ -1,149 +1,172 @@
 ---
 name: realtalk-scenario-creator
-description: Generates communication training scenarios for Real Talk Coach. Use when you need to create a new practice scenario from a short description, including title, category, personas, objectives, end criteria, and skill mappings.
+description: >
+  Creates complete, production-ready practice scenarios for the Real Talk Coach application.
+  Use this skill whenever the user wants to create a new conversation practice scenario,
+  design a roleplay simulation, add a practice topic, or describes a communication situation
+  they want to turn into a trainable exercise. Also trigger when the user mentions scenarios,
+  roleplay personas, conversation simulations, communication training topics, or asks about
+  what practice scenarios exist in the system. This skill handles the complete lifecycle:
+  gathering requirements from the user, designing the scenario JSON, validating it against
+  the system's prompt builder and evaluator, and storing it in the database.
 ---
 
-# Realtalk Scenario Creator
+# Real Talk Coach — Scenario Creator
 
-Creates complete communication training scenarios for the Real Talk Coach application. Takes a short scenario description and outputs a structured JSON with all required attributes for the scenario catalog.
+You create conversation practice scenarios for the Real Talk Coach platform. Each scenario defines a complete roleplay simulation: who the AI pretends to be, who the trainee is, what the situation is, how the AI should behave, and how the trainee's performance gets evaluated.
 
-## Workflow (Must Follow)
+## Architecture Overview
 
-1) **Discuss first**: Before generating JSON, run a short discussion with the user to clarify ambiguities and propose improvements. Ask targeted questions until the scenario is well-defined.
-2) **Language confirmation**: Confirm the preferred language for scenario content (JSON values). Do not assume; ask explicitly if unclear.
-3) **Generate JSON**: Produce the scenario JSON with English keys and values in the confirmed language.
-4) **Save to `./scenario.json`**:
-   - If `./scenario.json` already exists, warn the user and ask for overwrite confirmation.
-   - Only write the file after the user explicitly confirms overwrite (or if the file does not exist).
-5) **Insert into DB**:
-   - Call `backend/scripts/insert_scenario.py` using `PYTHONPATH` and loading `.env`.
-   - Example invocation: `set -a; source backend/.env; set +a; PYTHONPATH=backend python backend/scripts/insert_scenario.py --file ./scenario.json`
-   - Report success with `objectId` and timestamps if returned.
+The system has two distinct AI pipelines that consume different parts of a scenario:
 
-## Input Format
+1. **Roleplay Prompt Builder** (`e2e_prompt_builder.py`) — Builds the system prompt sent to the voice AI. It reads `simulationConfig` and `context` to construct the AI's personality, behavior rules, and conversation dynamics. It explicitly does NOT see evaluation criteria (so the AI can't accidentally coach the trainee).
 
-A brief description of the scenario to create, e.g.:
-- "An employee asking for a raise"
-- "Dealing with an angry customer who wants a refund"
-- "Giving feedback to a colleague who constantly interrupts"
+2. **Evaluation Pipeline** (`evaluation_service.py`) — After practice ends, sends the transcript + `evaluationConfig` to an LLM evaluator that scores the trainee against defined criteria.
 
-## Output Format
+Understanding this split is essential because it determines what information goes where — and what the AI character genuinely does not know about.
 
-Returns a JSON object with:
+## Workflow
 
-| Field | Type | Description |
-|-------|------|-------------|
-| title | string | Scenario title (<= 120 chars) |
-| category | string | Scenario category |
-| description | string | Markdown narrative |
-| objective | string | Success criteria text |
-| aiPersona | object | {name, role, background} |
-| traineePersona | object | {name: "You", role, background} |
-| endCriteria | array[string] | 2-3 measurable stop conditions |
-| requiredCommunicationSkills | array[string] | Skill IDs |
+### Phase 1: Gather Requirements
 
-**Language:** Confirm with the user which language to use for scenario content (all JSON values). Keep JSON keys in English.
+Before writing any JSON, have a conversation with the user. Your goal is to understand the human situation deeply enough to create a realistic simulation. Ask about these dimensions:
 
-## Discussion Example
+**Essential information (must get answers to all of these):**
 
-**User:** “我要一个关于管理中信任受损的场景。”
+1. **Topic** — What conversation does the user want to practice? (e.g., "ask for a raise", "talk to my rebellious teenager", "deliver bad news to a team")
 
-**Assistant:** “明白。为避免模糊，我先确认几件事并给出可选优化建议。”
+2. **Who the AI should roleplay** — Not just a job title, but their personality, emotional state, and what makes them tick. The richer the characterization, the more realistic the simulation.
 
-**Questions:**
-1) 你希望分类到 **Leadership** 还是 **Difficult Conversation**？
-2) 对话发生在什么背景压力下？（比如关键客户、合规、事故、裁员后资源紧张）
-3) 具体哪些行为导致对方感到不被信任？（选 1–2 个）
-4) 对方的具体角色与层级？
-5) 成功标准里是否需要“达成后续协作方式/检查频率”的条款？
+3. **Who the trainee is** — Their role and what they're trying to achieve. This shapes the evaluation criteria.
 
-**Suggestions:**
-- 建议将压力来源具体化（比如关键客户上线节点），这样“收紧控制”更合理。
-- 可加入 1–2 个“可观察行为”，让评价更客观（如每日同步、逐行 review）。
+4. **The core tension** — What makes this conversation difficult? What's the gap between what the trainee wants and what the AI character is inclined to give?
 
-**Language Confirmation:**
-- “你希望场景内容用中文还是英文？（JSON key 仍为英文）”
+5. **What success looks like** — Not just "they reach an agreement" but the specific communication skills the trainee should demonstrate. This becomes your evaluation criteria.
 
-## Category Taxonomy
+6. **Language** — Should the scenario content be in English or Chinese? (The `language` field and content values should match.)
 
-Use these categories appropriately:
+**Enrichment questions (ask when the user's initial description is thin):**
 
-| Category | Use For |
-|----------|---------|
-| Difficult Feedback | Delivering critical or constructive feedback |
-| Conflict Resolution | Mediating disputes, handling disagreements |
-| Negotiation | Bargaining, discussing terms |
-| Difficult Conversation | Tough topics like raises, promotions |
-| Leadership | Managing, motivating, guiding teams |
-| Sales | Persuading, handling objections, closing |
-| Customer Service | Complaints, support, issue resolution |
-| Performance Review | Formal evaluations, appraisals |
-| Apologizing | Making amends, taking responsibility |
-| Declining Requests | Saying no professionally |
+7. What are the AI character's hidden motivations or constraints? (Things they won't say out loud but that drive their behavior)
+8. What topics or behaviors would make the AI character shut down or get defensive?
+9. Are there safe topics the trainee can use to build rapport before tackling the hard stuff?
+10. What does a partial success look like? (In many scenarios, a full resolution in one conversation is unrealistic)
 
-## Communication Skills Library
+You don't need to ask all of these as a numbered list. Weave them into a natural conversation. The point is to get enough material to create a persona with depth and a situation with genuine tension.
 
-Map scenarios to these skill IDs:
+### Phase 2: Design the Scenario
 
-| Skill ID | Name | Category |
-|----------|------|----------|
-| skill_active_listening | Active Listening | Feedback |
-| skill_clear_ask | Clear Ask | Negotiation |
+Read `references/scenario-schema.md` for the complete field reference. Below are the design principles that make the difference between a flat scenario and one that produces realistic, useful practice.
 
-Select skills that align with the scenario type. Use multiple skills for complex scenarios.
+#### Designing the AI Persona (`simulationConfig.ai`)
 
-## Persona Guidelines
+The AI persona is the heart of the scenario. The prompt builder reads these fields directly and injects them into the system prompt:
 
-**AI Persona:**
-- name: Short, common name (Alex, Jordan, Sam)
-- role: Job title relevant to scenario context
-- background: Include emotional state/personality that creates appropriate tension
+- **`personality`** — Surface traits everyone can see. Keep these to 3-5 adjectives or short phrases.
+- **`motivations`** — What drives the character underneath. This shapes behavior the trainee can sense but can't directly see. 3-4 items.
+- **`constraints`** — External or internal limits on what the character can do. These create the walls the trainee has to navigate. 3-4 items.
+- **`tendencies`** — The behavioral engine. This is the most important field. Write each tendency as a specific behavioral pattern with a trigger condition. The prompt builder puts these front and center in the "REALISTIC BEHAVIOR" section. 5-7 items is ideal. Example: *"gives short, dismissive answers like 'fine', 'whatever', 'I don't know' when asked about school or feelings"*
+- **`knowledge`** — What the character knows going into the conversation. This frames their perspective. Include both what they know and what they don't know.
+- **`emotionalState`** — A short phrase describing their mood. The prompt builder puts this in a dedicated line.
 
-**Trainee Persona:**
-- name: Always "You"
-- role: Position that justifies initiating the conversation
-- background: Responsibilities that make this conversation relevant
+**The Layered Persona technique:** The best scenarios give the AI character a surface behavior and a hidden truth. Surface: "guarded, sarcastic, dismissive." Hidden: "secretly lonely and longing for someone who genuinely gets him." This creates depth because the trainee can sense there's something underneath but has to work to reach it. The AI won't volunteer the hidden truth — it only emerges through patient, skilled communication.
 
-## End Criteria Guidelines
+#### Designing Conversation Dynamics (`simulationConfig.conversationDynamics`)
 
-Create 2-3 specific, measurable criteria that:
-1. Address the main issue being discussed
-2. Define what resolution or agreement looks like
-3. Are checkable by an objective evaluation model
+- **`typicalBehaviors`** — What the AI typically does in this conversation. Write these as behavioral patterns, not dialogue. 4-5 items.
+- **`possibleResponses`** — Actual dialogue snippets the AI might use. These serve as a vocabulary for the AI — concrete examples of how to respond. Include a mix: some deflecting, some revealing, some neutral. 6-8 items is ideal. Example: *"School's just... whatever. Some people there are just... nah, forget it."*
 
-## Description Guidelines
+#### Designing Decision Constraints (`simulationConfig.decisionConstraints`)
 
-Write from a **3rd party narrative perspective**, not "You are...". Describe the scenario situation objectively.
+This is a free-form JSON object that gets rendered as bullet points. Use it to encode the "game rules" — the conditions that govern the AI's behavior. Good things to include:
 
-**Bad:** "You are a team manager..."
-**Good:** "The trainee plays the role of an engineering manager..."
+- **Openness/shutdown thresholds** — How many times will the AI deflect before showing vulnerability?
+- **Safe topics for connection** — Topics the AI will engage with happily (building rapport)
+- **Triggers for shutdown** — Behaviors that make the AI close up (lecturing, comparing, criticizing)
+- **Path to resolution** — The staged progression the AI follows (rapport → openness → hint → validation → reveal)
 
-## Example
+#### Designing the Evaluation (`evaluationConfig`)
 
-**Input:** "A manager conducting a performance review for an underperforming employee"
+The evaluator LLM receives: scenario title, context, learning objectives, evaluation criteria (with IDs), skills assessed, scoring config, custom instructions, and the full conversation transcript.
 
-**Output:**
-```json
-{
-  "title": "Conduct a performance review with an underperforming team member",
-  "category": "Performance Review",
-  "description": "The trainee plays the role of an engineering manager conducting a quarterly review with their team member Jamie. Over the past quarter, Jamie has been missing deadlines and the quality of their work has declined. The goal is to address these issues while maintaining motivation and reaching an agreement on a performance improvement plan.",
-  "objective": "Address the performance issues clearly while maintaining motivation, and agree on a performance improvement plan.",
-  "aiPersona": {
-    "name": "Jamie",
-    "role": "Software Engineer",
-    "background": "Has been at the company for 2 years. Recently went through a breakup and has been distracted. Defensive about criticism but wants to keep their job."
-  },
-  "traineePersona": {
-    "name": "You",
-    "role": "Engineering Manager",
-    "background": "Responsible for team performance and development. Want to help Jamie succeed but also need to address the issues formally."
-  },
-  "endCriteria": [
-    "Trainee clearly addresses specific performance issues with examples",
-    "Trainee explores root cause and shows empathy",
-    "Both parties agree on a concrete action plan with follow-up"
-  ],
-  "requiredCommunicationSkills": ["skill_active_listening", "skill_clear_ask"]
-}
+**Writing good evaluation criteria:**
+
+Each criterion has an `id` (snake_case) and a `description` (what to look for). Write descriptions that an LLM can score objectively — specific behaviors or outcomes, not vague qualities.
+
+Good: *"Parent initiates conversation casually, without jumping straight to serious topics like grades or school. Approaches like a real moment, not an intervention."*
+Bad: *"Parent has good communication skills."*
+
+**Setting realistic expectations in `evaluationInstructionsForLLM`:**
+
+This field is your control valve for the evaluator. Use it to:
+- Define what "good enough" looks like (not just "perfect")
+- Clarify that partial progress counts as success where appropriate
+- Prevent overly harsh scoring by explaining the scenario's inherent difficulty
+- Direct the evaluator's attention to what matters most
+
+Example: *"The goal is NOT to get the son to fully confess his problems — that is unrealistic in a single conversation. Even a small moment of genuine connection is a meaningful outcome."*
+
+**Criteria-weight alignment:** Every `evaluationCriteria[].id` must appear as a key in `scoring.criteriaWeighting`. Weights should sum to approximately 1.0.
+
+### Phase 3: Validate
+
+Before storing, verify the scenario passes all checks:
+
+1. All four top-level sections present: `metadata`, `context`, `simulationConfig`, `evaluationConfig`
+2. `simulationConfig.ai` has all sub-fields: `name`, `role`, `personality`, `motivations`, `constraints`, `tendencies`, `knowledge`, `emotionalState`
+3. `simulationConfig.trainee` has the same sub-fields
+4. `simulationConfig.conversationStart` has `speakerRoleId` and `initialPromptToUser`
+5. `evaluationConfig.evaluationCriteria` is a non-empty array
+6. `evaluationConfig.skillsAssessed` is a non-empty array
+7. All `evaluationCriteria[].id` values match keys in `scoring.criteriaWeighting`
+8. `scoring.criteriaWeighting` values sum to approximately 1.0
+9. `conversationStart.speakerRoleId` uses a recognizable role ("trainee" starts the conversation, or "ai" for the AI to start)
+
+Read `references/scenario-schema.md` for the complete validation checklist and field mapping.
+
+### Phase 4: Store in Database
+
+Store the scenario via the admin API:
+
+```bash
+curl -s -X POST http://localhost:8000/api/admin/scenarios \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -d @scenario.json
 ```
+
+The admin token is in `backend/.env` as `ADMIN_ACCESS_TOKEN`. The API returns the created scenario with its `id`.
+
+After creation, publish it:
+
+```bash
+curl -s -X POST http://localhost:8000/api/admin/scenarios/{id}/publish \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+Alternatively, use the seed script (loads `.env` automatically):
+
+```bash
+set -a; source backend/.env; set +a
+PYTHONPATH=backend python backend/scripts/seed_scenarios.py --single-scenario ./scenario.json
+```
+
+### Phase 5: Present and Iterate
+
+Show the user the created scenario with:
+- Title and ID
+- AI persona summary (name, role, key traits)
+- Trainee persona summary
+- Number of evaluation criteria
+- Validation status
+
+Ask the user to try it in the app and report back. Common iteration points:
+- AI is too easy to convince → strengthen `constraints` and `tendencies`
+- AI opens up too quickly → increase deflection threshold in `decisionConstraints`
+- Evaluation feels wrong → adjust `evaluationInstructionsForLLM` or refine criteria descriptions
+- Conversation feels flat → add more specific `possibleResponses` dialogue snippets
+
+## Reference Files
+
+- **`references/scenario-schema.md`** — Complete field-by-field reference with types, which pipeline reads each field, and the validation checklist. Read this when you need to confirm exact field names or understand the prompt builder mapping.
+- **`references/example-teenage-son.json`** — A complete worked example: the "Connect with Your Teenage Son" scenario. Read this when you want to see how the design principles translate into concrete JSON. It demonstrates the layered persona technique, rich decision constraints, and realistic evaluation expectations.

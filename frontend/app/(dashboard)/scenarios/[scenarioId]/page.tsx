@@ -3,19 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getApiBase } from "@/services/api/base";
+import type { Scenario } from "@/services/api/scenarios";
 
 const apiBase = getApiBase();
-
-type Scenario = {
-  id: string;
-  category?: string;
-  title?: string;
-  description?: string;
-  objective?: string;
-  aiPersona?: { name?: string; background?: string };
-  traineePersona?: { name?: string; background?: string };
-  endCriteria?: string[];
-};
 
 type PracticeLanguage = "en" | "zh";
 
@@ -23,7 +13,7 @@ const detectScenarioLanguage = (scenario: Scenario | null): PracticeLanguage => 
   if (!scenario) {
     return "en";
   }
-  const text = `${scenario.title ?? ""} ${scenario.description ?? ""} ${scenario.objective ?? ""}`;
+  const text = `${scenario.metadata?.title ?? ""} ${scenario.context?.situation ?? ""}`;
   return /[\\u4e00-\\u9fff]/.test(text) ? "zh" : "en";
 };
 
@@ -128,10 +118,9 @@ export default function ScenarioDetailPage() {
       <section style={{ maxWidth: 820, margin: "0 auto" }}>
         <header style={{ marginBottom: 24 }}>
           <p style={{ textTransform: "uppercase", letterSpacing: 2, fontSize: 12 }}>
-            {scenario.category}
+            {scenario.metadata?.domain}
           </p>
-          <h1 style={{ fontSize: 40, margin: "8px 0" }}>{scenario.title}</h1>
-          <p style={{ lineHeight: 1.6 }}>{scenario.description}</p>
+          <h1 style={{ fontSize: 40, margin: "8px 0" }}>{scenario.metadata?.title}</h1>
         </header>
 
         <div
@@ -143,11 +132,11 @@ export default function ScenarioDetailPage() {
             marginBottom: 24,
           }}
         >
-          <h2 style={{ marginTop: 0 }}>Objective</h2>
-          <p>{scenario.objective}</p>
-          <h3>End criteria</h3>
+          <h2 style={{ marginTop: 0 }}>Situation</h2>
+          <p>{scenario.context?.situation}</p>
+          <h3>End conditions</h3>
           <ul>
-            {(scenario.endCriteria ?? []).map((item) => (
+            {(scenario.simulationConfig?.conversationEndConditions?.possibleEndStates ?? []).map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
@@ -163,8 +152,8 @@ export default function ScenarioDetailPage() {
             }}
           >
             <h3 style={{ marginTop: 0 }}>AI Persona</h3>
-            <p>{scenario.aiPersona?.name}</p>
-            <p style={{ margin: 0 }}>{scenario.aiPersona?.background}</p>
+            <p>{scenario.simulationConfig?.ai?.name} ({scenario.simulationConfig?.ai?.role})</p>
+            <p style={{ margin: 0 }}>{scenario.simulationConfig?.ai?.personality?.join(", ")}</p>
           </div>
           <div
             style={{
@@ -175,8 +164,8 @@ export default function ScenarioDetailPage() {
             }}
           >
             <h3 style={{ marginTop: 0 }}>Your Persona</h3>
-            <p>{scenario.traineePersona?.name}</p>
-            <p style={{ margin: 0 }}>{scenario.traineePersona?.background}</p>
+            <p>{scenario.simulationConfig?.trainee?.name} ({scenario.simulationConfig?.trainee?.role})</p>
+            <p style={{ margin: 0 }}>{scenario.simulationConfig?.trainee?.personality?.join(", ")}</p>
           </div>
         </div>
 
