@@ -1,200 +1,180 @@
 # Scenario Schema Reference
 
-Complete field-by-field reference for Real Talk Coach scenarios. Use this when writing scenario JSON to confirm exact field names, types, and which system pipeline reads each field.
+Use this reference for exact field names and current pipeline visibility.
 
-## Top-Level Structure
+## Top-Level Shape
 
 ```json
 {
-  "metadata": { ... },
-  "context": { ... },
-  "simulationConfig": { ... },
-  "evaluationConfig": { ... }
+  "metadata": {},
+  "context": {},
+  "simulationConfig": {},
+  "evaluationConfig": {}
 }
 ```
 
-All four sections are required. The admin API rejects payloads missing any of them.
+The admin API requires all four top-level sections. The frontend/admin type expects the richer structure below.
 
----
+## `metadata`
 
-## Field Reference
+Admin catalog data.
 
-### `metadata` — Admin catalog info
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `title` | string | yes | Display name. Sent to evaluator as scenario title. |
+| `slug` | string | no | URL-friendly identifier. |
+| `domain` | string | yes | Category/domain. |
+| `scenarioType` | string | yes | Communication type. |
+| `difficulty` | string | yes | Display label. Existing data may use English or Chinese labels. |
+| `conflictLevel` | string | yes | Display label. Existing data may use English or Chinese labels. |
+| `estimatedDurationMinutes` | number | yes | Expected practice duration. |
+| `tags` | string[] | yes | Search/filter labels. |
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `title` | string | yes | Display name (shown in scenario list) |
-| `slug` | string | no | URL-friendly identifier |
-| `domain` | string | yes | Category domain: "Workplace", "Family", "Healthcare", "Education", etc. |
-| `scenarioType` | string | yes | Communication type: "Negotiation", "Empathetic Listening", "Conflict Resolution", "Difficult Feedback", etc. |
-| `difficulty` | string | yes | "Easy", "Medium", or "Hard" |
-| `conflictLevel` | string | yes | "Low", "Medium", or "High" |
-| `estimatedDurationMinutes` | number | yes | Expected practice duration |
-| `tags` | string[] | yes | Searchable tags |
+Roleplay visibility: not sent to roleplay AI.
 
-**Pipeline visibility:** Not sent to roleplay AI. `title` is sent to evaluator. Rest is admin/internal only.
+Evaluation visibility: `title` only.
 
----
+## `context`
 
-### `context` — Situation background
+Shared situation background.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `situation` | string | yes | What triggered the conversation |
-| `background` | string | yes | Additional context and history |
-| `setting` | string | yes | Where and when the conversation takes place |
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `situation` | string | yes | Immediate conflict and what triggered the talk. |
+| `background` | string | yes | History, hidden pressure, character incentives. |
+| `setting` | string | yes | Where/when the conversation starts. |
 
-**Pipeline visibility:** Sent to BOTH roleplay AI (in "SCENARIO CONTEXT" section) and evaluator (as `scenario_context`).
+Roleplay visibility: all fields are injected.
 
----
+Evaluation visibility: all fields are sent as scenario context.
 
-### `simulationConfig` — Roleplay configuration
+## `simulationConfig`
 
-#### `simulationConfig.ai` — The character the AI plays
+### `simulationConfig.ai`
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | yes | Character name (used as bot display name) |
-| `role` | string | yes | Character's role/title |
-| `personality` | string[] | yes | Surface personality traits (3-5 items) |
-| `motivations` | string[] | yes | What drives the character underneath (3-4 items) |
-| `constraints` | string[] | yes | External/internal limits on behavior (3-4 items) |
-| `tendencies` | string[] | yes | Specific behavioral patterns — most important field (5-7 items) |
-| `knowledge` | string[] | yes | What the character knows going in |
-| `emotionalState` | string | yes | Current mood/ emotional state |
+The character played by the AI.
 
-**Pipeline visibility:** All fields sent to roleplay AI in "ROLE YOU ARE PLAYING" section. NOT sent to evaluator.
+| Field | Type | Required | Roleplay Visibility |
+| --- | --- | --- | --- |
+| `name` | string | yes | Injected; used as bot display name. |
+| `role` | string | yes | Injected. |
+| `personality` | string[] | yes | Injected. |
+| `motivations` | string[] | yes | Injected. |
+| `constraints` | string[] | yes | Injected; strong behavior lever. |
+| `tendencies` | string[] | yes | Injected; strong behavior lever. |
+| `knowledge` | string[] | yes | Stored, but **not injected by current prompt builder**. Do not rely on this for live behavior. |
+| `emotionalState` | string | yes | Injected. |
 
-#### `simulationConfig.trainee` — The trainee's persona
+For behavior-critical facts, duplicate or move them into `context`, `constraints`, `tendencies`, `conversationDynamics`, or `decisionConstraints`.
 
-Same sub-fields as `ai`. However, the prompt builder only reads `name`, `role`, `knowledge`, and `emotionalState` from the trainee. The remaining fields (`personality`, `motivations`, `constraints`, `tendencies`) exist for completeness and are NOT sent to the roleplay AI or evaluator.
+### `simulationConfig.trainee`
 
-**Pipeline visibility:** Only `name`, `role`, `knowledge`, `emotionalState` sent to AI (in "TRAINEE ROLE" section).
+The user's role.
 
-#### `simulationConfig.language`
+Same sub-fields as `ai`.
 
-String: "English" or "Chinese". Determines the language instruction in the prompt.
+Roleplay visibility:
 
-#### `simulationConfig.conversationStart`
+- Injected: `name`, `role`, `knowledge`, `emotionalState`
+- Not injected: `personality`, `motivations`, `constraints`, `tendencies`
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `speakerRoleId` | string | yes | Who speaks first. Normalized: "trainee"/"employee"/"user"/"learner"/"candidate" → trainee starts. "ai"/"assistant"/"bot"/"coach"/"manager" → AI starts. |
-| `initialPromptToUser` | string | yes* | Shown to trainee if trainee speaks first. Instruction for how to begin. |
+Use non-injected trainee fields for admin readability and scenario design, not for live roleplay behavior.
 
-*Required when `speakerRoleId` maps to "trainee".
+### `simulationConfig.language`
 
-#### `simulationConfig.conversationRules`
+Use `zh` for Chinese practice and `en` for English practice. The prompt builder also understands labels such as `Chinese`, but current UI/session APIs use `zh`/`en`.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `stayInCharacter` | boolean | yes | AI must stay in role |
-| `allowNarration` | boolean | yes | Allow stage directions |
-| `coachingAllowed` | boolean | yes | Allow coaching interjections |
-| `tone` | string | yes | Conversation tone description |
+### `simulationConfig.conversationStart`
 
-**Pipeline visibility:** NOT sent to roleplay AI explicitly — the prompt builder enforces these via hardcoded rules instead.
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `speakerRoleId` | string | yes | Prefer exact values `trainee` or `ai`. The backend normalizes some aliases, but the frontend type is stricter. |
+| `initialPromptToUser` | string | yes when trainee starts | Shown/sent when trainee starts. |
 
-#### `simulationConfig.conversationDynamics`
+If `speakerRoleId` resolves to `trainee`, the opening prompt is sent without LLM generation. If it resolves to `ai`, `opening_prompt_service.py` may generate the first AI line.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `typicalBehaviors` | string[] | yes | What the AI typically does (4-5 behavioral patterns) |
-| `possibleResponses` | string[] | yes | Actual dialogue snippets the AI might use (6-8 items) |
+### `simulationConfig.conversationRules`
 
-**Pipeline visibility:** Sent to roleplay AI in "REALISTIC BEHAVIOR" section.
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `stayInCharacter` | boolean | yes | Stored/admin field. |
+| `allowNarration` | boolean | yes | Stored/admin field. |
+| `coachingAllowed` | boolean | yes | Stored/admin field. |
+| `tone` | string | yes | Stored/admin field. |
 
-#### `simulationConfig.decisionConstraints`
+Current roleplay prompt uses hardcoded equivalent rules instead of rendering this object directly.
 
-Free-form JSON object. Rendered as nested bullet points. Use for scenario-specific rules like:
-- Thresholds for the AI's openness/resistance
-- Safe topics for building rapport
-- Behaviors that trigger shutdown
-- The staged path from resistance to openness
+### `simulationConfig.conversationDynamics`
 
-**Pipeline visibility:** Sent to roleplay AI in "REALISTIC BEHAVIOR" section under "Keep the following constraints in mind".
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `typicalBehaviors` | string[] | yes | Injected under realistic behavior. Describe response rhythm and triggers. |
+| `possibleResponses` | string[] | yes | Injected examples. Keep these aligned with desired resistance/cooperation level. |
 
-#### `simulationConfig.conversationEndConditions`
+Avoid over-cooperative snippets unless the persona should soften quickly.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `possibleEndStates` | string[] | yes | Possible conversation outcomes (2-4 items) |
+### `simulationConfig.decisionConstraints`
 
-**Pipeline visibility:** Sent to roleplay AI in "CONVERSATION FLOW" section.
+Free-form JSON object. Injected as nested bullets under "Keep the following constraints in mind".
 
----
+Use this for:
 
-### `evaluationConfig` — Scoring configuration
+- awareness/resistance thresholds
+- early-turn rules
+- concession ceilings
+- shutdown triggers
+- safe topics
+- deflection patterns
+- path to partial agreement
+- "do not make the AI..." guardrails
 
-**Pipeline visibility:** NOT sent to roleplay AI. All fields sent to evaluator LLM.
+This is the best place for scenario-specific state-machine behavior.
 
-#### `evaluationConfig.learningObjectives`
+### `simulationConfig.conversationEndConditions`
 
-`string[]` — What the trainee should learn/demonstrate (4-5 items). Shown to evaluator as a bullet list.
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `possibleEndStates` | string[] | yes | Injected. Include partial success and failure paths. |
 
-#### `evaluationConfig.evaluationCriteria`
+## `evaluationConfig`
 
-Array of objects. Each criterion has:
+Not sent to the roleplay AI. Sent to the evaluator after the session.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | yes | Unique snake_case identifier. Used as `skillId` in scores. |
-| `description` | string | yes | What to look for. Write for LLM scoring — specific behaviors, not vague qualities. |
-
-The evaluator uses each `id` as the `skillId` in its score output. These IDs must match keys in `scoring.criteriaWeighting`.
-
-#### `evaluationConfig.skillsAssessed`
-
-`string[]` — Skill labels for the evaluator (5-6 items). These are descriptive, not scored individually.
-
-#### `evaluationConfig.scoring`
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `scale` | string | yes | Always "1-5" |
-| `criteriaWeighting` | object | yes | Maps criterion IDs to weights (should sum to ~1.0) |
-
-#### `evaluationConfig.evaluationInstructionsForLLM`
-
-`string` — Custom instructions for the evaluator. Use to set expectations, focus attention, and prevent harsh scoring. This is your control valve for evaluation quality.
-
----
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `learningObjectives` | string[] | yes | Sent to evaluator. |
+| `evaluationCriteria` | `{id, description}[]` | yes | Criterion ids become score `skillId`s. |
+| `skillsAssessed` | string[] | yes | Descriptive labels. |
+| `scoring.scale` | string | yes | Use `"1-5"`. |
+| `scoring.criteriaWeighting` | object | yes | Keys must match criterion ids. |
+| `evaluationInstructionsForLLM` | string | yes | Sets grading expectations and partial-success logic. |
 
 ## Validation Checklist
 
-Run these checks before storing:
+- [ ] Four top-level sections exist.
+- [ ] Required `metadata` and `context` fields exist.
+- [ ] `simulationConfig.ai` and `.trainee` have the persona sub-fields.
+- [ ] `language` is `zh` or `en`.
+- [ ] `conversationStart.speakerRoleId` is `trainee` or `ai`.
+- [ ] `conversationStart.initialPromptToUser` exists if trainee starts.
+- [ ] `conversationDynamics.typicalBehaviors` and `possibleResponses` are non-empty.
+- [ ] `decisionConstraints` includes thresholds for resistant personas.
+- [ ] `conversationEndConditions.possibleEndStates` includes realistic partial/failure states.
+- [ ] `evaluationCriteria` and `skillsAssessed` are non-empty.
+- [ ] Every criterion id has a weighting key.
+- [ ] Weight values sum to approximately 1.0.
+- [ ] Live prompt generation includes the behavior-critical rules.
 
-- [ ] All 4 top-level sections present: `metadata`, `context`, `simulationConfig`, `evaluationConfig`
-- [ ] `metadata` has: `title`, `domain`, `scenarioType`, `difficulty`, `conflictLevel`, `estimatedDurationMinutes`, `tags`
-- [ ] `context` has: `situation`, `background`, `setting`
-- [ ] `simulationConfig.ai` has: `name`, `role`, `personality`, `motivations`, `constraints`, `tendencies`, `knowledge`, `emotionalState`
-- [ ] `simulationConfig.trainee` has same sub-fields as `ai`
-- [ ] `simulationConfig.conversationStart` has `speakerRoleId` and `initialPromptToUser`
-- [ ] `simulationConfig.conversationDynamics` has `typicalBehaviors` and `possibleResponses`
-- [ ] `simulationConfig.conversationEndConditions` has `possibleEndStates`
-- [ ] `evaluationConfig.evaluationCriteria` is non-empty array
-- [ ] `evaluationConfig.skillsAssessed` is non-empty array
-- [ ] All `evaluationCriteria[].id` values exist in `scoring.criteriaWeighting`
-- [ ] `scoring.criteriaWeighting` values sum to approximately 1.0
-- [ ] `speakerRoleId` is a recognizable role identifier
+## Prompt Field Map
 
-## Prompt Builder Field Map
-
-For reference, here's exactly what the roleplay AI sees in its system prompt:
-
-| Prompt Section | Scenario Fields Injected |
-|---------------|------------------------|
+| Prompt Section | Fields Injected |
+| --- | --- |
 | ROLE YOU ARE PLAYING | `ai.name`, `ai.role`, `ai.personality`, `ai.motivations`, `ai.constraints`, `ai.tendencies`, `ai.emotionalState` |
 | SCENARIO CONTEXT | `context.situation`, `context.background`, `context.setting` |
-| TRAINEE ROLE (FOR CONTEXT ONLY) | `trainee.name`, `trainee.role`, `trainee.knowledge`, `trainee.emotionalState` |
-| ROLEPLAY RULES | Hardcoded (stay in character, no narration, no coaching, no evaluation hints) |
-| CONVERSATION STYLE | Hardcoded (natural tone, ask questions, let trainee drive) |
+| TRAINEE ROLE | `trainee.name`, `trainee.role`, `trainee.knowledge`, `trainee.emotionalState` |
+| ROLEPLAY RULES | Hardcoded no coaching/no narration/no evaluation mechanics |
+| CONVERSATION STYLE | Hardcoded natural tone, ask questions, let trainee drive |
 | REALISTIC BEHAVIOR | `conversationDynamics.typicalBehaviors`, `possibleResponses`, `decisionConstraints` |
 | CONVERSATION FLOW | `conversationEndConditions.possibleEndStates` |
-| LANGUAGE | Resolved from `language` parameter or `simulationConfig.language` |
+| LANGUAGE | Session language or `simulationConfig.language` |
 | START OF SIMULATION | `conversationStart.speakerRoleId` |
-
-The prompt also includes these hardcoded behavioral guardrails:
-- "Do NOT help the trainee succeed."
-- "Do NOT immediately agree with the trainee's request unless sufficient justification is provided."
-- "Do NOT mention evaluation criteria or training mechanics."
